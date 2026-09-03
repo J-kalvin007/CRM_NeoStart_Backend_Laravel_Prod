@@ -3,8 +3,14 @@
 namespace Database\Seeders;
 
 use App\Models\User;
-// use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use App\Models\Country;
+use App\Models\Subsidiary;
+use App\Models\Region;
+use App\Models\Territory;
+use App\Models\Team;
+use App\Models\Role;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
 
 class DatabaseSeeder extends Seeder
 {
@@ -13,11 +19,61 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // User::factory(10)->create();
+        // Clear cached permissions
+        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
+        // 1. Create Roles
+        $roles = [
+            'Administrateur Groupe',
+            'Administrateur Pays',
+            'Direction Générale',
+            'Manager',
+            'Délégué Médical'
+        ];
+
+        foreach ($roles as $roleName) {
+            Role::firstOrCreate(['name' => $roleName, 'guard_name' => 'web']);
+        }
+
+        // 2. Create sample Hierarchy
+        $country = Country::firstOrCreate(['iso_code' => 'FRA'], [
+            'name' => 'France',
+            'currency' => 'EUR',
+            'language' => 'fr',
+            'timezone' => 'Europe/Paris',
+            'status' => true
         ]);
+
+        $subsidiary = Subsidiary::firstOrCreate(['code' => 'SUB-FR'], [
+            'country_id' => $country->id,
+            'name' => 'Filiale France',
+            'status' => true
+        ]);
+
+        $region = Region::firstOrCreate(['name' => 'Île-de-France'], [
+            'subsidiary_id' => $subsidiary->id
+        ]);
+
+        $territory = Territory::firstOrCreate(['name' => 'Paris'], [
+            'region_id' => $region->id
+        ]);
+
+        $team = Team::firstOrCreate(['name' => 'Équipe Paris Centre'], [
+            'territory_id' => $territory->id
+        ]);
+
+        // 3. Create Super Admin
+        $admin = User::firstOrCreate(['email' => 'admin@crm.local'], [
+            'name' => 'Super Administrateur',
+            'password' => Hash::make('password'),
+            'country_id' => $country->id,
+            'subsidiary_id' => $subsidiary->id,
+            'team_id' => $team->id,
+            'status' => true
+        ]);
+
+        if (!$admin->hasRole('Administrateur Groupe')) {
+            $admin->assignRole('Administrateur Groupe');
+        }
     }
 }
