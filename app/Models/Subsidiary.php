@@ -3,12 +3,13 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use App\Models\Traits\HasPerimeter;
 
 class Subsidiary extends Model
 {
-    use HasUuids;
+    use HasFactory, HasUuids, HasPerimeter;
 
     protected $fillable = [
         'country_id',
