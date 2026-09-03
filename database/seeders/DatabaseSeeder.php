@@ -22,17 +22,30 @@ class DatabaseSeeder extends Seeder
         // Clear cached permissions
         app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
 
-        // 1. Create Roles
-        $roles = [
-            'Administrateur Groupe',
-            'Administrateur Pays',
-            'Direction Générale',
-            'Manager',
-            'Délégué Médical'
+        // 1. Create Scope Permissions
+        $scopePermissions = [
+            'scope:global',
+            'scope:country',
+            'scope:subsidiary',
+            'scope:team'
+        ];
+        
+        foreach ($scopePermissions as $perm) {
+            \App\Models\Permission::firstOrCreate(['name' => $perm, 'guard_name' => 'web']);
+        }
+
+        // 2. Create Roles and assign scope permissions
+        $rolesConfig = [
+            'Administrateur Groupe' => ['scope:global'],
+            'Administrateur Pays' => ['scope:country'],
+            'Direction Générale' => ['scope:subsidiary'], // Ou country selon le besoin
+            'Manager' => ['scope:subsidiary'], // Ou team, peut varier dynamiquement
+            'Délégué Médical' => ['scope:team']
         ];
 
-        foreach ($roles as $roleName) {
-            Role::firstOrCreate(['name' => $roleName, 'guard_name' => 'web']);
+        foreach ($rolesConfig as $roleName => $perms) {
+            $role = Role::firstOrCreate(['name' => $roleName, 'guard_name' => 'web']);
+            $role->syncPermissions($perms);
         }
 
         // 2. Create sample Hierarchy
