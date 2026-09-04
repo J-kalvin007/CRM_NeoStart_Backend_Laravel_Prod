@@ -19,10 +19,14 @@ use App\Http\Controllers\Api\V1\ObjectifController;
 use App\Http\Controllers\Api\V1\CampaignController;
 use App\Http\Controllers\Api\V1\KolProfileController;
 use App\Http\Controllers\Api\V1\NotificationController;
+use App\Http\Controllers\Api\V1\SettingController;
 
 Route::get('/login', fn() => response()->json(['message' => 'Non authentifié'], 401))->name('login');
 
 Route::prefix('v1')->group(function () {
+
+    // ── Configuration Publique (Logo, Nom App) ────────────────
+    Route::get('/settings', [SettingController::class, 'index']);
 
     // ── Authentification ──────────────────────────────────────
     Route::post('/login', [AuthController::class, 'login']);
@@ -70,7 +74,8 @@ Route::prefix('v1')->group(function () {
             Route::get('product-types', [ConfigurationController::class, 'productTypeIndex']);
             Route::post('product-types', [ConfigurationController::class, 'productTypeStore']);
             Route::put('product-types/{id}', [ConfigurationController::class, 'productTypeUpdate']);
-            Route::delete('product-types/{id}', [ConfigurationController::class, 'productTypeDestroy']);
+            // Settings (Mise à jour)
+            Route::post('settings', [SettingController::class, 'store']);
         });
 
         // ── Répertoire (Comptes & Contacts) ────────────────────
