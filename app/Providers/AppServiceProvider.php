@@ -6,6 +6,8 @@ use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\Sanctum;
 use App\Models\PersonalAccessToken;
+use App\Models\Activity;
+use App\Observers\ActivityObserver;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -24,5 +26,6 @@ class AppServiceProvider extends ServiceProvider
     {
         Schema::defaultStringLength(191);
         Sanctum::usePersonalAccessTokenModel(PersonalAccessToken::class);
+        Activity::observe(ActivityObserver::class);
     }
 }
