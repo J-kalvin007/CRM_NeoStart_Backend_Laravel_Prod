@@ -1,66 +1,82 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Skynity CRM Backend (API)
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Il s'agit de l'API de base (backend) pour le CRM Skynity, développée avec Laravel 11. 
+Le backend repose sur une architecture agnostique, conçue pour gérer la force de vente terrain (Délégués médicaux/commerciaux), les tournées, la gestion des stocks d'échantillons, les campagnes marketing, et bien plus encore.
 
-## About Laravel
+## 🚀 Prérequis
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- **PHP** : >= 8.2
+- **Composer** : >= 2.0
+- **Base de données** : MySQL ou PostgreSQL
+- **Serveur web** : Nginx / Apache / Serveur interne PHP
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## ⚙️ Installation & Configuration
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+1. **Cloner le dépôt et installer les dépendances**
+   ```bash
+   git clone <votre_depot>
+   cd CRM-backend
+   composer install
+   ```
 
-## Learning Laravel
+2. **Configurer l'environnement**
+   Copiez le fichier d'exemple et configurez votre base de données :
+   ```bash
+   cp .env.example .env
+   php artisan key:generate
+   ```
+   *N'oubliez pas de configurer vos identifiants de base de données dans le `.env` (`DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`).*
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+3. **Construire la base de données et les données de test (Seeders)**
+   Cette commande génère toute la structure (tables, UUID, clés étrangères) et peuple la base avec des rôles, des utilisateurs (`admin@crm.local`, `delegue@crm.local`), des filiales, des médecins et des historiques de visites.
+   ```bash
+   php artisan migrate:fresh --seed
+   ```
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+4. **Lancer le serveur de développement**
+   ```bash
+   php artisan serve
+   ```
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## 📖 Documentation API (Swagger)
 
-## Laravel Sponsors
+L'API est entièrement documentée avec L5-Swagger (OpenAPI 3). 
+Une fois le serveur lancé, vous pouvez consulter la documentation et tester les endpoints interactivement à l'adresse suivante :
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+**[http://localhost:8000/api/documentation](http://localhost:8000/api/documentation)**
 
-### Premium Partners
+*Pour régénérer la documentation après avoir modifié les annotations dans les contrôleurs, exécutez :*
+```bash
+php artisan l5-swagger:generate
+```
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[WebReinvent](https://webreinvent.com/)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Jump24](https://jump24.co.uk)**
-- **[Redberry](https://redberry.international/laravel/)**
-- **[Active Logic](https://activelogic.com)**
-- **[byte5](https://byte5.de)**
-- **[OP.GG](https://op.gg)**
+## 🧠 Intelligence Métier (Tâches en arrière-plan)
 
-## Contributing
+Le CRM inclut des mécanismes automatiques (State Machines et CRON) pour assister les équipes.
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+### 1. Commandes Planifiées (Cron Jobs)
+Assurez-vous que le planificateur de tâches de Laravel est configuré sur votre serveur de production (`* * * * * cd /path-to-your-project && php artisan schedule:run >> /dev/null 2>&1`).
 
-## Code of Conduct
+*   **Rappels des visites (`app:send-reminders`)** : Tourne à **07h00** tous les jours. Envoie un récapitulatif par email aux délégués pour les visites de la journée suivante.
+*   **Moteur de Scoring (`app:calculate-scores`)** : Tourne à **02h00** tous les jours. Recalcule le `potentiel` et le `score` des contacts en fonction de la fréquence des visites (30 derniers jours).
+    *   *Vous pouvez tester le calcul manuellement avec :* `php artisan app:calculate-scores`
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+### 2. Workflows (Observers)
+*   **Workflow Visites (`ActivityObserver`)** :
+    *   Lorsqu'une visite est marquée "Réalisée", le système calcule la durée automatiquement, vérifie le pointage GPS de l'activité par rapport à la cible (tolérance 500m), déduit les échantillons donnés de la table `sample_movements`, et verrouille la visite contre toute modification future.
+*   **Workflow Campagnes (`CampaignObserver`)** :
+    *   Empêche les sauts de statuts illogiques (`creation` -> `validation` -> `deploiement`...). Lève une erreur API HTTP 422 si la séquence métier n'est pas respectée.
 
-## Security Vulnerabilities
+## 🔐 Sécurité & Authentification
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+-   L'API utilise **Laravel Sanctum** pour l'authentification par jeton (Token Bearer).
+-   La gestion des rôles et des accès (RBAC) est assurée par **Spatie Permission** (`super-admin`, `manager`, `delegue`).
+-   Les données sont cloisonnées par périmètre géographique (Filiale/Pays) via le trait global `HasPerimeter`.
 
-## License
+## 🧪 Tests manuels rapides
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+Si vous avez lancé les Seeders, voici les identifiants de test préconfigurés :
+- **Super Admin** : `admin@crm.local` (Mot de passe : `password`)
+- **Délégué Médical** : `delegue@crm.local` (Mot de passe : `password`)
+
+*(Note : à la toute première connexion, l'API renverra un statut `force_password_change` pour simuler le changement de mot de passe obligatoire).*
