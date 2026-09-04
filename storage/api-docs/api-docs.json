@@ -689,12 +689,121 @@
                 ]
             }
         },
+        "/api/v1/auth/invite": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Créer un utilisateur et envoyer un email d'invitation",
+                "description": "L'admin crée un compte avec email uniquement. Un email est envoyé avec un token pour configurer le mot de passe.",
+                "operationId": "a68c708f422b9b9cc1a4b44e98d36ac5",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "name",
+                                    "email"
+                                ],
+                                "properties": {
+                                    "name": {
+                                        "type": "string",
+                                        "example": "John Doe"
+                                    },
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email",
+                                        "example": "john.doe@example.com"
+                                    },
+                                    "country_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    },
+                                    "subsidiary_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Utilisateur créé, email d'invitation envoyé"
+                    },
+                    "422": {
+                        "description": "Email déjà utilisé ou données invalides"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/auth/setup-password": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Définir le mot de passe via le lien d'invitation",
+                "operationId": "84f424c703c54c48eb25ba89dbf9da8c",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "token",
+                                    "password",
+                                    "password_confirmation"
+                                ],
+                                "properties": {
+                                    "token": {
+                                        "type": "string"
+                                    },
+                                    "password": {
+                                        "type": "string",
+                                        "format": "password",
+                                        "minLength": 8
+                                    },
+                                    "password_confirmation": {
+                                        "type": "string",
+                                        "format": "password",
+                                        "minLength": 8
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Mot de passe défini avec succès"
+                    },
+                    "400": {
+                        "description": "Token invalide ou expiré"
+                    },
+                    "422": {
+                        "description": "Le mot de passe ne correspond pas ou est trop court"
+                    }
+                }
+            }
+        },
         "/api/v1/login": {
             "post": {
                 "tags": [
                     "Authentication"
                 ],
-                "summary": "Authentification (Obtenir un Token)",
+                "summary": "Première étape de connexion (Email/Mot de passe) -> Déclenche l'OTP",
+                "description": "Vérifie les identifiants et envoie un code OTP à 6 chiffres par email.",
                 "operationId": "bae68d1c55329ecb6e41f48285840c8f",
                 "requestBody": {
                     "required": true,
@@ -723,8 +832,71 @@
                     }
                 },
                 "responses": {
+                    "202": {
+                        "description": "Identifiants valides, OTP envoyé par email",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "example": "requires_otp"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Un code de vérification a été envoyé à votre adresse email."
+                                        },
+                                        "user_id": {
+                                            "type": "string",
+                                            "format": "uuid"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Identifiants invalides"
+                    }
+                }
+            }
+        },
+        "/api/v1/verify-otp": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Deuxième étape de connexion (Vérification OTP)",
+                "description": "Valide le code OTP reçu par email et retourne le Token Sanctum final.",
+                "operationId": "bc7a1720ed9e42ff935f73ac5ab69371",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "user_id",
+                                    "otp_code"
+                                ],
+                                "properties": {
+                                    "user_id": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                    },
+                                    "otp_code": {
+                                        "type": "string",
+                                        "example": "123456"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
                     "200": {
-                        "description": "Connexion réussie",
+                        "description": "Connexion réussie, Token délivré",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -742,7 +914,7 @@
                         }
                     },
                     "401": {
-                        "description": "Identifiants invalides"
+                        "description": "Code OTP invalide ou expiré"
                     }
                 }
             }
