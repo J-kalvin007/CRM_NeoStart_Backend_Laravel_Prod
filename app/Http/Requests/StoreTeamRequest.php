@@ -14,7 +14,7 @@ class StoreTeamRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'territory_id' => 'required|exists:territories,id',
+            'sector_id' => 'required|exists:sectors,id',
             'name' => 'required|string|max:255',
             'manager_id' => 'nullable|exists:users,id',
         ];
