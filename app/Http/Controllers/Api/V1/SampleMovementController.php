@@ -85,4 +85,35 @@ class SampleMovementController extends Controller
     {
         return new SampleMovementResource(SampleMovement::with(['product', 'user', 'activity'])->findOrFail($id));
     }
+
+    public function myStock(Request $request)
+    {
+        $userId = $request->user()->id;
+
+        // Aggregate stock per product for the authenticated delegate
+        $stock = \Illuminate\Support\Facades\DB::table('sample_movements')
+            ->where('user_id', $userId)
+            ->join('products', 'sample_movements.product_id', '=', 'products.id')
+            ->select(
+                'products.id as product_id',
+                'products.name as product_name',
+                'products.image_url',
+                \Illuminate\Support\Facades\DB::raw("SUM(CASE WHEN movement_type IN ('reception','retour') THEN quantity ELSE 0 END) as quantity_received"),
+                \Illuminate\Support\Facades\DB::raw("SUM(CASE WHEN movement_type IN ('distribution','destruction') THEN quantity ELSE 0 END) as quantity_distributed"),
+                \Illuminate\Support\Facades\DB::raw("SUM(CASE WHEN movement_type IN ('reception','retour') THEN quantity ELSE -quantity END) as quantity_available")
+            )
+            ->groupBy('products.id', 'products.name', 'products.image_url')
+            ->get()
+            ->map(fn($row) => [
+                'product_id'           => $row->product_id,
+                'product_name'         => $row->product_name,
+                'image_url'            => $row->image_url,
+                'quantity_available'   => max(0, $row->quantity_available),
+                'quantity_distributed' => $row->quantity_distributed,
+                'quantity_received'    => $row->quantity_received,
+                'alert_threshold'      => 5, // configurable
+            ]);
+
+        return response()->json(['data' => $stock]);
+    }
 }

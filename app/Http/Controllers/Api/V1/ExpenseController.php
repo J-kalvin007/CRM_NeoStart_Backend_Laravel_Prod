@@ -159,4 +159,25 @@ class ExpenseController extends Controller
         $expense->delete();
         return response()->json(null, 204);
     }
+
+    /**
+     * PATCH /api/v1/expenses/{expense}/status
+     * Approve or reject an expense (manager only)
+     */
+    public function updateStatus(Request $request, Expense $expense)
+    {
+        $v = $request->validate([
+            'status'           => 'required|in:approved,rejected,pending',
+            'rejection_reason' => 'nullable|string|max:500',
+        ]);
+
+        $expense->update([
+            'status'           => $v['status'],
+            'approved_by'      => $v['status'] === 'approved' ? Auth::id() : $expense->approved_by,
+            'rejection_reason' => $v['rejection_reason'] ?? null,
+            'approved_at'      => $v['status'] === 'approved' ? now() : null,
+        ]);
+
+        return response()->json(new ExpenseResource($expense->load(['user', 'approver'])));
+    }
 }
