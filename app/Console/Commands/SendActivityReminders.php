@@ -35,7 +35,7 @@ class SendActivityReminders extends Command
         // Trouver toutes les activités prévues pour demain, groupées par délégué (user_id)
         $activitiesGrouped = Activity::with(['contact', 'account'])
             ->whereDate('date_activite', $tomorrow)
-            ->whereIn('statut', ['brouillon', 'planifie'])
+            ->where('statut', 'planifiee')
             ->orderBy('heure_debut')
             ->get()
             ->groupBy('user_id');

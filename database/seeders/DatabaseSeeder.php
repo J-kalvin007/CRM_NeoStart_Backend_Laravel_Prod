@@ -88,5 +88,9 @@ class DatabaseSeeder extends Seeder
         if (!$admin->hasRole('Administrateur Groupe')) {
             $admin->assignRole('Administrateur Groupe');
         }
+
+        $this->call([
+            CRMDataSeeder::class,
+        ]);
     }
 }
