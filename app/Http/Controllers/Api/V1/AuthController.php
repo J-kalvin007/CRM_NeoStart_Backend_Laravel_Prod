@@ -244,8 +244,13 @@ class AuthController extends Controller
         // L'OTP est valide, on l'efface du cache
         Cache::forget('login_otp_' . $user->id);
 
-        // Connexion réussie
-        $user->update(['last_login_at' => now()]);
+        // Mise à jour des informations de connexion et vérification email
+        $updateData = ['last_login_at' => now()];
+        if (is_null($user->email_verified_at)) {
+            $updateData['email_verified_at'] = now();
+        }
+        $user->update($updateData);
+
         $token = $user->createToken('auth-token')->plainTextToken;
 
         return response()->json([

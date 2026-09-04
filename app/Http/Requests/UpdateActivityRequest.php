@@ -23,7 +23,10 @@ class UpdateActivityRequest extends FormRequest
     public function rules(): array
     {
         return [
-            //
+            'notes' => 'nullable|string',
+            'statut' => 'nullable|string|in:planifiee,en_cours,realisee,manquee,annulee',
+            'heure_debut' => 'nullable|string',
+            'heure_fin' => 'nullable|string',
         ];
     }
 }

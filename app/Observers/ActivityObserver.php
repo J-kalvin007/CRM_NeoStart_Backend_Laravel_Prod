@@ -67,6 +67,11 @@ class ActivityObserver
 
             // Décrémentation des échantillons (SampleMovements)
             $this->deductSamples($activity);
+
+            // -------------------------------------------------------------
+            // Recalcul des objectifs associés (Indicateurs)
+            // -------------------------------------------------------------
+            app(\App\Services\IndicatorCalculationEngine::class)->updateObjectivesForModel($activity);
         }
     }
 

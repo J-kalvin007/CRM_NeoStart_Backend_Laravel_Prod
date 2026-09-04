@@ -23,7 +23,19 @@ class StoreObjectifRequest extends FormRequest
     public function rules(): array
     {
         return [
-            //
+            'user_id' => 'nullable|exists:users,id',
+            'team_id' => 'nullable|uuid|exists:teams,id',
+            'indicator_id' => 'required|uuid|exists:indicators,id',
+            'date_debut' => 'required|date',
+            'date_fin' => 'required|date|after_or_equal:date_debut',
+            'periode' => 'nullable|string',
+            'valeur_cible' => 'required|numeric',
+            'valeur_realisee' => 'nullable|numeric',
+            'taux_realisation' => 'nullable|numeric',
+            'product_id' => 'nullable|uuid|exists:products,id',
+            'description' => 'nullable|string',
+            'statut' => 'nullable|string|in:en_cours,actif,atteint,depasse,non_atteint,annule',
+            'subsidiary_id' => 'required|uuid|exists:subsidiaries,id',
         ];
     }
 }

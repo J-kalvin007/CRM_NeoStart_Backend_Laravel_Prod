@@ -11,6 +11,7 @@ class StoreActivityRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'subsidiary_id'  => 'required|uuid|exists:subsidiaries,id',
             'tour_plan_id'   => 'nullable|uuid|exists:tour_plans,id',
             'contact_id'     => 'nullable|uuid|exists:contacts,id',
             'account_id'     => 'nullable|uuid|exists:accounts,id',
