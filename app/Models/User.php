@@ -35,6 +35,7 @@ class User extends Authenticatable
         'manager_id',
         'status',
         'last_login_at',
+        'force_password_change',
     ];
 
     /**
@@ -59,6 +60,7 @@ class User extends Authenticatable
             'password' => 'hashed',
             'status' => 'boolean',
             'last_login_at' => 'datetime',
+            'force_password_change' => 'boolean',
         ];
     }
 

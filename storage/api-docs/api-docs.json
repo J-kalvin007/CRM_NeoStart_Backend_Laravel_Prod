@@ -694,8 +694,8 @@
                 "tags": [
                     "Authentication"
                 ],
-                "summary": "Créer un utilisateur et envoyer un email d'invitation",
-                "description": "L'admin crée un compte avec email uniquement. Un email est envoyé avec un token pour configurer le mot de passe.",
+                "summary": "Créer un utilisateur (mot de passe temporaire)",
+                "description": "L'admin crée un compte. Le système génère un mot de passe temporaire s'il n'est pas fourni. L'utilisateur devra le changer à la première connexion.",
                 "operationId": "a68c708f422b9b9cc1a4b44e98d36ac5",
                 "requestBody": {
                     "required": true,
@@ -704,7 +704,8 @@
                             "schema": {
                                 "required": [
                                     "name",
-                                    "email"
+                                    "email",
+                                    "password"
                                 ],
                                 "properties": {
                                     "name": {
@@ -715,6 +716,10 @@
                                         "type": "string",
                                         "format": "email",
                                         "example": "john.doe@example.com"
+                                    },
+                                    "password": {
+                                        "description": "Mot de passe temporaire créé par l'admin",
+                                        "type": "string"
                                     },
                                     "country_id": {
                                         "type": "string",
@@ -734,7 +739,7 @@
                 },
                 "responses": {
                     "201": {
-                        "description": "Utilisateur créé, email d'invitation envoyé"
+                        "description": "Utilisateur créé, email contenant les identifiants envoyé"
                     },
                     "422": {
                         "description": "Email déjà utilisé ou données invalides"
@@ -747,63 +752,13 @@
                 ]
             }
         },
-        "/api/v1/auth/setup-password": {
-            "post": {
-                "tags": [
-                    "Authentication"
-                ],
-                "summary": "Définir le mot de passe via le lien d'invitation",
-                "operationId": "84f424c703c54c48eb25ba89dbf9da8c",
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "required": [
-                                    "token",
-                                    "password",
-                                    "password_confirmation"
-                                ],
-                                "properties": {
-                                    "token": {
-                                        "type": "string"
-                                    },
-                                    "password": {
-                                        "type": "string",
-                                        "format": "password",
-                                        "minLength": 8
-                                    },
-                                    "password_confirmation": {
-                                        "type": "string",
-                                        "format": "password",
-                                        "minLength": 8
-                                    }
-                                },
-                                "type": "object"
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "200": {
-                        "description": "Mot de passe défini avec succès"
-                    },
-                    "400": {
-                        "description": "Token invalide ou expiré"
-                    },
-                    "422": {
-                        "description": "Le mot de passe ne correspond pas ou est trop court"
-                    }
-                }
-            }
-        },
         "/api/v1/login": {
             "post": {
                 "tags": [
                     "Authentication"
                 ],
-                "summary": "Première étape de connexion (Email/Mot de passe) -> Déclenche l'OTP",
-                "description": "Vérifie les identifiants et envoie un code OTP à 6 chiffres par email.",
+                "summary": "Connexion (Déclenche OTP ou demande changement de mot de passe)",
+                "description": "Vérifie les identifiants. Si c'est la première connexion, force le changement de mot de passe. Sinon, envoie le code OTP.",
                 "operationId": "bae68d1c55329ecb6e41f48285840c8f",
                 "requestBody": {
                     "required": true,
@@ -833,7 +788,7 @@
                 },
                 "responses": {
                     "202": {
-                        "description": "Identifiants valides, OTP envoyé par email",
+                        "description": "OTP envoyé par email",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -842,9 +797,25 @@
                                             "type": "string",
                                             "example": "requires_otp"
                                         },
-                                        "message": {
+                                        "user_id": {
                                             "type": "string",
-                                            "example": "Un code de vérification a été envoyé à votre adresse email."
+                                            "format": "uuid"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Changement de mot de passe requis",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "example": "requires_password_change"
                                         },
                                         "user_id": {
                                             "type": "string",
@@ -858,6 +829,59 @@
                     },
                     "401": {
                         "description": "Identifiants invalides"
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/change-password": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Changer le mot de passe temporaire et déclencher l'OTP",
+                "operationId": "76cf7302f52a6d34a066a35f01453073",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "user_id",
+                                    "old_password",
+                                    "new_password",
+                                    "new_password_confirmation"
+                                ],
+                                "properties": {
+                                    "user_id": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                    },
+                                    "old_password": {
+                                        "type": "string",
+                                        "format": "password"
+                                    },
+                                    "new_password": {
+                                        "type": "string",
+                                        "format": "password",
+                                        "minLength": 8
+                                    },
+                                    "new_password_confirmation": {
+                                        "type": "string",
+                                        "format": "password",
+                                        "minLength": 8
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "202": {
+                        "description": "Mot de passe mis à jour, OTP envoyé"
+                    },
+                    "422": {
+                        "description": "Ancien mot de passe incorrect ou nouveau non conforme"
                     }
                 }
             }
