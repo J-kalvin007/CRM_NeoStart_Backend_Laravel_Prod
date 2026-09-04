@@ -23,9 +23,14 @@ Route::prefix('v1')->group(function () {
 
     // ── Authentification ──────────────────────────────────────
     Route::post('/login', [AuthController::class, 'login']);
+    Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
+    Route::post('/auth/setup-password', [AuthController::class, 'setupPassword']);
 
     // ── Endpoints protégés ────────────────────────────────────
     Route::middleware('auth:sanctum')->group(function () {
+        
+        // Création de compte (Admin)
+        Route::post('/auth/invite', [AuthController::class, 'invite']);
 
         Route::get('/me', [AuthController::class, 'me']);
         Route::post('/logout', [AuthController::class, 'logout']);
