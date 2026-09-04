@@ -50,6 +50,51 @@ class ContactController extends Controller
     }
 
     #[OA\Post(
+        path: '/api/v1/contacts/check-duplicates',
+        summary: 'Vérifier l\'existence de doublons potentiels',
+        security: [['bearerAuth' => []]],
+        tags: ['Contacts'],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                properties: [
+                    new OA\Property(property: 'account_id', type: 'string', format: 'uuid', nullable: true),
+                    new OA\Property(property: 'nom', type: 'string', nullable: true),
+                    new OA\Property(property: 'prenom', type: 'string', nullable: true),
+                    new OA\Property(property: 'telephone', type: 'string', nullable: true),
+                    new OA\Property(property: 'email', type: 'string', format: 'email', nullable: true),
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Résultat de la recherche'),
+        ]
+    )]
+    public function checkDuplicates(Request $request, DuplicateDetectionService $duplicateService)
+    {
+        $request->validate([
+            'account_id' => 'nullable|uuid|exists:accounts,id',
+            'nom' => 'nullable|string',
+            'prenom' => 'nullable|string',
+            'telephone' => 'nullable|string',
+            'email' => 'nullable|email',
+        ]);
+
+        $countryId = null;
+        if ($request->account_id) {
+            $account = Account::with('subsidiary')->find($request->account_id);
+            $countryId = $account?->subsidiary?->country_id;
+        }
+
+        $duplicate = $duplicateService->findDuplicateContact($countryId, $request->all());
+
+        return response()->json([
+            'is_duplicate' => $duplicate ? true : false,
+            'duplicate' => $duplicate ? new ContactResource($duplicate->load(['account', 'categories'])) : null,
+        ]);
+    }
+
+    #[OA\Post(
         path: '/api/v1/contacts',
         summary: 'Créer un nouveau contact',
         security: [['bearerAuth' => []]],

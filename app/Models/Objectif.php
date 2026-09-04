@@ -20,13 +20,12 @@ class Objectif extends Model
     protected $fillable = [
         'user_id',
         'team_id',
+        'indicator_id',
         'date_debut',
         'date_fin',
         'periode',
-        'type_objectif',
         'valeur_cible',
         'valeur_realisee',
-        'unite',
         'taux_realisation',
         'product_id',
         'description',
@@ -56,6 +55,11 @@ class Objectif extends Model
     public function product()
     {
         return $this->belongsTo(Product::class);
+    }
+
+    public function indicator()
+    {
+        return $this->belongsTo(Indicator::class);
     }
 
     /* ─── Business Logic ─────────────────────────────────────── */

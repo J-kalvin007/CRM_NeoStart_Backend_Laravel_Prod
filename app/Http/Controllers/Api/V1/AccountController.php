@@ -45,6 +45,46 @@ class AccountController extends Controller
     }
 
     #[OA\Post(
+        path: '/api/v1/accounts/check-duplicates',
+        summary: 'Vérifier l\'existence de doublons potentiels',
+        security: [['bearerAuth' => []]],
+        tags: ['Accounts'],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['subsidiary_id'],
+                properties: [
+                    new OA\Property(property: 'subsidiary_id', type: 'string', format: 'uuid'),
+                    new OA\Property(property: 'nom', type: 'string', nullable: true),
+                    new OA\Property(property: 'ville', type: 'string', nullable: true),
+                    new OA\Property(property: 'telephone', type: 'string', nullable: true),
+                    new OA\Property(property: 'email', type: 'string', format: 'email', nullable: true),
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Résultat de la recherche de doublons'),
+        ]
+    )]
+    public function checkDuplicates(Request $request, DuplicateDetectionService $duplicateService)
+    {
+        $request->validate([
+            'subsidiary_id' => 'required|uuid|exists:subsidiaries,id',
+            'nom' => 'nullable|string',
+            'ville' => 'nullable|string',
+            'telephone' => 'nullable|string',
+            'email' => 'nullable|email',
+        ]);
+
+        $duplicate = $duplicateService->findDuplicateAccount($request->subsidiary_id, $request->all());
+
+        return response()->json([
+            'is_duplicate' => $duplicate ? true : false,
+            'duplicate' => $duplicate ? new AccountResource($duplicate) : null,
+        ]);
+    }
+
+    #[OA\Post(
         path: '/api/v1/accounts',
         summary: 'Créer un nouveau compte',
         security: [['bearerAuth' => []]],

@@ -10,6 +10,8 @@ use App\Models\Activity;
 use App\Observers\ActivityObserver;
 use App\Models\Campaign;
 use App\Observers\CampaignObserver;
+use App\Models\Task;
+use App\Observers\TaskObserver;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -30,5 +32,6 @@ class AppServiceProvider extends ServiceProvider
         Sanctum::usePersonalAccessTokenModel(PersonalAccessToken::class);
         Activity::observe(ActivityObserver::class);
         Campaign::observe(CampaignObserver::class);
+        Task::observe(TaskObserver::class);
     }
 }
