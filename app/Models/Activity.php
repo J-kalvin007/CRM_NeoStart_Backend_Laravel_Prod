@@ -35,6 +35,7 @@ class Activity extends Model
         'statut',
         'is_locked',
         'locked_at',
+        'gps_flagged',
         'local_uuid',
     ];
 
@@ -47,6 +48,7 @@ class Activity extends Model
         'duree_minutes'  => 'integer',
         'is_locked'      => 'boolean',
         'locked_at'      => 'datetime',
+        'gps_flagged'    => 'boolean',
     ];
 
     /* ─── Relations ──────────────────────────────────────────── */

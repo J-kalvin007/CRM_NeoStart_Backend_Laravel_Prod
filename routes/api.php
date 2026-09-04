@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\V1\SampleMovementController;
 use App\Http\Controllers\Api\V1\ObjectifController;
 use App\Http\Controllers\Api\V1\CampaignController;
 use App\Http\Controllers\Api\V1\KolProfileController;
+use App\Http\Controllers\Api\V1\NotificationController;
 
 Route::get('/login', fn() => response()->json(['message' => 'Non authentifié'], 401))->name('login');
 
@@ -36,6 +37,11 @@ Route::prefix('v1')->group(function () {
 
         Route::get('/me', [AuthController::class, 'me']);
         Route::post('/logout', [AuthController::class, 'logout']);
+
+        // ── Notifications ──────────────────────────────────────────
+        Route::get('/notifications', [NotificationController::class, 'index']);
+        Route::post('/notifications/mark-all-as-read', [NotificationController::class, 'markAllAsRead']);
+        Route::post('/notifications/{id}/mark-as-read', [NotificationController::class, 'markAsRead']);
 
         // ── Structure Organisationnelle ────────────────────────
         Route::apiResource('countries', CountryController::class);
