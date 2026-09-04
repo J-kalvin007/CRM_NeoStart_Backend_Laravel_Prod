@@ -1,7 +1,7 @@
 # Skynity CRM Backend (API)
 
-Il s'agit de l'API de base (backend) pour le CRM Skynity, développée avec Laravel 11. 
-Le backend repose sur une architecture agnostique, conçue pour gérer la force de vente terrain (Délégués médicaux/commerciaux), les tournées, la gestion des stocks d'échantillons, les campagnes marketing, et bien plus encore.
+Il s'agit de l'API de base (backend) pour le CRM Skynity, développée avec Laravel 12. 
+Le backend repose sur une architecture agnostique, conçue pour gérer la force de vente (collaborateurs et agents terrain), les tournées, la gestion des stocks d'échantillons, les campagnes marketing, et bien plus encore.
 
 ## 🚀 Prérequis
 
@@ -28,7 +28,7 @@ Le backend repose sur une architecture agnostique, conçue pour gérer la force 
    *N'oubliez pas de configurer vos identifiants de base de données dans le `.env` (`DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`).*
 
 3. **Construire la base de données et les données de test (Seeders)**
-   Cette commande génère toute la structure (tables, UUID, clés étrangères) et peuple la base avec des rôles, des utilisateurs (`admin@crm.local`, `delegue@crm.local`), des filiales, des médecins et des historiques de visites.
+   Cette commande génère toute la structure (tables, UUID, clés étrangères) et peuple la base avec des rôles, des utilisateurs (`admin@crm.local`, `utilisateur@crm.local`), des filiales, des contacts professionnels et des historiques de visites.
    ```bash
    php artisan migrate:fresh --seed
    ```
@@ -57,7 +57,7 @@ Le CRM inclut des mécanismes automatiques (State Machines et CRON) pour assiste
 ### 1. Commandes Planifiées (Cron Jobs)
 Assurez-vous que le planificateur de tâches de Laravel est configuré sur votre serveur de production (`* * * * * cd /path-to-your-project && php artisan schedule:run >> /dev/null 2>&1`).
 
-*   **Rappels des visites (`app:send-reminders`)** : Tourne à **07h00** tous les jours. Envoie un récapitulatif par email aux délégués pour les visites de la journée suivante.
+*   **Rappels des visites (`app:send-reminders`)** : Tourne à **07h00** tous les jours. Envoie un récapitulatif par email aux collaborateurs pour les visites de la journée suivante.
 *   **Moteur de Scoring (`app:calculate-scores`)** : Tourne à **02h00** tous les jours. Recalcule le `potentiel` et le `score` des contacts en fonction de la fréquence des visites (30 derniers jours).
     *   *Vous pouvez tester le calcul manuellement avec :* `php artisan app:calculate-scores`
 
@@ -79,13 +79,13 @@ Une table `settings` (clé/valeur) permet de configurer le nom de l'application,
 ## 🔐 Sécurité & Authentification
 
 -   L'API utilise **Laravel Sanctum** pour l'authentification par jeton (Token Bearer).
--   La gestion des rôles et des accès (RBAC) est assurée par **Spatie Permission** (`super-admin`, `manager`, `delegue`).
+-   La gestion des rôles et des accès (RBAC) est assurée par **Spatie Permission** (`super-admin`, `manager`, `user`).
 -   Les données sont cloisonnées par périmètre géographique (Filiale/Pays) via le trait global `HasPerimeter`.
 
 ## 🧪 Tests manuels rapides
 
 Si vous avez lancé les Seeders, voici les identifiants de test préconfigurés :
 - **Super Admin** : `admin@crm.local` (Mot de passe : `password`)
-- **Délégué Médical** : `delegue@crm.local` (Mot de passe : `password`)
+- **Agent Terrain / Collaborateur** : `delegue@crm.local` (Mot de passe : `password`)
 
 *(Note : à la toute première connexion, l'API renverra un statut `force_password_change` pour simuler le changement de mot de passe obligatoire).*
