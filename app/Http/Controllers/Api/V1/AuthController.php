@@ -32,6 +32,10 @@ class AuthController extends Controller
                     new OA\Property(property: 'password', type: 'string', description: 'Mot de passe temporaire créé par l\'admin'),
                     new OA\Property(property: 'country_id', type: 'string', format: 'uuid', nullable: true),
                     new OA\Property(property: 'subsidiary_id', type: 'string', format: 'uuid', nullable: true),
+                    new OA\Property(property: 'region_id', type: 'string', format: 'uuid', nullable: true),
+                    new OA\Property(property: 'territory_id', type: 'string', format: 'uuid', nullable: true),
+                    new OA\Property(property: 'zone_id', type: 'string', format: 'uuid', nullable: true),
+                    new OA\Property(property: 'sector_id', type: 'string', format: 'uuid', nullable: true),
                 ]
             )
         ),
@@ -48,6 +52,10 @@ class AuthController extends Controller
             'password' => 'required|string|min:6',
             'country_id' => 'nullable|uuid',
             'subsidiary_id' => 'nullable|uuid',
+            'region_id' => 'nullable|uuid',
+            'territory_id' => 'nullable|uuid',
+            'zone_id' => 'nullable|uuid',
+            'sector_id' => 'nullable|uuid',
         ]);
 
         $temporaryPassword = $validated['password'];

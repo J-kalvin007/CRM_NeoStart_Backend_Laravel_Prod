@@ -7,7 +7,7 @@
     },
     "servers": [
         {
-            "url": "http://my-default-host.com",
+            "url": "http://localhost:8000",
             "description": "Main API Server"
         }
     ],
@@ -168,6 +168,61 @@
                     },
                     "422": {
                         "description": "Données de validation invalides"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/accounts/check-duplicates": {
+            "post": {
+                "tags": [
+                    "Accounts"
+                ],
+                "summary": "Vérifier l'existence de doublons potentiels",
+                "operationId": "37af0e30cc4bc44f66ca2a9a7eb07633",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "subsidiary_id"
+                                ],
+                                "properties": {
+                                    "subsidiary_id": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                    },
+                                    "nom": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "ville": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "telephone": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Résultat de la recherche de doublons"
                     }
                 },
                 "security": [
@@ -689,6 +744,25 @@
                 ]
             }
         },
+        "/api/v1/analytics/dashboard": {
+            "get": {
+                "tags": [
+                    "Analytics"
+                ],
+                "summary": "Obtenir les données pour le tableau de bord (Indicateurs et Objectifs)",
+                "operationId": "89ee0bb19258dd953425308a94aa8153",
+                "responses": {
+                    "200": {
+                        "description": "Statistiques du tableau de bord"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/auth/invite": {
             "post": {
                 "tags": [
@@ -727,6 +801,26 @@
                                         "nullable": true
                                     },
                                     "subsidiary_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    },
+                                    "region_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    },
+                                    "territory_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    },
+                                    "zone_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    },
+                                    "sector_id": {
                                         "type": "string",
                                         "format": "uuid",
                                         "nullable": true
@@ -1956,6 +2050,59 @@
                     },
                     "422": {
                         "description": "Données de validation invalides"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/contacts/check-duplicates": {
+            "post": {
+                "tags": [
+                    "Contacts"
+                ],
+                "summary": "Vérifier l'existence de doublons potentiels",
+                "operationId": "60d77626862df16a933e8f9f9183ed75",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "account_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    },
+                                    "nom": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "prenom": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "telephone": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Résultat de la recherche"
                     }
                 },
                 "security": [
@@ -3307,6 +3454,231 @@
                 ]
             }
         },
+        "/api/v1/sectors": {
+            "get": {
+                "tags": [
+                    "Geography"
+                ],
+                "summary": "Liste des secteurs",
+                "operationId": "7bb75b189d9b5f518b2a3e6169adcf5d",
+                "responses": {
+                    "200": {
+                        "description": "Succès"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Geography"
+                ],
+                "summary": "Créer un secteur",
+                "operationId": "eead253ff30de1422cc8e8df9afaf088",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "zone_id",
+                                    "name",
+                                    "code"
+                                ],
+                                "properties": {
+                                    "zone_id": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                    },
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "code": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Secteur créé avec succès"
+                    },
+                    "422": {
+                        "description": "Données invalides"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/sectors/{id}": {
+            "get": {
+                "tags": [
+                    "Geography"
+                ],
+                "summary": "Afficher un secteur spécifique",
+                "operationId": "f943e60a72bc597d75f834c209788998",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Succès"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Geography"
+                ],
+                "summary": "Mettre à jour un secteur",
+                "operationId": "75e526cec1b7ae17caa6e93d13c423d3",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Succès"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Geography"
+                ],
+                "summary": "Supprimer un secteur",
+                "operationId": "b414aece220bc1f67dbd0e88ba08159f",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Succès"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/settings": {
+            "get": {
+                "tags": [
+                    "Settings"
+                ],
+                "summary": "Lister les paramètres publics",
+                "operationId": "0dd8f3513d25a61df64210ec5b698722",
+                "parameters": [
+                    {
+                        "name": "subsidiary_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Liste des paramètres"
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Settings"
+                ],
+                "summary": "Mettre à jour un paramètre (ex: Logo)",
+                "operationId": "338954b5470c0d400587b35ec02d2f76",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "required": [
+                                    "key"
+                                ],
+                                "properties": {
+                                    "key": {
+                                        "type": "string"
+                                    },
+                                    "value": {
+                                        "type": "string"
+                                    },
+                                    "subsidiary_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    },
+                                    "file": {
+                                        "type": "string",
+                                        "format": "binary",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Paramètre mis à jour"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/subsidiaries": {
             "get": {
                 "tags": [
@@ -3541,11 +3913,11 @@
                         "application/json": {
                             "schema": {
                                 "required": [
-                                    "territory_id",
+                                    "sector_id",
                                     "name"
                                 ],
                                 "properties": {
-                                    "territory_id": {
+                                    "sector_id": {
                                         "type": "string",
                                         "format": "uuid"
                                     },
@@ -3633,7 +4005,7 @@
                         "application/json": {
                             "schema": {
                                 "properties": {
-                                    "territory_id": {
+                                    "sector_id": {
                                         "type": "string",
                                         "format": "uuid"
                                     },
@@ -4117,6 +4489,158 @@
                     }
                 ]
             }
+        },
+        "/api/v1/zones": {
+            "get": {
+                "tags": [
+                    "Geography"
+                ],
+                "summary": "Liste des zones",
+                "operationId": "bdc9e73e06606fd88a36ee7bb01932e0",
+                "responses": {
+                    "200": {
+                        "description": "Succès"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Geography"
+                ],
+                "summary": "Créer une zone",
+                "operationId": "2396e059dc818e7172ee9cbaf2fda7ed",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "territory_id",
+                                    "name",
+                                    "code"
+                                ],
+                                "properties": {
+                                    "territory_id": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                    },
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "code": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Zone créée avec succès"
+                    },
+                    "422": {
+                        "description": "Données invalides"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/zones/{id}": {
+            "get": {
+                "tags": [
+                    "Geography"
+                ],
+                "summary": "Afficher une zone spécifique",
+                "operationId": "29392691dcbfaf289c5297bffb3a1935",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Succès"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Geography"
+                ],
+                "summary": "Mettre à jour une zone",
+                "operationId": "6ffad6cf60ef2d862140f927b64022e4",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Succès"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Geography"
+                ],
+                "summary": "Supprimer une zone",
+                "operationId": "869a8ec31fcb2e3ee842183ffdd994aa",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Succès"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
         }
     },
     "components": {
@@ -4138,6 +4662,10 @@
         {
             "name": "Activities",
             "description": "Activities"
+        },
+        {
+            "name": "Analytics",
+            "description": "Analytics"
         },
         {
             "name": "Authentication",
@@ -4186,6 +4714,14 @@
         {
             "name": "SampleMovements",
             "description": "SampleMovements"
+        },
+        {
+            "name": "Geography",
+            "description": "Geography"
+        },
+        {
+            "name": "Settings",
+            "description": "Settings"
         },
         {
             "name": "Subsidiaries",
