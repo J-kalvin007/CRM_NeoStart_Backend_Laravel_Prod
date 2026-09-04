@@ -7,11 +7,688 @@
     },
     "servers": [
         {
-            "url": "http://localhost:8000",
+            "url": "http://my-default-host.com",
             "description": "Main API Server"
         }
     ],
     "paths": {
+        "/api/v1/accounts": {
+            "get": {
+                "tags": [
+                    "Accounts"
+                ],
+                "summary": "Lister tous les comptes (Pharmacies, Hôpitaux, Grossistes...)",
+                "operationId": "4bbac367ecf8af0f1c2dbad57ff21dc3",
+                "parameters": [
+                    {
+                        "name": "account_type",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "pharmacie",
+                                "hopital",
+                                "clinique",
+                                "grossiste",
+                                "cabinet",
+                                "entreprise",
+                                "autre"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "statut",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "actif",
+                                "inactif",
+                                "suspendu"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "search",
+                        "in": "query",
+                        "description": "Recherche par nom, ville ou responsable",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Liste des comptes récupérée avec succès"
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Accounts"
+                ],
+                "summary": "Créer un nouveau compte",
+                "operationId": "ca10abbfc49106114ac7da3d8678501b",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "nom",
+                                    "account_type"
+                                ],
+                                "properties": {
+                                    "subsidiary_id": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                    },
+                                    "nom": {
+                                        "type": "string",
+                                        "example": "Pharmacie Centrale"
+                                    },
+                                    "account_type": {
+                                        "type": "string",
+                                        "enum": [
+                                            "pharmacie",
+                                            "hopital",
+                                            "clinique",
+                                            "grossiste",
+                                            "cabinet",
+                                            "entreprise",
+                                            "autre"
+                                        ]
+                                    },
+                                    "adresse": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "ville": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "telephone": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email",
+                                        "nullable": true
+                                    },
+                                    "responsable": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "potentiel": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "enum": [
+                                            "faible",
+                                            "moyen",
+                                            "fort"
+                                        ]
+                                    },
+                                    "gps_lat": {
+                                        "type": "number",
+                                        "format": "float",
+                                        "nullable": true
+                                    },
+                                    "gps_lng": {
+                                        "type": "number",
+                                        "format": "float",
+                                        "nullable": true
+                                    },
+                                    "local_uuid": {
+                                        "description": "UUID généré côté mobile pour le mode offline",
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Compte créé avec succès"
+                    },
+                    "422": {
+                        "description": "Données de validation invalides"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/accounts/{id}": {
+            "get": {
+                "tags": [
+                    "Accounts"
+                ],
+                "summary": "Afficher les détails d'un compte",
+                "operationId": "577c024ccebfc85ec3189eb045d43f2b",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Détails du compte"
+                    },
+                    "404": {
+                        "description": "Compte non trouvé"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Accounts"
+                ],
+                "summary": "Mettre à jour un compte",
+                "operationId": "f4782297606206b0adc1ff8660750132",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "nom": {
+                                        "type": "string"
+                                    },
+                                    "account_type": {
+                                        "type": "string",
+                                        "enum": [
+                                            "pharmacie",
+                                            "hopital",
+                                            "clinique",
+                                            "grossiste",
+                                            "cabinet",
+                                            "entreprise",
+                                            "autre"
+                                        ]
+                                    },
+                                    "adresse": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "ville": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "telephone": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email",
+                                        "nullable": true
+                                    },
+                                    "statut": {
+                                        "type": "string",
+                                        "enum": [
+                                            "actif",
+                                            "inactif",
+                                            "suspendu"
+                                        ]
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Compte mis à jour avec succès"
+                    },
+                    "404": {
+                        "description": "Compte non trouvé"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Accounts"
+                ],
+                "summary": "Supprimer (soft-delete) un compte",
+                "operationId": "92228661a3432dd364690c18850eb0a4",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Compte supprimé avec succès"
+                    },
+                    "404": {
+                        "description": "Compte non trouvé"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/activities": {
+            "get": {
+                "tags": [
+                    "Activities"
+                ],
+                "summary": "Lister les activités terrain (visites, appels, emails...)",
+                "operationId": "95761a10a8d473dbd3dd1dce4f121d88",
+                "parameters": [
+                    {
+                        "name": "activity_type",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "visite",
+                                "appel",
+                                "email",
+                                "reunion",
+                                "conference"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "statut",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "planifiee",
+                                "en_cours",
+                                "realisee",
+                                "manquee",
+                                "annulee"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "date_debut",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "date_fin",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "contact_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "account_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "tour_plan_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Liste des activités récupérée avec succès"
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Activities"
+                ],
+                "summary": "Créer une nouvelle activité (visite, appel, email...)",
+                "description": "Crée une activité terrain et enregistre optionnellement les produits présentés/distribués. Supporte le mode offline via local_uuid.",
+                "operationId": "a4bcc37a677c42ef4c818699823ab5d3",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "activity_type",
+                                    "date_activite"
+                                ],
+                                "properties": {
+                                    "tour_plan_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    },
+                                    "contact_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    },
+                                    "account_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    },
+                                    "activity_type": {
+                                        "type": "string",
+                                        "enum": [
+                                            "visite",
+                                            "appel",
+                                            "email",
+                                            "reunion",
+                                            "conference"
+                                        ]
+                                    },
+                                    "date_activite": {
+                                        "type": "string",
+                                        "format": "date"
+                                    },
+                                    "heure_debut": {
+                                        "type": "string",
+                                        "example": "09:30"
+                                    },
+                                    "heure_fin": {
+                                        "type": "string",
+                                        "example": "10:00"
+                                    },
+                                    "gps_debut_lat": {
+                                        "type": "number",
+                                        "format": "float"
+                                    },
+                                    "gps_debut_lng": {
+                                        "type": "number",
+                                        "format": "float"
+                                    },
+                                    "gps_fin_lat": {
+                                        "type": "number",
+                                        "format": "float"
+                                    },
+                                    "gps_fin_lng": {
+                                        "type": "number",
+                                        "format": "float"
+                                    },
+                                    "notes": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "statut": {
+                                        "type": "string",
+                                        "enum": [
+                                            "planifiee",
+                                            "en_cours",
+                                            "realisee",
+                                            "manquee",
+                                            "annulee"
+                                        ]
+                                    },
+                                    "local_uuid": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    },
+                                    "products": {
+                                        "type": "array",
+                                        "items": {
+                                            "properties": {
+                                                "product_id": {
+                                                    "type": "string",
+                                                    "format": "uuid"
+                                                },
+                                                "quantity": {
+                                                    "type": "integer",
+                                                    "default": 0
+                                                },
+                                                "customer_interest": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "faible",
+                                                        "moyen",
+                                                        "fort"
+                                                    ]
+                                                },
+                                                "remarques": {
+                                                    "type": "string",
+                                                    "nullable": true
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Activité créée avec succès"
+                    },
+                    "422": {
+                        "description": "Données invalides"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/activities/{id}": {
+            "get": {
+                "tags": [
+                    "Activities"
+                ],
+                "summary": "Afficher les détails d'une activité",
+                "operationId": "6e8d081b4955f0ef32308413433f967e",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Détails de l'activité"
+                    },
+                    "404": {
+                        "description": "Activité non trouvée"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Activities"
+                ],
+                "summary": "Mettre à jour une activité (bloqué si verrouillée)",
+                "operationId": "62ff9653b4cfe00ff2080a3f4aedcbf6",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "notes": {
+                                        "type": "string"
+                                    },
+                                    "statut": {
+                                        "type": "string",
+                                        "enum": [
+                                            "planifiee",
+                                            "en_cours",
+                                            "realisee",
+                                            "manquee",
+                                            "annulee"
+                                        ]
+                                    },
+                                    "heure_debut": {
+                                        "type": "string"
+                                    },
+                                    "heure_fin": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Activité mise à jour avec succès"
+                    },
+                    "403": {
+                        "description": "Activité verrouillée — modification interdite"
+                    },
+                    "404": {
+                        "description": "Activité non trouvée"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Activities"
+                ],
+                "summary": "Supprimer (soft-delete) une activité",
+                "operationId": "be87d3c3b1c36137d87b77e281f94612",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Activité supprimée avec succès"
+                    },
+                    "403": {
+                        "description": "Activité verrouillée — suppression interdite"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/login": {
             "post": {
                 "tags": [
@@ -114,6 +791,937 @@
                 ]
             }
         },
+        "/api/v1/categories": {
+            "get": {
+                "tags": [
+                    "Categories"
+                ],
+                "summary": "Lister toutes les catégories/tags",
+                "operationId": "e225c2b7eb5daf7fb16e00f4f07ff030",
+                "parameters": [
+                    {
+                        "name": "type",
+                        "in": "query",
+                        "description": "Filtrer par type (ex: specialite_medicale, segment_client)",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "is_active",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Liste des catégories"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Categories"
+                ],
+                "summary": "Créer une catégorie/tag",
+                "operationId": "dd76b8d73b7ea8b4951f03d7c0904c92",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "nom"
+                                ],
+                                "properties": {
+                                    "nom": {
+                                        "type": "string",
+                                        "example": "Cardiologie"
+                                    },
+                                    "type": {
+                                        "description": "Groupement libre défini par l'Admin",
+                                        "type": "string",
+                                        "example": "specialite_medicale"
+                                    },
+                                    "description": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "couleur": {
+                                        "type": "string",
+                                        "example": "#EF4444"
+                                    },
+                                    "icone": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "ordre": {
+                                        "type": "integer",
+                                        "default": 0
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Catégorie créée avec succès"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/categories/{id}": {
+            "get": {
+                "tags": [
+                    "Categories"
+                ],
+                "summary": "Détails d'une catégorie",
+                "operationId": "9c4934d1b68a6d4440ec72cfc8ae7074",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Détails de la catégorie"
+                    },
+                    "404": {
+                        "description": "Non trouvée"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Categories"
+                ],
+                "summary": "Mettre à jour une catégorie",
+                "operationId": "988e8695bc991d7f8e40131db5ba7a76",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "nom": {
+                                        "type": "string"
+                                    },
+                                    "type": {
+                                        "type": "string"
+                                    },
+                                    "couleur": {
+                                        "type": "string"
+                                    },
+                                    "is_active": {
+                                        "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Catégorie mise à jour"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Categories"
+                ],
+                "summary": "Supprimer une catégorie",
+                "operationId": "37196d259228d2274dd9dbef8b00e547",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Supprimée avec succès"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/config/account-types": {
+            "get": {
+                "tags": [
+                    "Configuration"
+                ],
+                "summary": "Lister les types de comptes configurables",
+                "description": "Retourne la liste des types de comptes définis par l'administrateur (ex: Pharmacie, Hôpital, Grossiste pour le secteur Pharma).",
+                "operationId": "34cdcadb71e0cb9bd6d947e85215354a",
+                "responses": {
+                    "200": {
+                        "description": "Liste des types de comptes"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Configuration"
+                ],
+                "summary": "Créer un nouveau type de compte",
+                "operationId": "7b1c531c9b4378a3f6c970e5004cc92d",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "code",
+                                    "libelle"
+                                ],
+                                "properties": {
+                                    "code": {
+                                        "description": "Identifiant technique unique",
+                                        "type": "string",
+                                        "example": "pharmacie"
+                                    },
+                                    "libelle": {
+                                        "type": "string",
+                                        "example": "Pharmacie"
+                                    },
+                                    "description": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "couleur": {
+                                        "type": "string",
+                                        "example": "#3B82F6"
+                                    },
+                                    "icone": {
+                                        "type": "string",
+                                        "example": "pharmacy-icon"
+                                    },
+                                    "ordre": {
+                                        "type": "integer",
+                                        "default": 0
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Type de compte créé avec succès"
+                    },
+                    "422": {
+                        "description": "Validation échouée"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/config/account-types/{id}": {
+            "put": {
+                "tags": [
+                    "Configuration"
+                ],
+                "summary": "Mettre à jour un type de compte",
+                "operationId": "ca8552257d103e1d186bb677e6f466fa",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Type mis à jour"
+                    },
+                    "404": {
+                        "description": "Non trouvé"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Configuration"
+                ],
+                "summary": "Supprimer un type de compte",
+                "operationId": "2d801affa076e4cf93acfaeefc8e769e",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Supprimé avec succès"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/config/contact-types": {
+            "get": {
+                "tags": [
+                    "Configuration"
+                ],
+                "summary": "Lister les types de contacts configurables",
+                "description": "Retourne la liste des types de contacts (ex: Cardiologue, Pédiatre, Généraliste pour le secteur Pharma).",
+                "operationId": "273a9491803be184f1814ee0c21757d4",
+                "responses": {
+                    "200": {
+                        "description": "Liste des types de contacts"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Configuration"
+                ],
+                "summary": "Créer un nouveau type de contact",
+                "operationId": "02583624643fce2d9b4b333c5e84030e",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "code",
+                                    "libelle"
+                                ],
+                                "properties": {
+                                    "code": {
+                                        "type": "string",
+                                        "example": "cardiologue"
+                                    },
+                                    "libelle": {
+                                        "type": "string",
+                                        "example": "Cardiologue"
+                                    },
+                                    "description": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "couleur": {
+                                        "type": "string",
+                                        "example": "#EF4444"
+                                    },
+                                    "ordre": {
+                                        "type": "integer"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Type de contact créé"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/config/contact-types/{id}": {
+            "put": {
+                "tags": [
+                    "Configuration"
+                ],
+                "summary": "Mettre à jour un type de contact",
+                "operationId": "89f74c4e07ebb7f92e3a4a12c4c97a07",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Type mis à jour"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Configuration"
+                ],
+                "summary": "Supprimer un type de contact",
+                "operationId": "347dca362c436101ea3a61fdc5e32d30",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Supprimé avec succès"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/config/product-types": {
+            "get": {
+                "tags": [
+                    "Configuration"
+                ],
+                "summary": "Lister les types de produits configurables",
+                "description": "Retourne les types de produits (ex: Article Vente Rx, Échantillon Gratuit, Brochure pour Pharma). Les champs is_stockable et is_distributable pilotent le comportement du système.",
+                "operationId": "a1feb3c01498da87cfe7f318e59aa24b",
+                "responses": {
+                    "200": {
+                        "description": "Liste des types de produits"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Configuration"
+                ],
+                "summary": "Créer un nouveau type de produit",
+                "operationId": "d27e9af316ee08aec0782660f2f20764",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "code",
+                                    "libelle"
+                                ],
+                                "properties": {
+                                    "code": {
+                                        "type": "string",
+                                        "example": "echantillon"
+                                    },
+                                    "libelle": {
+                                        "type": "string",
+                                        "example": "Échantillon Gratuit"
+                                    },
+                                    "is_stockable": {
+                                        "type": "boolean",
+                                        "default": true
+                                    },
+                                    "is_distributable": {
+                                        "type": "boolean",
+                                        "default": false
+                                    },
+                                    "couleur": {
+                                        "type": "string",
+                                        "example": "#10B981"
+                                    },
+                                    "ordre": {
+                                        "type": "integer"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Type de produit créé"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/config/product-types/{id}": {
+            "put": {
+                "tags": [
+                    "Configuration"
+                ],
+                "summary": "Mettre à jour un type de produit",
+                "operationId": "09440b731ec8d51b06c6264cbe47116e",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Type mis à jour"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Configuration"
+                ],
+                "summary": "Supprimer un type de produit",
+                "operationId": "28e4a10a92e8466f5abd641d780ce7e1",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Supprimé avec succès"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/contacts": {
+            "get": {
+                "tags": [
+                    "Contacts"
+                ],
+                "summary": "Lister tous les contacts (Médecins, Spécialistes, Interlocuteurs B2B)",
+                "operationId": "7ba58fcc6fbe7a027323651586d2fd7f",
+                "parameters": [
+                    {
+                        "name": "specialite",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "is_kol",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    },
+                    {
+                        "name": "account_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "statut",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "actif",
+                                "inactif",
+                                "archive"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "search",
+                        "in": "query",
+                        "description": "Recherche par nom, prénom ou spécialité",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Liste des contacts récupérée avec succès"
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Contacts"
+                ],
+                "summary": "Créer un nouveau contact",
+                "operationId": "15c43d3f7dcf308412eae1fed188e42a",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "nom",
+                                    "prenom"
+                                ],
+                                "properties": {
+                                    "account_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    },
+                                    "nom": {
+                                        "type": "string",
+                                        "example": "Koné"
+                                    },
+                                    "prenom": {
+                                        "type": "string",
+                                        "example": "Ibrahim"
+                                    },
+                                    "titre": {
+                                        "type": "string",
+                                        "example": "Dr.",
+                                        "nullable": true
+                                    },
+                                    "specialite": {
+                                        "type": "string",
+                                        "example": "Cardiologie",
+                                        "nullable": true
+                                    },
+                                    "telephone": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email",
+                                        "nullable": true
+                                    },
+                                    "potentiel": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "enum": [
+                                            "faible",
+                                            "moyen",
+                                            "fort"
+                                        ]
+                                    },
+                                    "influence": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "enum": [
+                                            "faible",
+                                            "moyen",
+                                            "fort"
+                                        ]
+                                    },
+                                    "is_kol": {
+                                        "type": "boolean",
+                                        "default": false
+                                    },
+                                    "rpps": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "gps_lat": {
+                                        "type": "number",
+                                        "format": "float",
+                                        "nullable": true
+                                    },
+                                    "gps_lng": {
+                                        "type": "number",
+                                        "format": "float",
+                                        "nullable": true
+                                    },
+                                    "local_uuid": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Contact créé avec succès"
+                    },
+                    "422": {
+                        "description": "Données de validation invalides"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/contacts/{id}": {
+            "get": {
+                "tags": [
+                    "Contacts"
+                ],
+                "summary": "Afficher les détails d'un contact",
+                "operationId": "9ff6ecca2b683fe6e04145d21cd2412e",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Détails du contact"
+                    },
+                    "404": {
+                        "description": "Contact non trouvé"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Contacts"
+                ],
+                "summary": "Mettre à jour un contact",
+                "operationId": "8bc3f68d02a3ef418ed0e40785c91da1",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "nom": {
+                                        "type": "string"
+                                    },
+                                    "prenom": {
+                                        "type": "string"
+                                    },
+                                    "specialite": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "potentiel": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "enum": [
+                                            "faible",
+                                            "moyen",
+                                            "fort"
+                                        ]
+                                    },
+                                    "is_kol": {
+                                        "type": "boolean"
+                                    },
+                                    "statut": {
+                                        "type": "string",
+                                        "enum": [
+                                            "actif",
+                                            "inactif",
+                                            "archive"
+                                        ]
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Contact mis à jour avec succès"
+                    },
+                    "404": {
+                        "description": "Contact non trouvé"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Contacts"
+                ],
+                "summary": "Supprimer (soft-delete) un contact",
+                "operationId": "b9811eb977a1c3d348dbe900e8bc2f69",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Contact supprimé avec succès"
+                    },
+                    "404": {
+                        "description": "Contact non trouvé"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/countries": {
             "get": {
                 "tags": [
@@ -146,6 +1754,567 @@
                                 }
                             }
                         }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/objectifs": {
+            "get": {
+                "tags": [
+                    "Objectifs"
+                ],
+                "summary": "Lister les objectifs de performance",
+                "operationId": "6cffb095d62b82cbb2f170785cbc66b6",
+                "parameters": [
+                    {
+                        "name": "user_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "team_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "type_objectif",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "statut",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "actif",
+                                "atteint",
+                                "depasse",
+                                "non_atteint",
+                                "annule"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "periode",
+                        "in": "query",
+                        "description": "Ex: Q3-2026, Oct-2026",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Liste des objectifs"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Objectifs"
+                ],
+                "summary": "Créer un objectif de performance",
+                "operationId": "47364d93ce29c4fe2032e87488db853e",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "type_objectif",
+                                    "valeur_cible",
+                                    "date_debut",
+                                    "date_fin"
+                                ],
+                                "properties": {
+                                    "user_id": {
+                                        "type": "integer",
+                                        "nullable": true
+                                    },
+                                    "team_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    },
+                                    "type_objectif": {
+                                        "type": "string",
+                                        "enum": [
+                                            "nombre_visites",
+                                            "couverture_contacts",
+                                            "ca_ventes",
+                                            "nb_commandes",
+                                            "nb_echantillons",
+                                            "nb_nouveaux_contacts",
+                                            "nb_activites_kol",
+                                            "campagne",
+                                            "autre"
+                                        ]
+                                    },
+                                    "valeur_cible": {
+                                        "type": "number",
+                                        "format": "float",
+                                        "example": 100
+                                    },
+                                    "unite": {
+                                        "type": "string",
+                                        "example": "visites",
+                                        "nullable": true
+                                    },
+                                    "date_debut": {
+                                        "type": "string",
+                                        "format": "date"
+                                    },
+                                    "date_fin": {
+                                        "type": "string",
+                                        "format": "date"
+                                    },
+                                    "periode": {
+                                        "type": "string",
+                                        "example": "Q3-2026",
+                                        "nullable": true
+                                    },
+                                    "product_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    },
+                                    "description": {
+                                        "type": "string",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Objectif créé avec succès"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/objectifs/{id}": {
+            "get": {
+                "tags": [
+                    "Objectifs"
+                ],
+                "summary": "Détails d'un objectif",
+                "operationId": "d19eefe80f9933c318ff27ab33b54256",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Détails de l'objectif"
+                    },
+                    "404": {
+                        "description": "Non trouvé"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Objectifs"
+                ],
+                "summary": "Mettre à jour un objectif (valeur réalisée)",
+                "operationId": "53c94175eeac3c4ef92f1de3861eb245",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "valeur_realisee": {
+                                        "type": "number",
+                                        "format": "float"
+                                    },
+                                    "statut": {
+                                        "type": "string",
+                                        "enum": [
+                                            "actif",
+                                            "atteint",
+                                            "depasse",
+                                            "non_atteint",
+                                            "annule"
+                                        ]
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Objectif mis à jour"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Objectifs"
+                ],
+                "summary": "Supprimer un objectif",
+                "operationId": "8abc3c7ac17a21a58741b9161a82880e",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Supprimé avec succès"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/products": {
+            "get": {
+                "tags": [
+                    "Products"
+                ],
+                "summary": "Lister tous les produits du catalogue",
+                "operationId": "1ce27f90dd8c39cea9520bf45d58c7c2",
+                "parameters": [
+                    {
+                        "name": "product_type_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "statut",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "brouillon",
+                                "actif",
+                                "archive"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "stock_alerte",
+                        "in": "query",
+                        "description": "Filtrer les produits en alerte stock",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    },
+                    {
+                        "name": "search",
+                        "in": "query",
+                        "description": "Recherche par nom, code, marque",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Liste des produits récupérée avec succès"
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Products"
+                ],
+                "summary": "Créer un nouveau produit dans le catalogue",
+                "operationId": "acaa0d3fdc74fd4b534e70fc016cf7f1",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "subsidiary_id",
+                                    "nom"
+                                ],
+                                "properties": {
+                                    "subsidiary_id": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                    },
+                                    "product_type_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    },
+                                    "nom": {
+                                        "type": "string",
+                                        "example": "Amoxicilline 500mg"
+                                    },
+                                    "code": {
+                                        "type": "string",
+                                        "example": "AMX-500",
+                                        "nullable": true
+                                    },
+                                    "marque": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "gamme": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "prix_unitaire": {
+                                        "type": "number",
+                                        "format": "float",
+                                        "nullable": true
+                                    },
+                                    "stock_actuel": {
+                                        "type": "integer",
+                                        "default": 0
+                                    },
+                                    "stock_alerte": {
+                                        "type": "integer",
+                                        "default": 0
+                                    },
+                                    "statut": {
+                                        "type": "string",
+                                        "enum": [
+                                            "brouillon",
+                                            "actif",
+                                            "archive"
+                                        ]
+                                    },
+                                    "meta": {
+                                        "description": "Attributs sectoriels libres. Pharma ex: {\"molecule\":\"Amoxicilline\",\"dosage\":\"500mg\",\"forme\":\"Comprimé\",\"numero_amm\":\"AMM-001\"}",
+                                        "type": "object",
+                                        "example": {
+                                            "molecule": "Amoxicilline",
+                                            "dosage": "500mg",
+                                            "forme": "Comprimé"
+                                        },
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Produit créé avec succès"
+                    },
+                    "422": {
+                        "description": "Données de validation invalides"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/products/{id}": {
+            "get": {
+                "tags": [
+                    "Products"
+                ],
+                "summary": "Afficher les détails d'un produit",
+                "operationId": "249e765b6489191fb8167474db8867f7",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Détails du produit"
+                    },
+                    "404": {
+                        "description": "Produit non trouvé"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Products"
+                ],
+                "summary": "Mettre à jour un produit",
+                "operationId": "436a5b5d1aff1d5fd341389786161044",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "nom": {
+                                        "type": "string"
+                                    },
+                                    "prix_unitaire": {
+                                        "type": "number",
+                                        "format": "float"
+                                    },
+                                    "stock_alerte": {
+                                        "type": "integer"
+                                    },
+                                    "statut": {
+                                        "type": "string",
+                                        "enum": [
+                                            "brouillon",
+                                            "actif",
+                                            "archive"
+                                        ]
+                                    },
+                                    "meta": {
+                                        "type": "object",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Produit mis à jour avec succès"
+                    },
+                    "404": {
+                        "description": "Produit non trouvé"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Products"
+                ],
+                "summary": "Archiver (soft-delete) un produit",
+                "operationId": "cc01048629edd9759ba1d7ffc989f667",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Produit supprimé avec succès"
+                    },
+                    "404": {
+                        "description": "Produit non trouvé"
                     }
                 },
                 "security": [
@@ -340,6 +2509,178 @@
                 "security": [
                     {
                         "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/sample-movements": {
+            "get": {
+                "tags": [
+                    "SampleMovements"
+                ],
+                "summary": "Lister les mouvements de stock d'échantillons",
+                "operationId": "798f1846062bf444055ee4ada2d5c693",
+                "parameters": [
+                    {
+                        "name": "product_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "movement_type",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "reception",
+                                "attribution",
+                                "distribution",
+                                "retour",
+                                "destruction",
+                                "inventaire"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "lot_number",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Liste des mouvements de stock"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "SampleMovements"
+                ],
+                "summary": "Enregistrer un mouvement de stock",
+                "description": "Crée un mouvement de stock (réception, distribution, retour...) et met à jour automatiquement le stock du produit.",
+                "operationId": "4cabe6c19847e30a67294f8d4ebfb372",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "product_id",
+                                    "movement_type",
+                                    "quantity"
+                                ],
+                                "properties": {
+                                    "product_id": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                    },
+                                    "activity_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    },
+                                    "movement_type": {
+                                        "type": "string",
+                                        "enum": [
+                                            "reception",
+                                            "attribution",
+                                            "distribution",
+                                            "retour",
+                                            "destruction",
+                                            "inventaire"
+                                        ]
+                                    },
+                                    "quantity": {
+                                        "type": "integer",
+                                        "minimum": 1
+                                    },
+                                    "lot_number": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "expiry_date": {
+                                        "type": "string",
+                                        "format": "date",
+                                        "nullable": true
+                                    },
+                                    "signature_url": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "qr_code": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "remarques": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "local_uuid": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Mouvement enregistré avec succès"
+                    },
+                    "422": {
+                        "description": "Données invalides"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/sample-movements/{id}": {
+            "get": {
+                "tags": [
+                    "SampleMovements"
+                ],
+                "summary": "Détails d'un mouvement de stock",
+                "operationId": "77cff27ece738bded1093848e25bf487",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Détails du mouvement"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
                     }
                 ]
             }
@@ -925,6 +3266,235 @@
                     }
                 ]
             }
+        },
+        "/api/v1/tour-plans": {
+            "get": {
+                "tags": [
+                    "TourPlans"
+                ],
+                "summary": "Lister les plans de tournée",
+                "operationId": "4cef4eb732734dd9e9b748da21203f50",
+                "parameters": [
+                    {
+                        "name": "statut",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "brouillon",
+                                "soumis",
+                                "valide",
+                                "en_cours",
+                                "termine",
+                                "rejete"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "date_debut",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "date_fin",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Liste des plans de tournée"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "TourPlans"
+                ],
+                "summary": "Créer un plan de tournée",
+                "operationId": "1c07723efcaa2facb2caee77c22a7698",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "nom",
+                                    "date_debut",
+                                    "date_fin"
+                                ],
+                                "properties": {
+                                    "nom": {
+                                        "type": "string",
+                                        "example": "Semaine 42 - Secteur Nord"
+                                    },
+                                    "description": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "date_debut": {
+                                        "type": "string",
+                                        "format": "date"
+                                    },
+                                    "date_fin": {
+                                        "type": "string",
+                                        "format": "date"
+                                    },
+                                    "local_uuid": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Plan créé avec succès"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/tour-plans/{id}": {
+            "get": {
+                "tags": [
+                    "TourPlans"
+                ],
+                "summary": "Détails d'un plan de tournée",
+                "operationId": "cf7e79eb51b5f99fd9d85fcacba0b13c",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Détails du plan"
+                    },
+                    "404": {
+                        "description": "Non trouvé"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "TourPlans"
+                ],
+                "summary": "Mettre à jour un plan de tournée",
+                "operationId": "a247ca77102ce9e129f4e24abd927447",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "nom": {
+                                        "type": "string"
+                                    },
+                                    "statut": {
+                                        "type": "string",
+                                        "enum": [
+                                            "brouillon",
+                                            "soumis",
+                                            "valide",
+                                            "en_cours",
+                                            "termine",
+                                            "rejete"
+                                        ]
+                                    },
+                                    "commentaire_validation": {
+                                        "type": "string",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Plan mis à jour"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "TourPlans"
+                ],
+                "summary": "Supprimer un plan de tournée",
+                "operationId": "836337dd42e4175f06090b1c0e65767c",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Supprimé avec succès"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
         }
     },
     "components": {
@@ -940,16 +3510,48 @@
     },
     "tags": [
         {
+            "name": "Accounts",
+            "description": "Accounts"
+        },
+        {
+            "name": "Activities",
+            "description": "Activities"
+        },
+        {
             "name": "Authentication",
             "description": "Authentication"
+        },
+        {
+            "name": "Categories",
+            "description": "Categories"
+        },
+        {
+            "name": "Configuration",
+            "description": "Configuration"
+        },
+        {
+            "name": "Contacts",
+            "description": "Contacts"
         },
         {
             "name": "Countries",
             "description": "Countries"
         },
         {
+            "name": "Objectifs",
+            "description": "Objectifs"
+        },
+        {
+            "name": "Products",
+            "description": "Products"
+        },
+        {
             "name": "Regions",
             "description": "Regions"
+        },
+        {
+            "name": "SampleMovements",
+            "description": "SampleMovements"
         },
         {
             "name": "Subsidiaries",
@@ -962,6 +3564,10 @@
         {
             "name": "Territories",
             "description": "Territories"
+        },
+        {
+            "name": "TourPlans",
+            "description": "TourPlans"
         }
     ]
 }

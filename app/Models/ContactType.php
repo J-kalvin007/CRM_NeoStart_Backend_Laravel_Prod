@@ -1,0 +1,26 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class ContactType extends Model
+{
+    use HasFactory, HasUuids;
+
+    protected $fillable = ['code', 'libelle', 'description', 'couleur', 'icone', 'is_active', 'ordre'];
+
+    protected $casts = ['is_active' => 'boolean', 'ordre' => 'integer'];
+
+    public function contacts()
+    {
+        return $this->hasMany(Contact::class);
+    }
+
+    public function scopeActive($query)
+    {
+        return $query->where('is_active', true)->orderBy('ordre');
+    }
+}
