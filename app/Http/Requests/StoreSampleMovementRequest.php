@@ -23,7 +23,12 @@ class StoreSampleMovementRequest extends FormRequest
     public function rules(): array
     {
         return [
-            //
+            'subsidiary_id' => 'required|uuid|exists:subsidiaries,id',
+            'product_id'    => 'required|uuid|exists:products,id',
+            'movement_type' => 'required|in:reception,attribution,distribution,retour,destruction,inventaire',
+            'quantity'      => 'required|integer|min:1',
+            'activity_id'   => 'nullable|uuid|exists:activities,id',
+            'notes'         => 'nullable|string',
         ];
     }
 }

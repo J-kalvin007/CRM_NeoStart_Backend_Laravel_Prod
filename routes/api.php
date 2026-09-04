@@ -15,6 +15,17 @@ use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\TourPlanController;
 use App\Http\Controllers\Api\V1\ActivityController;
 use App\Http\Controllers\Api\V1\SampleMovementController;
+use App\Http\Controllers\Api\V1\TaskController;
+use App\Http\Controllers\Api\V1\OpportunityController;
+use App\Http\Controllers\Api\V1\OrderController;
+use App\Http\Controllers\Api\V1\SaleController;
+use App\Http\Controllers\Api\V1\EventController;
+use App\Http\Controllers\Api\V1\DocumentController;
+use App\Http\Controllers\Api\V1\SyncController;
+use App\Http\Controllers\Api\V1\CustomFieldController;
+use App\Http\Controllers\Api\V1\ExpenseController;
+use App\Http\Controllers\Api\V1\RoleController;
+use App\Http\Controllers\Api\V1\PermissionController;
 use App\Http\Controllers\Api\V1\ObjectifController;
 use App\Http\Controllers\Api\V1\CampaignController;
 use App\Http\Controllers\Api\V1\KolProfileController;
@@ -34,7 +45,8 @@ Route::prefix('v1')->group(function () {
     Route::post('/auth/change-password', [AuthController::class, 'forceChangePassword']);
 
     // ── Endpoints protégés ────────────────────────────────────
-    Route::middleware('auth:sanctum')->group(function () {
+
+Route::middleware('auth:sanctum')->group(function () {
         
         // Création de compte (Admin)
         Route::post('/auth/invite', [AuthController::class, 'invite']);
@@ -78,21 +90,51 @@ Route::prefix('v1')->group(function () {
         Route::post('/notifications/{id}/mark-as-read', [NotificationController::class, 'markAsRead']);
 
         // ── Répertoire (Comptes & Contacts) ────────────────────
+        Route::post('accounts/check-duplicates', [AccountController::class, 'checkDuplicates']);
         Route::apiResource('accounts', AccountController::class);
+        
+        Route::post('contacts/check-duplicates', [ContactController::class, 'checkDuplicates']);
         Route::apiResource('contacts', ContactController::class);
+        
         Route::apiResource('categories', CategoryController::class);
 
         // ── Catalogue Produits ─────────────────────────────────
         Route::apiResource('products', ProductController::class);
 
-        // ── Opérationnel Terrain ───────────────────────────────
+        // ── Opérationnel Terrain (Visites, Tâches, Agenda) ──────
         Route::apiResource('tour-plans', TourPlanController::class);
         Route::apiResource('activities', ActivityController::class);
+        Route::apiResource('tasks', TaskController::class);
+
+        // ── Cycle Commercial (Opportunités, Commandes, Ventes) ──
+        Route::apiResource('opportunities', OpportunityController::class);
+        Route::apiResource('orders', OrderController::class);
+        Route::apiResource('sales', SaleController::class);
+
+        // ── Événements & Marketing ─────────────────────────────
+        Route::apiResource('events', EventController::class);
+        Route::apiResource('documents', DocumentController::class);
 
         // ── Logistique Échantillons ────────────────────────────
         Route::get('sample-movements', [SampleMovementController::class, 'index']);
         Route::post('sample-movements', [SampleMovementController::class, 'store']);
         Route::get('sample-movements/{id}', [SampleMovementController::class, 'show']);
+
+        // -- Statistiques & Dashboards --
+        Route::get('/analytics/dashboard', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'dashboard']);
+
+        // ── Notes de Frais (Expenses) ──────────────────────────
+        Route::apiResource('expenses', ExpenseController::class);
+        Route::post('expenses/{expense}/submit', [ExpenseController::class, 'submit']);
+
+        // ── Synchronisation Mobile Offline ───────────────────────
+        Route::get('sync/pull', [SyncController::class, 'pull']);
+        Route::post('sync/push', [SyncController::class, 'push']);
+
+        // ── Administration & Configuration ─────────────────────
+        Route::apiResource('custom-fields', CustomFieldController::class);
+        Route::apiResource('roles', RoleController::class);
+        Route::get('permissions', [PermissionController::class, 'index']);
 
         // ── Objectifs & Performance ────────────────────────────
         Route::apiResource('objectifs', ObjectifController::class);

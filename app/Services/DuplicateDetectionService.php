@@ -37,6 +37,10 @@ class DuplicateDetectionService
         $prenom = $data['prenom'] ?? null;
         $meta = $data['meta'] ?? []; // On ne cherche pas encore par meta spécifique pour simplifier, mais c'est prévu.
 
+        if (!$email && !$telephone && !($nom && $prenom)) {
+            return null;
+        }
+
         return $query->where(function($q) use ($email, $telephone, $nom, $prenom) {
             if ($email) $q->orWhere('email', $email);
             if ($telephone) $q->orWhere('telephone', $telephone);
@@ -64,6 +68,10 @@ class DuplicateDetectionService
         $telephone = $data['telephone'] ?? null;
         $nom = $data['nom'] ?? null;
         $ville = $data['ville'] ?? null;
+
+        if (!$email && !$telephone && !($nom && $ville)) {
+            return null; // Pas assez de critères pour détecter un doublon
+        }
 
         return $query->where(function($q) use ($email, $telephone, $nom, $ville) {
             if ($email) $q->orWhere('email', $email);
