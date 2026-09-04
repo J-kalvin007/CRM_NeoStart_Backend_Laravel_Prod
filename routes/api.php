@@ -24,7 +24,7 @@ Route::prefix('v1')->group(function () {
     // ── Authentification ──────────────────────────────────────
     Route::post('/login', [AuthController::class, 'login']);
     Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
-    Route::post('/auth/setup-password', [AuthController::class, 'setupPassword']);
+    Route::post('/auth/change-password', [AuthController::class, 'forceChangePassword']);
 
     // ── Endpoints protégés ────────────────────────────────────
     Route::middleware('auth:sanctum')->group(function () {

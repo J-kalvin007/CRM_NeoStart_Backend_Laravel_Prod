@@ -15,27 +15,22 @@ class UserInvitationMail extends Mailable
 
     public function __construct(
         public User $user,
-        public string $token
+        public string $temporaryPassword
     ) {}
 
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Bienvenue sur le CRM - Définissez votre mot de passe',
+            subject: 'Vos identifiants de connexion CRM',
         );
     }
 
     public function content(): Content
     {
-        // On suppose que le front-end tourne sur une URL précise,
-        // ici on passe le lien directement à la vue
-        $frontendUrl = config('app.frontend_url', 'http://localhost:3000');
-        $setupLink = "{$frontendUrl}/setup-password?token={$this->token}&email={$this->user->email}";
-
         return new Content(
             view: 'emails.user_invitation',
             with: [
-                'setupLink' => $setupLink,
+                'temporaryPassword' => $this->temporaryPassword,
             ]
         );
     }

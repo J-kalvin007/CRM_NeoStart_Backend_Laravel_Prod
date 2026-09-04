@@ -18,24 +18,25 @@ class AuthController extends Controller
 {
     #[OA\Post(
         path: '/api/v1/auth/invite',
-        summary: 'Créer un utilisateur et envoyer un email d\'invitation',
-        description: 'L\'admin crée un compte avec email uniquement. Un email est envoyé avec un token pour configurer le mot de passe.',
+        summary: 'Créer un utilisateur (mot de passe temporaire)',
+        description: 'L\'admin crée un compte. Le système génère un mot de passe temporaire s\'il n\'est pas fourni. L\'utilisateur devra le changer à la première connexion.',
         security: [['bearerAuth' => []]],
         tags: ['Authentication'],
         requestBody: new OA\RequestBody(
             required: true,
             content: new OA\JsonContent(
-                required: ['name', 'email'],
+                required: ['name', 'email', 'password'],
                 properties: [
                     new OA\Property(property: 'name', type: 'string', example: 'John Doe'),
                     new OA\Property(property: 'email', type: 'string', format: 'email', example: 'john.doe@example.com'),
+                    new OA\Property(property: 'password', type: 'string', description: 'Mot de passe temporaire créé par l\'admin'),
                     new OA\Property(property: 'country_id', type: 'string', format: 'uuid', nullable: true),
                     new OA\Property(property: 'subsidiary_id', type: 'string', format: 'uuid', nullable: true),
                 ]
             )
         ),
         responses: [
-            new OA\Response(response: 201, description: 'Utilisateur créé, email d\'invitation envoyé'),
+            new OA\Response(response: 201, description: 'Utilisateur créé, email contenant les identifiants envoyé'),
             new OA\Response(response: 422, description: 'Email déjà utilisé ou données invalides')
         ]
     )]
@@ -44,83 +45,31 @@ class AuthController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email',
+            'password' => 'required|string|min:6',
             'country_id' => 'nullable|uuid',
             'subsidiary_id' => 'nullable|uuid',
         ]);
 
-        // Création de l'utilisateur avec un mot de passe temporaire aléatoire
-        $validated['password'] = Hash::make(Str::random(32));
+        $temporaryPassword = $validated['password'];
+        
+        $validated['password'] = Hash::make($temporaryPassword);
+        $validated['force_password_change'] = true;
+        
         $user = User::create($validated);
 
-        // Génération du token d'invitation
-        $token = Str::random(64);
-        
-        // Stockage du token dans le cache pour 48 heures (2880 minutes)
-        Cache::put('invite_token_' . $token, $user->id, now()->addHours(48));
-
-        // Envoi de l'email
-        Mail::to($user->email)->send(new UserInvitationMail($user, $token));
+        // Envoi de l'email avec le mot de passe en clair (temporaire)
+        Mail::to($user->email)->send(new UserInvitationMail($user, $temporaryPassword));
 
         return response()->json([
-            'message' => 'Compte créé avec succès, un email d\'invitation a été envoyé.',
+            'message' => 'Compte créé avec succès, un email avec les identifiants a été envoyé.',
             'user' => $user
         ], 201);
     }
 
     #[OA\Post(
-        path: '/api/v1/auth/setup-password',
-        summary: 'Définir le mot de passe via le lien d\'invitation',
-        tags: ['Authentication'],
-        requestBody: new OA\RequestBody(
-            required: true,
-            content: new OA\JsonContent(
-                required: ['token', 'password', 'password_confirmation'],
-                properties: [
-                    new OA\Property(property: 'token', type: 'string'),
-                    new OA\Property(property: 'password', type: 'string', format: 'password', minLength: 8),
-                    new OA\Property(property: 'password_confirmation', type: 'string', format: 'password', minLength: 8),
-                ]
-            )
-        ),
-        responses: [
-            new OA\Response(response: 200, description: 'Mot de passe défini avec succès'),
-            new OA\Response(response: 400, description: 'Token invalide ou expiré'),
-            new OA\Response(response: 422, description: 'Le mot de passe ne correspond pas ou est trop court')
-        ]
-    )]
-    public function setupPassword(Request $request)
-    {
-        $request->validate([
-            'token' => 'required|string',
-            'password' => 'required|string|min:8|confirmed',
-        ]);
-
-        $userId = Cache::get('invite_token_' . $request->token);
-
-        if (!$userId) {
-            return response()->json(['message' => 'Le lien d\'invitation est invalide ou a expiré.'], 400);
-        }
-
-        $user = User::find($userId);
-        if (!$user) {
-            return response()->json(['message' => 'Utilisateur introuvable.'], 404);
-        }
-
-        // Mise à jour du mot de passe
-        $user->update([
-            'password' => Hash::make($request->password)
-        ]);
-
-        // Invalidation du token
-        Cache::forget('invite_token_' . $request->token);
-
-        return response()->json(['message' => 'Mot de passe configuré avec succès. Vous pouvez maintenant vous connecter.']);
-    }
-
-    #[OA\Post(
         path: '/api/v1/login',
-        summary: 'Première étape de connexion (Email/Mot de passe) -> Déclenche l\'OTP',
-        description: 'Vérifie les identifiants et envoie un code OTP à 6 chiffres par email.',
+        summary: 'Connexion (Déclenche OTP ou demande changement de mot de passe)',
+        description: 'Vérifie les identifiants. Si c\'est la première connexion, force le changement de mot de passe. Sinon, envoie le code OTP.',
         tags: ['Authentication'],
         requestBody: new OA\RequestBody(
             required: true,
@@ -135,14 +84,19 @@ class AuthController extends Controller
         responses: [
             new OA\Response(
                 response: 202,
-                description: 'Identifiants valides, OTP envoyé par email',
-                content: new OA\JsonContent(
-                    properties: [
-                        new OA\Property(property: 'status', type: 'string', example: 'requires_otp'),
-                        new OA\Property(property: 'message', type: 'string', example: 'Un code de vérification a été envoyé à votre adresse email.'),
-                        new OA\Property(property: 'user_id', type: 'string', format: 'uuid'),
-                    ]
-                )
+                description: 'OTP envoyé par email',
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'status', type: 'string', example: 'requires_otp'),
+                    new OA\Property(property: 'user_id', type: 'string', format: 'uuid')
+                ])
+            ),
+            new OA\Response(
+                response: 403,
+                description: 'Changement de mot de passe requis',
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'status', type: 'string', example: 'requires_password_change'),
+                    new OA\Property(property: 'user_id', type: 'string', format: 'uuid')
+                ])
             ),
             new OA\Response(response: 401, description: 'Identifiants invalides')
         ]
@@ -158,22 +112,82 @@ class AuthController extends Controller
 
         if (!$user || !Hash::check($request->password, $user->password)) {
             throw ValidationException::withMessages([
-                'email' => ['Les identifiants fournis sont incorrects.'],
+                'email' => ['Identifiants incorrects'],
             ]);
         }
 
-        // Génération de l'OTP à 6 chiffres
+        // Vérification du changement de mot de passe obligatoire
+        if ($user->force_password_change) {
+            return response()->json([
+                'status' => 'requires_password_change',
+                'message' => 'Veuillez modifier votre mot de passe temporaire pour continuer.',
+                'user_id' => $user->id
+            ], 403);
+        }
+
+        // Sinon, génération de l'OTP à 6 chiffres
         $otpCode = (string) random_int(100000, 999999);
-
-        // Sauvegarde dans le Cache pour 10 minutes
         Cache::put('login_otp_' . $user->id, $otpCode, now()->addMinutes(10));
-
-        // Envoi de l'OTP par email
         Mail::to($user->email)->send(new LoginOtpMail($user, $otpCode));
 
         return response()->json([
             'status' => 'requires_otp',
-            'message' => 'Un code de vérification a été envoyé à votre adresse email. Il expirera dans 10 minutes.',
+            'message' => 'Un code de vérification a été envoyé à votre adresse email.',
+            'user_id' => $user->id
+        ], 202);
+    }
+
+    #[OA\Post(
+        path: '/api/v1/auth/change-password',
+        summary: 'Changer le mot de passe temporaire et déclencher l\'OTP',
+        tags: ['Authentication'],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['user_id', 'old_password', 'new_password', 'new_password_confirmation'],
+                properties: [
+                    new OA\Property(property: 'user_id', type: 'string', format: 'uuid'),
+                    new OA\Property(property: 'old_password', type: 'string', format: 'password'),
+                    new OA\Property(property: 'new_password', type: 'string', format: 'password', minLength: 8),
+                    new OA\Property(property: 'new_password_confirmation', type: 'string', format: 'password', minLength: 8),
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 202, description: 'Mot de passe mis à jour, OTP envoyé'),
+            new OA\Response(response: 422, description: 'Ancien mot de passe incorrect ou nouveau non conforme')
+        ]
+    )]
+    public function forceChangePassword(Request $request)
+    {
+        $request->validate([
+            'user_id' => 'required|uuid',
+            'old_password' => 'required|string',
+            'new_password' => 'required|string|min:8|confirmed',
+        ]);
+
+        $user = User::findOrFail($request->user_id);
+
+        if (!Hash::check($request->old_password, $user->password)) {
+            throw ValidationException::withMessages([
+                'old_password' => ['L\'ancien mot de passe est incorrect.'],
+            ]);
+        }
+
+        // Mise à jour du mot de passe et retrait du flag
+        $user->update([
+            'password' => Hash::make($request->new_password),
+            'force_password_change' => false,
+        ]);
+
+        // Transition fluide : on génère l'OTP directement
+        $otpCode = (string) random_int(100000, 999999);
+        Cache::put('login_otp_' . $user->id, $otpCode, now()->addMinutes(10));
+        Mail::to($user->email)->send(new LoginOtpMail($user, $otpCode));
+
+        return response()->json([
+            'status' => 'requires_otp',
+            'message' => 'Mot de passe mis à jour avec succès. Un code OTP a été envoyé à votre email.',
             'user_id' => $user->id
         ], 202);
     }
