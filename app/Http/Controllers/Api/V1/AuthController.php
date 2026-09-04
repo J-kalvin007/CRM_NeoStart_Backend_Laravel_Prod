@@ -271,7 +271,23 @@ class AuthController extends Controller
     )]
     public function me(Request $request)
     {
-        return response()->json($request->user()->load('roles', 'country', 'subsidiary', 'team'));
+        return response()->json($request->user()->load(['roles', 'permissions', 'country', 'subsidiary', 'team']));
+    }
+
+    /**
+     * Enregistrer le token FCM de l'appareil mobile
+     */
+    public function updateFcmToken(Request $request)
+    {
+        $request->validate([
+            'fcm_token' => 'required|string',
+        ]);
+
+        $user = $request->user();
+        $user->fcm_token = $request->fcm_token;
+        $user->save();
+
+        return response()->json(['message' => 'FCM Token updated successfully']);
     }
 
     #[OA\Post(

@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "crmneomedlink",
+  "private_key_id": "32bd59f2991e904c0e0d9f82c6b7f47c9cafe7cc",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCraw/ejN6buNZL\nREF4+/7y/evcJWIvaJv9fJx0FZpQy+CFfOaK0Z5dwlT4XKS8cJq5j/SRXg5BLAAI\neH/et7mmSYBMAspWynzbOM8rWyVE1KcZSqXQ9EiQoofJj2Fq0FUHdsel6KaSm/jn\ns4X6qLSm87yVj5pcTfo/onPdwLwyhxuz+ySs28ZDmOeeH04n6w5YJqe2FtFzdwB4\nsJ/clC1DarjZJ9N24pP3io2bN6J2HbUILN91LdVP/5K4nczEGA6kd/XDvYGm4oeq\n8h6RrTpy3MGhT5ZbaSNJ0v5AaKR3luqBt7EycmIEvj4IE1SubYIbvGvKRN3p5Hxh\nkpVYOAMHAgMBAAECggEAJ4eL5E1l9FEekcLOumCaPVzS7DRuvPIJrt3ykk59BI7P\nWtkfrPmD5KkwwQlUL+RjudD5nCAtd1f3Nfzbt/d0R2WBwYWPNY6CVmd2VtAw+vtz\nAUEWleYPadMhLxjyZRhf01XP2nGZIAv5zSy4A8KtziY84dx4wzp0MAJ9Z7DPdXMT\n0iM3TSOgeRZqxcFOPeU6yNiBg67O1JyJlGCgxEz1ro3/RyBKkx5EcTrU4kF3Yih4\naj/4LQVZFgPGdEcM4DnGJ55lXppy76rPdN6uBV2LDlF6L1zJUwPTDkJhOKvmTvlN\n5+ApfYJa7oG+d77gY3WdEm38l1ebTBDfowx7RCV/cQKBgQDhC6SVaszhr6QROytb\nj8t1dy5PPaXc0965VeCLwClxYfWutmVpPz8Kg9ZQIGjrYDzqjm/a0IVvxrQYwGhL\nN5MPGA/cqncAD3zULzJQHc/+3IrnjYpp8dfVWhpidFV5EdCxE5o9EMW0UHJhMJsU\naD1WHoORj9KF3KhlcuieFj9RSQKBgQDC/xUZgjUl2Vc0dpEoumIWohIJOfKU3Byi\n7iD6ILCxSPoqn3AuTATo+tbYQBuS5J8tHc22fI3eRZMnk7wilXgikmB1bv15CQMH\na/5dP4NQJ08dvAsWFw4PNawMcOglB9Y72XCVl30BKlVMU4aLnQjhkzu/qYvtlAy/\n/EOUshQBzwKBgQC2JktXmPMt9JESVVb5rECc2hNElfxK6b4LOsQduTKSEBzgBce9\nUTDAXQc5IZJqeSG1JAbLEB4A487ffdSslNXV0L7994eMJ/z8bRsHF6pDedSAKOMQ\nb2wnxt82Mzz/WnkU6m3b4Vh0YuzBV6sd8GU88EPDrKpUKM6wFjrLwewL6QKBgDsu\nE4dEX0D3b2H6wh9sQazAz1yBe7/19bL1NojzNuz3SwV4kiFa7PqQdnf3LOct/6k/\nrFlAAAZ/cyPF0Ilmd6l2Z1P8tWzwcTzlZ7OBPScsZvSNR4gSwy+WiHrWIX5rnHdZ\njLO54DRkVrLtfp4MsM9VUgLfQBqAnkX+F7yfNzc9AoGBAIXsnyUT6r9HCdQkOCrr\niOPYXUtwXeA17MYTLSIxzKdQtbc2x+lr1Wd6D1MWm2Uq82YCn6CpAPYuAt6Dbgxf\nkKqGn4iCyO93eGh/NfSVnMpJuzwdarTCWMRtlFnijtvtsRx/G14vR9BUlMpgwOgJ\nUKe1pS4FMGk8n+LmI6Fo6VzE\n-----END PRIVATE KEY-----\n",
+  "client_email": "firebase-adminsdk-fbsvc@crmneomedlink.iam.gserviceaccount.com",
+  "client_id": "112822122821882486283",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40crmneomedlink.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
