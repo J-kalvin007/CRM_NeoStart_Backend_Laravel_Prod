@@ -46,8 +46,8 @@ Route::prefix('v1')->group(function () {
 
     // ── Endpoints protégés ────────────────────────────────────
 
-Route::middleware('auth:sanctum')->group(function () {
-        
+    Route::middleware('auth:sanctum')->group(function () {
+
         // Création de compte (Admin)
         Route::post('/auth/invite', [AuthController::class, 'invite']);
 
@@ -60,7 +60,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::apiResource('teams', TeamController::class);
         Route::apiResource('campaigns', CampaignController::class);
         Route::apiResource('kol-profiles', KolProfileController::class);
-        
+
         // Configuration (Tables paramétrables par l'Admin/Manager)
         Route::prefix('config')->group(function () {
             Route::get('account-types', [ConfigurationController::class, 'accountTypeIndex']);
@@ -76,7 +76,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('product-types', [ConfigurationController::class, 'productTypeIndex']);
             Route::post('product-types', [ConfigurationController::class, 'productTypeStore']);
             Route::put('product-types/{id}', [ConfigurationController::class, 'productTypeUpdate']);
-            
+
             // Settings (Mise à jour)
             Route::post('settings', [SettingController::class, 'store']);
         });
@@ -93,10 +93,10 @@ Route::middleware('auth:sanctum')->group(function () {
         // ── Répertoire (Comptes & Contacts) ────────────────────
         Route::post('accounts/check-duplicates', [AccountController::class, 'checkDuplicates']);
         Route::apiResource('accounts', AccountController::class);
-        
+
         Route::post('contacts/check-duplicates', [ContactController::class, 'checkDuplicates']);
         Route::apiResource('contacts', ContactController::class);
-        
+
         Route::apiResource('categories', CategoryController::class);
 
         // ── Catalogue Produits ─────────────────────────────────
