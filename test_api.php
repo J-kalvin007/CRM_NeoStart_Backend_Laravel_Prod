@@ -1,5 +1,6 @@
 <?php
 
+// 1. Initial Login to trigger OTP
 $ch = curl_init('http://localhost:8000/api/v1/login');
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_POST, true);
@@ -9,14 +10,44 @@ $response = curl_exec($ch);
 curl_close($ch);
 
 $data = json_decode($response, true);
-$token = $data['token'] ?? null;
+$userId = $data['user_id'] ?? null;
 
-if (!$token) {
-    echo "Login failed. Response: " . $response . "\n";
+if (!$userId) {
+    echo "Login step 1 failed. Response: " . $response . "\n";
     exit(1);
 }
+echo "Step 1: Login successful. User ID: $userId\n";
 
-echo "Login successful.\n";
+// 2. Fetch OTP from Laravel Cache
+require __DIR__.'/vendor/autoload.php';
+$app = require_once __DIR__.'/bootstrap/app.php';
+$kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
+$kernel->bootstrap();
+
+$otpCode = \Illuminate\Support\Facades\Cache::get('login_otp_' . $userId);
+if (!$otpCode) {
+    echo "Failed to retrieve OTP from Cache for user: $userId\n";
+    exit(1);
+}
+echo "Step 2: OTP retrieved from Cache: $otpCode\n";
+
+// 3. Verify OTP
+$ch = curl_init('http://localhost:8000/api/v1/verify-otp');
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+curl_setopt($ch, CURLOPT_POST, true);
+curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['user_id' => $userId, 'otp_code' => $otpCode]));
+curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json', 'Accept: application/json']);
+$otpResponse = curl_exec($ch);
+curl_close($ch);
+
+$otpData = json_decode($otpResponse, true);
+$token = $otpData['token'] ?? null;
+
+if (!$token) {
+    echo "OTP Verification failed. Response: " . $otpResponse . "\n";
+    exit(1);
+}
+echo "Step 3: OTP verified successfully. Token acquired.\n";
 
 function testEndpoint($url, $token) {
     echo "Testing $url...\n";

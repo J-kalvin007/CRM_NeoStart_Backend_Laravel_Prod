@@ -6,10 +6,11 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Models\Traits\HasPerimeter;
 
 class Activity extends Model
 {
-    use HasFactory, HasUuids, SoftDeletes;
+    use HasFactory, HasUuids, SoftDeletes, HasPerimeter;
 
     protected $fillable = [
         'tour_plan_id',
@@ -88,3 +89,4 @@ class Activity extends Model
         $this->update(['is_locked' => true, 'locked_at' => now()]);
     }
 }
+

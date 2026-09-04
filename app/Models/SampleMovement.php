@@ -48,3 +48,4 @@ class SampleMovement extends Model
         return $this->belongsTo(Activity::class);
     }
 }
+

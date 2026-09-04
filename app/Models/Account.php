@@ -6,10 +6,11 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Models\Traits\HasPerimeter;
 
 class Account extends Model
 {
-    use HasFactory, HasUuids, SoftDeletes;
+    use HasFactory, HasUuids, SoftDeletes, HasPerimeter;
 
     protected $fillable = [
         'subsidiary_id', 'user_id', 'account_type_id',
@@ -32,3 +33,4 @@ class Account extends Model
     public function categories()   { return $this->belongsToMany(Category::class, 'account_category'); }
     public function activities()   { return $this->hasMany(Activity::class); }
 }
+

@@ -6,10 +6,11 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Models\Traits\HasPerimeter;
 
 class Contact extends Model
 {
-    use HasFactory, HasUuids, SoftDeletes;
+    use HasFactory, HasUuids, SoftDeletes, HasPerimeter;
 
     protected $fillable = [
         'account_id', 'user_id', 'contact_type_id',
@@ -39,3 +40,4 @@ class Contact extends Model
         return data_get($this->meta, $key, $default);
     }
 }
+

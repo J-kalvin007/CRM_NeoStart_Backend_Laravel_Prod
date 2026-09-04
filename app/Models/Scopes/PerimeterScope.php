@@ -73,12 +73,19 @@ class PerimeterScope implements Scope
             case 'users':
                 $builder->where($table . '.subsidiary_id', $subsidiaryId);
                 break;
-            // TODO : Ajouter les futures tables du SFA (Visites, Médecins, Pharmacies)
-            // case 'doctors':
-            // case 'pharmacies':
-            // case 'visits':
-            //     $builder->where($table . '.subsidiary_id', $subsidiaryId);
-            //     break;
+            case 'accounts':
+            case 'products':
+                $builder->where($table . '.subsidiary_id', $subsidiaryId);
+                break;
+            case 'contacts':
+            case 'activities':
+            case 'tour_plans':
+            case 'sample_movements':
+            case 'objectifs':
+                $builder->whereIn($table . '.user_id', function ($query) use ($subsidiaryId) {
+                    $query->select('id')->from('users')->where('subsidiary_id', $subsidiaryId);
+                });
+                break;
         }
     }
 
@@ -112,6 +119,21 @@ class PerimeterScope implements Scope
                     $query->where('country_id', $countryId);
                 });
                 break;
+            case 'accounts':
+            case 'products':
+                $builder->whereIn($table . '.subsidiary_id', function ($query) use ($countryId) {
+                    $query->select('id')->from('subsidiaries')->where('country_id', $countryId);
+                });
+                break;
+            case 'contacts':
+            case 'activities':
+            case 'tour_plans':
+            case 'sample_movements':
+            case 'objectifs':
+                $builder->whereIn($table . '.user_id', function ($query) use ($countryId) {
+                    $query->select('id')->from('users')->where('country_id', $countryId);
+                });
+                break;
         }
     }
 
@@ -127,10 +149,25 @@ class PerimeterScope implements Scope
             case 'users':
                 $builder->where($table . '.team_id', $teamId);
                 break;
-            // Pour les futures tables :
-            // case 'visits':
-            //     $builder->where($table . '.team_id', $teamId);
-            //     break;
+            case 'accounts':
+            case 'contacts':
+            case 'activities':
+            case 'tour_plans':
+            case 'sample_movements':
+            case 'objectifs':
+                $builder->whereIn($table . '.user_id', function ($query) use ($teamId) {
+                    $query->select('id')->from('users')->where('team_id', $teamId);
+                });
+                break;
+            case 'products':
+                // Produits accessibles par équipe = on prend les produits de la filiale de l'équipe
+                $builder->whereIn($table . '.subsidiary_id', function ($query) use ($teamId) {
+                    $query->select('subsidiary_id')->from('teams')
+                          ->join('territories', 'teams.territory_id', '=', 'territories.id')
+                          ->join('regions', 'territories.region_id', '=', 'regions.id')
+                          ->where('teams.id', $teamId);
+                });
+                break;
         }
     }
 }
