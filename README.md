@@ -67,6 +67,15 @@ Assurez-vous que le planificateur de tâches de Laravel est configuré sur votre
 *   **Workflow Campagnes (`CampaignObserver`)** :
     *   Empêche les sauts de statuts illogiques (`creation` -> `validation` -> `deploiement`...). Lève une erreur API HTTP 422 si la séquence métier n'est pas respectée.
 
+## 🎨 Personnalisation & Configuration (Settings)
+
+Le CRM est conçu pour être personnalisé en "marque blanche" par filiale.
+Une table `settings` (clé/valeur) permet de configurer le nom de l'application, les couleurs et le logo.
+
+- **Route publique** : `GET /api/v1/settings` (Permet au Front-End d'afficher le logo avant même la connexion).
+- **Upload du Logo** : `POST /api/v1/settings` (Accepte les `multipart/form-data` avec le fichier image `logo`). Le chemin est converti dynamiquement en URL publique complète (`https://.../storage/logos/...`).
+- **Périmètre** : En passant un `subsidiary_id`, chaque filiale peut surcharger la configuration globale avec son propre logo.
+
 ## 🔐 Sécurité & Authentification
 
 -   L'API utilise **Laravel Sanctum** pour l'authentification par jeton (Token Bearer).
