@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Models\Traits\HasActivityLogs;
+
 use Illuminate\Database\Eloquent\Model;
 
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 
 class Country extends Model
 {
+    use HasActivityLogs;
     use HasUuids;
 
     protected $fillable = [

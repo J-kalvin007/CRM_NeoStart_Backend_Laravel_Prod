@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\Traits\HasActivityLogs;
+
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -14,6 +16,7 @@ use App\Models\Traits\HasPerimeter;
 
 class User extends Authenticatable
 {
+    use HasActivityLogs;
     use HasApiTokens, HasFactory, Notifiable, HasUuids, HasRoles, HasPerimeter;
 
     /**
