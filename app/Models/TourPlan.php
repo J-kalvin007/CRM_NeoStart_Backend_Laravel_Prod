@@ -6,10 +6,11 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Models\Traits\HasPerimeter;
 
 class TourPlan extends Model
 {
-    use HasFactory, HasUuids, SoftDeletes;
+    use HasFactory, HasUuids, SoftDeletes, HasPerimeter;
 
     protected $fillable = [
         'user_id',
@@ -63,3 +64,4 @@ class TourPlan extends Model
         return $query->where('statut', 'valide');
     }
 }
+
