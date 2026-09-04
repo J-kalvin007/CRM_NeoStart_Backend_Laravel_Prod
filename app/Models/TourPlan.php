@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\Traits\HasActivityLogs;
+
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -11,6 +13,7 @@ use App\Models\Traits\HasPerimeter;
 class TourPlan extends Model
 {
     use HasFactory, HasUuids, SoftDeletes, HasPerimeter;
+    use HasActivityLogs;
 
     protected $fillable = [
         'user_id',

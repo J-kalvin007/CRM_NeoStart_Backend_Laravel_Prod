@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\Traits\HasActivityLogs;
+
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -11,6 +13,7 @@ use App\Models\Traits\HasPerimeter;
 class Account extends Model
 {
     use HasFactory, HasUuids, SoftDeletes, HasPerimeter;
+    use HasActivityLogs;
 
     protected $fillable = [
         'subsidiary_id', 'user_id', 'account_type_id',

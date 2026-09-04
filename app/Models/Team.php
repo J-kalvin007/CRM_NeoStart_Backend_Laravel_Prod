@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\Traits\HasActivityLogs;
+
 use Illuminate\Database\Eloquent\Model;
 
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -11,6 +13,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 class Team extends Model
 {
     use HasFactory, HasUuids, HasPerimeter;
+    use HasActivityLogs;
 
     protected $fillable = [
         'territory_id',

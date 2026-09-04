@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\Traits\HasActivityLogs;
+
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -10,6 +12,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class Category extends Model
 {
     use HasFactory, HasUuids, SoftDeletes;
+    use HasActivityLogs;
 
     protected $fillable = [
         'nom',
