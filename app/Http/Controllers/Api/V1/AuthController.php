@@ -125,7 +125,18 @@ class AuthController extends Controller
             ], 403);
         }
 
-        // Sinon, génération de l'OTP à 6 chiffres
+        // Si l'email a déjà été vérifié par un OTP précédent, on connecte directement
+        if (!is_null($user->email_verified_at)) {
+            $user->update(['last_login_at' => now()]);
+            $token = $user->createToken('auth-token')->plainTextToken;
+
+            return response()->json([
+                'token' => $token,
+                'user' => $user->load(['roles', 'permissions', 'country', 'subsidiary', 'team'])
+            ]);
+        }
+
+        // Sinon (Première connexion), génération de l'OTP à 6 chiffres pour vérifier l'email
         $otpCode = (string) random_int(100000, 999999);
         Cache::put('login_otp_' . $user->id, $otpCode, now()->addMinutes(10));
         Mail::to($user->email)->send(new LoginOtpMail($user, $otpCode));
