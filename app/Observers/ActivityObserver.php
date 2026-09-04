@@ -35,8 +35,8 @@ class ActivityObserver
             }
         }
 
-        // 2. Le Workflow de clôture
-        if ($activity->wasChanged('statut') && $activity->statut === 'cloture') {
+        // 2. Le Workflow de réalisation
+        if ($activity->wasChanged('statut') && $activity->statut === 'realisee') {
             
             // Calcul de la durée si on a début et fin
             if ($activity->heure_debut && $activity->heure_fin && !$activity->duree_minutes) {
