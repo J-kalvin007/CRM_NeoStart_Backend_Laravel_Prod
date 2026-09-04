@@ -77,4 +77,6 @@ testEndpoint('http://localhost:8000/api/v1/tour-plans', $token);
 testEndpoint('http://localhost:8000/api/v1/activities', $token);
 testEndpoint('http://localhost:8000/api/v1/sample-movements', $token);
 testEndpoint('http://localhost:8000/api/v1/objectifs', $token);
-
+testEndpoint('http://localhost:8000/api/v1/campaigns', $token);
+testEndpoint('http://localhost:8000/api/v1/kol-profiles', $token);
+testEndpoint('http://localhost:8000/api/v1/notifications', $token);
