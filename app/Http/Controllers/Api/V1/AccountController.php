@@ -7,6 +7,9 @@ use App\Http\Requests\StoreAccountRequest;
 use App\Http\Requests\UpdateAccountRequest;
 use App\Http\Resources\AccountResource;
 use App\Models\Account;
+use App\Models\AccountType;
+use App\Services\DynamicValidationService;
+use App\Services\DuplicateDetectionService;
 use Illuminate\Http\Request;
 use OpenApi\Attributes as OA;
 
@@ -71,10 +74,24 @@ class AccountController extends Controller
             new OA\Response(response: 422, description: 'Données de validation invalides'),
         ]
     )]
-    public function store(StoreAccountRequest $request)
-    {
+    public function store(
+        StoreAccountRequest $request,
+        DynamicValidationService $validationService,
+        DuplicateDetectionService $duplicateService
+    ) {
+        $validated = $request->validated();
+
+        // Validation dynamique du champ meta
+        if (!empty($validated['account_type_id'])) {
+            $type = AccountType::find($validated['account_type_id']);
+            $validationService->validateMeta($validated['meta'] ?? null, $type);
+        }
+
+        // Détection de doublons (Bloque la requête si doublon)
+        $duplicateService->abortIfDuplicateAccount($validated['subsidiary_id'], $validated);
+
         $account = Account::create(array_merge(
-            $request->validated(),
+            $validated,
             ['user_id' => auth()->id()]
         ));
 
@@ -127,10 +144,30 @@ class AccountController extends Controller
             new OA\Response(response: 404, description: 'Compte non trouvé'),
         ]
     )]
-    public function update(UpdateAccountRequest $request, string $id)
-    {
+    public function update(
+        UpdateAccountRequest $request,
+        string $id,
+        DynamicValidationService $validationService,
+        DuplicateDetectionService $duplicateService
+    ) {
         $account = Account::findOrFail($id);
-        $account->update($request->validated());
+        $validated = $request->validated();
+
+        // Validation dynamique
+        $typeId = $validated['account_type_id'] ?? $account->account_type_id;
+        if ($typeId) {
+            $type = AccountType::find($typeId);
+            // On fusionne les metas existants et les nouveaux pour valider
+            $mergedMeta = array_merge($account->meta ?? [], $validated['meta'] ?? []);
+            $validationService->validateMeta($mergedMeta, $type);
+        }
+
+        // Détection de doublons (en ignorant l'ID actuel)
+        $subsidiaryId = $validated['subsidiary_id'] ?? $account->subsidiary_id;
+        $dataForDuplicateCheck = array_merge($account->toArray(), $validated);
+        $duplicateService->abortIfDuplicateAccount($subsidiaryId, $dataForDuplicateCheck, $account->id);
+
+        $account->update($validated);
         return new AccountResource($account->load(['subsidiary', 'categories']));
     }
 

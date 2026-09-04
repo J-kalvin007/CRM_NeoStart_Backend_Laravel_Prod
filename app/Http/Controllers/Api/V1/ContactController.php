@@ -7,6 +7,10 @@ use App\Http\Requests\StoreContactRequest;
 use App\Http\Requests\UpdateContactRequest;
 use App\Http\Resources\ContactResource;
 use App\Models\Contact;
+use App\Models\ContactType;
+use App\Models\Account;
+use App\Services\DynamicValidationService;
+use App\Services\DuplicateDetectionService;
 use Illuminate\Http\Request;
 use OpenApi\Attributes as OA;
 
@@ -77,10 +81,29 @@ class ContactController extends Controller
             new OA\Response(response: 422, description: 'Données de validation invalides'),
         ]
     )]
-    public function store(StoreContactRequest $request)
-    {
+    public function store(
+        StoreContactRequest $request,
+        DynamicValidationService $validationService,
+        DuplicateDetectionService $duplicateService
+    ) {
+        $validated = $request->validated();
+
+        // Validation dynamique
+        if (!empty($validated['contact_type_id'])) {
+            $type = ContactType::find($validated['contact_type_id']);
+            $validationService->validateMeta($validated['meta'] ?? null, $type);
+        }
+
+        // Détection de doublons (Bloque la requête si doublon)
+        $countryId = null;
+        if (!empty($validated['account_id'])) {
+            $account = Account::with('subsidiary')->find($validated['account_id']);
+            $countryId = $account?->subsidiary?->country_id;
+        }
+        $duplicateService->abortIfDuplicateContact($countryId, $validated);
+
         $contact = Contact::create(array_merge(
-            $request->validated(),
+            $validated,
             ['user_id' => auth()->id()]
         ));
         return new ContactResource($contact->load(['account', 'categories']));
@@ -131,10 +154,34 @@ class ContactController extends Controller
             new OA\Response(response: 404, description: 'Contact non trouvé'),
         ]
     )]
-    public function update(UpdateContactRequest $request, string $id)
-    {
+    public function update(
+        UpdateContactRequest $request,
+        string $id,
+        DynamicValidationService $validationService,
+        DuplicateDetectionService $duplicateService
+    ) {
         $contact = Contact::findOrFail($id);
-        $contact->update($request->validated());
+        $validated = $request->validated();
+
+        // Validation dynamique
+        $typeId = $validated['contact_type_id'] ?? $contact->contact_type_id;
+        if ($typeId) {
+            $type = ContactType::find($typeId);
+            $mergedMeta = array_merge($contact->meta ?? [], $validated['meta'] ?? []);
+            $validationService->validateMeta($mergedMeta, $type);
+        }
+
+        // Détection de doublons
+        $accountId = $validated['account_id'] ?? $contact->account_id;
+        $countryId = null;
+        if ($accountId) {
+            $account = Account::with('subsidiary')->find($accountId);
+            $countryId = $account?->subsidiary?->country_id;
+        }
+        $dataForDuplicateCheck = array_merge($contact->toArray(), $validated);
+        $duplicateService->abortIfDuplicateContact($countryId, $dataForDuplicateCheck, $contact->id);
+
+        $contact->update($validated);
         return new ContactResource($contact->load(['account', 'categories']));
     }
 
