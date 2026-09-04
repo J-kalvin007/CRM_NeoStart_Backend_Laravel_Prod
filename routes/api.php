@@ -16,6 +16,8 @@ use App\Http\Controllers\Api\V1\TourPlanController;
 use App\Http\Controllers\Api\V1\ActivityController;
 use App\Http\Controllers\Api\V1\SampleMovementController;
 use App\Http\Controllers\Api\V1\ObjectifController;
+use App\Http\Controllers\Api\V1\CampaignController;
+use App\Http\Controllers\Api\V1\KolProfileController;
 
 Route::get('/login', fn() => response()->json(['message' => 'Non authentifié'], 401))->name('login');
 
@@ -84,5 +86,9 @@ Route::prefix('v1')->group(function () {
 
         // ── Objectifs & Performance ────────────────────────────
         Route::apiResource('objectifs', ObjectifController::class);
+        
+        // ── Campagnes & KOL (Extensions) ───────────────────────
+        Route::apiResource('campaigns', CampaignController::class);
+        Route::apiResource('kol-profiles', KolProfileController::class);
     });
 });

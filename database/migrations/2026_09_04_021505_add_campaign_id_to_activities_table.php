@@ -9,11 +9,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('activities', function (Blueprint $table) {
-            // Une visite peut être rattachée à une campagne. Nullable :
-            // toutes les visites ne s'inscrivent pas dans une campagne.
-            $table->foreignId('campaign_id')->nullable()
-                ->after('tour_plan_id')
-                ->constrained('campaigns')->nullOnDelete();
+            $table->foreignUuid('campaign_id')->nullable()->constrained('campaigns')->nullOnDelete()->after('tour_plan_id');
         });
     }
 

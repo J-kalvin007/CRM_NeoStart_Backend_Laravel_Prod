@@ -987,6 +987,190 @@
                 ]
             }
         },
+        "/api/v1/campaigns": {
+            "get": {
+                "tags": [
+                    "Campaigns"
+                ],
+                "summary": "Lister les campagnes",
+                "operationId": "1fbc4f93a5e90fc04f148461f9884c04",
+                "responses": {
+                    "200": {
+                        "description": "Liste des campagnes"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Campaigns"
+                ],
+                "summary": "Créer une campagne",
+                "operationId": "dfdd42b3daedd3bb1cd5b39107fe105a",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "nom",
+                                    "date_debut",
+                                    "date_fin",
+                                    "country_id"
+                                ],
+                                "properties": {
+                                    "country_id": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                    },
+                                    "nom": {
+                                        "type": "string"
+                                    },
+                                    "date_debut": {
+                                        "type": "string",
+                                        "format": "date"
+                                    },
+                                    "date_fin": {
+                                        "type": "string",
+                                        "format": "date"
+                                    },
+                                    "budget": {
+                                        "type": "number",
+                                        "format": "float",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Campagne créée"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/campaigns/{id}": {
+            "get": {
+                "tags": [
+                    "Campaigns"
+                ],
+                "summary": "Détails d'une campagne",
+                "operationId": "fc2fb7b68a8a6e84ea3153d80ad3f2bd",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Détails de la campagne"
+                    },
+                    "404": {
+                        "description": "Non trouvé"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Campaigns"
+                ],
+                "summary": "Mettre à jour une campagne",
+                "operationId": "fcbf59e91ac0d2def4e84883cccfae48",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "nom": {
+                                        "type": "string"
+                                    },
+                                    "statut": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Campagne mise à jour"
+                    },
+                    "404": {
+                        "description": "Non trouvé"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Campaigns"
+                ],
+                "summary": "Supprimer une campagne",
+                "operationId": "14d76752b71aa19b04e7f1759cfaea7f",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Supprimé"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/categories": {
             "get": {
                 "tags": [
@@ -1950,6 +2134,180 @@
                                 }
                             }
                         }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/kol-profiles": {
+            "get": {
+                "tags": [
+                    "KOL Profiles"
+                ],
+                "summary": "Lister les profils KOL",
+                "operationId": "29450f1dd4c1e200bce6d805206a5675",
+                "responses": {
+                    "200": {
+                        "description": "Liste des profils KOL"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "KOL Profiles"
+                ],
+                "summary": "Créer un profil KOL (Extension d'un contact)",
+                "operationId": "534a47785054977d238fb53bf4cdad3b",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "contact_id"
+                                ],
+                                "properties": {
+                                    "contact_id": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                    },
+                                    "expertise": {
+                                        "type": "string"
+                                    },
+                                    "influence_institution": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Profil KOL créé"
+                    },
+                    "422": {
+                        "description": "Validation failed"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/kol-profiles/{id}": {
+            "get": {
+                "tags": [
+                    "KOL Profiles"
+                ],
+                "summary": "Détails d'un profil KOL",
+                "operationId": "94d55ef92de97baf14912dd58b52dfee",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Détails du profil KOL"
+                    },
+                    "404": {
+                        "description": "Non trouvé"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "KOL Profiles"
+                ],
+                "summary": "Mettre à jour un profil KOL",
+                "operationId": "1cec526bb3702ced0351da2f62ce6308",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "expertise": {
+                                        "type": "string"
+                                    },
+                                    "influence_institution": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Profil KOL mis à jour"
+                    },
+                    "404": {
+                        "description": "Non trouvé"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "KOL Profiles"
+                ],
+                "summary": "Supprimer un profil KOL (le contact reste intact)",
+                "operationId": "5288af180c546456cd341d9743cc1fc7",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Supprimé"
                     }
                 },
                 "security": [
@@ -3718,6 +4076,10 @@
             "description": "Authentication"
         },
         {
+            "name": "Campaigns",
+            "description": "Campaigns"
+        },
+        {
             "name": "Categories",
             "description": "Categories"
         },
@@ -3732,6 +4094,10 @@
         {
             "name": "Countries",
             "description": "Countries"
+        },
+        {
+            "name": "KOL Profiles",
+            "description": "KOL Profiles"
         },
         {
             "name": "Objectifs",

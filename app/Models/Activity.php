@@ -17,6 +17,7 @@ class Activity extends Model
 
     protected $fillable = [
         'tour_plan_id',
+        'campaign_id',
         'user_id',
         'contact_id',
         'account_id',
@@ -53,6 +54,11 @@ class Activity extends Model
     public function tourPlan()
     {
         return $this->belongsTo(TourPlan::class);
+    }
+
+    public function campaign()
+    {
+        return $this->belongsTo(Campaign::class);
     }
 
     public function delegue()

@@ -36,6 +36,7 @@ class Contact extends Model
     public function contactType()  { return $this->belongsTo(ContactType::class); }
     public function categories()   { return $this->belongsToMany(Category::class, 'contact_category'); }
     public function activities()   { return $this->hasMany(Activity::class); }
+    public function kolProfile()   { return $this->hasOne(KolProfile::class); }
 
     // Accesseur pratique pour récupérer un attribut meta (ex: $contact->getMeta('rpps'))
     public function getMeta(string $key, mixed $default = null): mixed
