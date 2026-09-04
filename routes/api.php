@@ -54,8 +54,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::apiResource('countries', CountryController::class);
         Route::apiResource('subsidiaries', SubsidiaryController::class);
         Route::apiResource('regions', RegionController::class);
-
         Route::apiResource('territories', TerritoryController::class);
+        Route::apiResource('zones', ZoneController::class);
+        Route::apiResource('sectors', SectorController::class);
         Route::apiResource('teams', TeamController::class);
         Route::apiResource('campaigns', CampaignController::class);
         Route::apiResource('kol-profiles', KolProfileController::class);

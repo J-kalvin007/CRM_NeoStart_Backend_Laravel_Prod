@@ -16,14 +16,14 @@ class Team extends Model
     use HasActivityLogs;
 
     protected $fillable = [
-        'territory_id',
+        'sector_id',
         'name',
         'manager_id',
     ];
 
-    public function territory()
+    public function sector()
     {
-        return $this->belongsTo(Territory::class);
+        return $this->belongsTo(Sector::class);
     }
 
     public function members()

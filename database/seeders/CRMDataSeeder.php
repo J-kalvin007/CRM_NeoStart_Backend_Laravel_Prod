@@ -19,7 +19,12 @@ class CRMDataSeeder extends Seeder
     public function run(): void
     {
         $subsidiary = Subsidiary::where('code', 'SUB-FR')->first();
-        $team = Team::first();
+        $team = Team::with('sector.zone.territory.region')->first();
+
+        $sector = $team->sector ?? null;
+        $zone = $sector->zone ?? null;
+        $territory = $zone->territory ?? null;
+        $region = $territory->region ?? null;
 
         // 1. Création d'un Délégué de test
         $delegue = User::firstOrCreate([
@@ -29,6 +34,10 @@ class CRMDataSeeder extends Seeder
             'password' => Hash::make('password'),
             'country_id' => $subsidiary->country_id ?? null,
             'subsidiary_id' => $subsidiary->id ?? null,
+            'region_id' => $region->id ?? null,
+            'territory_id' => $territory->id ?? null,
+            'zone_id' => $zone->id ?? null,
+            'sector_id' => $sector->id ?? null,
             'team_id' => $team->id ?? null,
             'status' => true,
         ]);

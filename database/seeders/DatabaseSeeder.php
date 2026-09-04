@@ -7,6 +7,8 @@ use App\Models\Country;
 use App\Models\Subsidiary;
 use App\Models\Region;
 use App\Models\Territory;
+use App\Models\Zone;
+use App\Models\Sector;
 use App\Models\Team;
 use App\Models\Role;
 use Illuminate\Database\Seeder;
@@ -27,6 +29,10 @@ class DatabaseSeeder extends Seeder
             'scope:global',
             'scope:country',
             'scope:subsidiary',
+            'scope:region',
+            'scope:territory',
+            'scope:zone',
+            'scope:sector',
             'scope:team'
         ];
         
@@ -71,8 +77,16 @@ class DatabaseSeeder extends Seeder
             'region_id' => $region->id
         ]);
 
-        $team = Team::firstOrCreate(['name' => 'Équipe Paris Centre'], [
+        $zone = Zone::firstOrCreate(['name' => 'Paris Centre', 'code' => 'Z-PC'], [
             'territory_id' => $territory->id
+        ]);
+
+        $sector = Sector::firstOrCreate(['name' => 'Secteur 1 (Louvre)', 'code' => 'S-LOU'], [
+            'zone_id' => $zone->id
+        ]);
+
+        $team = Team::firstOrCreate(['name' => 'Équipe Paris Centre'], [
+            'sector_id' => $sector->id
         ]);
 
         // 3. Create Super Admin
@@ -81,6 +95,10 @@ class DatabaseSeeder extends Seeder
             'password' => Hash::make('password'),
             'country_id' => $country->id,
             'subsidiary_id' => $subsidiary->id,
+            'region_id' => $region->id,
+            'territory_id' => $territory->id,
+            'zone_id' => $zone->id,
+            'sector_id' => $sector->id,
             'team_id' => $team->id,
             'status' => true
         ]);

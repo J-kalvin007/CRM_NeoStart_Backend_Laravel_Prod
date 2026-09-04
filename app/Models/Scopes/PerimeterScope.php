@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Scope;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class PerimeterScope implements Scope
 {
@@ -21,153 +22,92 @@ class PerimeterScope implements Scope
         $user = Auth::user();
         $table = $model->getTable();
 
-        // 1. Si l'utilisateur a la permission globale, il voit tout (bypass du scope)
+        // 1. Holding / Global admin bypasses all filters
         if ($user->can('scope:global')) {
             return;
         }
 
-        // 2. S'il a la permission de voir tout son pays
-        if ($user->can('scope:country') && $user->country_id) {
-            $this->applyCountryFilter($builder, $table, $user->country_id);
-            return;
-        }
-
-        // 3. S'il a la permission de voir toute sa filiale
-        if ($user->can('scope:subsidiary') && $user->subsidiary_id) {
-            $this->applySubsidiaryFilter($builder, $table, $user->subsidiary_id);
-            return;
-        }
-
-        // 4. Sinon (par défaut ou avec permission stricte équipe), on restreint au plus bas niveau possible
+        // 2. Déterminer le niveau de restriction de l'utilisateur (du plus précis au plus large)
         if ($user->team_id) {
-            $this->applyTeamFilter($builder, $table, $user->team_id);
+            $this->applyHierarchyFilter($builder, $table, 'team_id', $user->team_id);
+        } elseif ($user->sector_id) {
+            $this->applyHierarchyFilter($builder, $table, 'sector_id', $user->sector_id);
+        } elseif ($user->zone_id) {
+            $this->applyHierarchyFilter($builder, $table, 'zone_id', $user->zone_id);
+        } elseif ($user->territory_id) {
+            $this->applyHierarchyFilter($builder, $table, 'territory_id', $user->territory_id);
+        } elseif ($user->region_id) {
+            $this->applyHierarchyFilter($builder, $table, 'region_id', $user->region_id);
         } elseif ($user->subsidiary_id) {
-            $this->applySubsidiaryFilter($builder, $table, $user->subsidiary_id);
+            $this->applyHierarchyFilter($builder, $table, 'subsidiary_id', $user->subsidiary_id);
         } elseif ($user->country_id) {
-            $this->applyCountryFilter($builder, $table, $user->country_id);
+            $this->applyHierarchyFilter($builder, $table, 'country_id', $user->country_id);
         }
     }
 
     /**
-     * Filtre les données pour n'afficher que ce qui appartient à une filiale spécifique.
+     * Filtre dynamique basé sur la hiérarchie organisationnelle.
      */
-    protected function applySubsidiaryFilter(Builder $builder, string $table, string $subsidiaryId): void
+    protected function applyHierarchyFilter(Builder $builder, string $table, string $levelColumn, string $levelId): void
     {
-        switch ($table) {
-            case 'subsidiaries':
-                $builder->where($table . '.id', $subsidiaryId);
-                break;
-            case 'regions':
+        // Tables structurelles simples
+        if ($table === 'countries' && $levelColumn === 'country_id') {
+            $builder->where('id', $levelId);
+            return;
+        }
+        if ($table === 'subsidiaries' && in_array($levelColumn, ['country_id', 'subsidiary_id'])) {
+            $column = $levelColumn === 'subsidiary_id' ? 'id' : $levelColumn;
+            $builder->where($column, $levelId);
+            return;
+        }
+
+        // Pour les tables opérationnelles (liées à un user_id)
+        $operationalTables = ['contacts', 'activities', 'tour_plans', 'sample_movements', 'objectifs', 'accounts', 'kol_profiles'];
+        if (in_array($table, $operationalTables) || $table === 'users') {
+            $columnToFilter = $table === 'users' ? 'id' : 'user_id';
+            
+            // On récupère tous les users qui tombent sous ce niveau hiérarchique
+            $builder->whereIn($table . '.' . $columnToFilter, function ($query) use ($levelColumn, $levelId) {
+                $query->select('id')->from('users');
+                
+                // Si l'utilisateur est restreint par un niveau supérieur, il voit les users en dessous
+                if ($levelColumn === 'team_id') {
+                    $query->where('team_id', $levelId);
+                } elseif ($levelColumn === 'sector_id') {
+                    $query->where('sector_id', $levelId)->orWhereIn('team_id', function ($q) use ($levelId) {
+                        $q->select('id')->from('teams')->where('sector_id', $levelId);
+                    });
+                } else {
+                    // Pour simplifier et optimiser, si l'architecture de données de l'utilisateur est stricte, 
+                    // il suffit de filtrer directement sur la colonne correspondante dans users.
+                    $query->where($levelColumn, $levelId);
+                }
+            });
+            return;
+        }
+
+        // Pour les produits, restreints à la filiale
+        if ($table === 'products') {
+            // On trouve la filiale correspondante au niveau actuel
+            $subsidiaryId = $this->getSubsidiaryIdFromLevel($levelColumn, $levelId);
+            if ($subsidiaryId) {
                 $builder->where($table . '.subsidiary_id', $subsidiaryId);
-                break;
-            case 'territories':
-                $builder->whereHas('region', function ($query) use ($subsidiaryId) {
-                    $query->where('subsidiary_id', $subsidiaryId);
-                });
-                break;
-            case 'teams':
-                $builder->whereHas('territory.region', function ($query) use ($subsidiaryId) {
-                    $query->where('subsidiary_id', $subsidiaryId);
-                });
-                break;
-            case 'users':
-                $builder->where($table . '.subsidiary_id', $subsidiaryId);
-                break;
-            case 'accounts':
-            case 'products':
-                $builder->where($table . '.subsidiary_id', $subsidiaryId);
-                break;
-            case 'contacts':
-            case 'activities':
-            case 'tour_plans':
-            case 'sample_movements':
-            case 'objectifs':
-                $builder->whereIn($table . '.user_id', function ($query) use ($subsidiaryId) {
-                    $query->select('id')->from('users')->where('subsidiary_id', $subsidiaryId);
-                });
-                break;
+            }
+            return;
         }
     }
 
     /**
-     * Filtre les données pour n'afficher que ce qui appartient à un pays spécifique.
+     * Remonte la hiérarchie pour trouver l'ID de la filiale.
      */
-    protected function applyCountryFilter(Builder $builder, string $table, string $countryId): void
+    protected function getSubsidiaryIdFromLevel(string $levelColumn, string $levelId): ?string
     {
-        switch ($table) {
-            case 'countries':
-                $builder->where($table . '.id', $countryId);
-                break;
-            case 'subsidiaries':
-                $builder->where($table . '.country_id', $countryId);
-                break;
-            case 'users':
-                $builder->where($table . '.country_id', $countryId);
-                break;
-            case 'regions':
-                $builder->whereHas('subsidiary', function ($query) use ($countryId) {
-                    $query->where('country_id', $countryId);
-                });
-                break;
-            case 'territories':
-                $builder->whereHas('region.subsidiary', function ($query) use ($countryId) {
-                    $query->where('country_id', $countryId);
-                });
-                break;
-            case 'teams':
-                $builder->whereHas('territory.region.subsidiary', function ($query) use ($countryId) {
-                    $query->where('country_id', $countryId);
-                });
-                break;
-            case 'accounts':
-            case 'products':
-                $builder->whereIn($table . '.subsidiary_id', function ($query) use ($countryId) {
-                    $query->select('id')->from('subsidiaries')->where('country_id', $countryId);
-                });
-                break;
-            case 'contacts':
-            case 'activities':
-            case 'tour_plans':
-            case 'sample_movements':
-            case 'objectifs':
-                $builder->whereIn($table . '.user_id', function ($query) use ($countryId) {
-                    $query->select('id')->from('users')->where('country_id', $countryId);
-                });
-                break;
-        }
-    }
+        if ($levelColumn === 'subsidiary_id') return $levelId;
+        if ($levelColumn === 'country_id') return null; // Les produits appartiennent à une filiale
 
-    /**
-     * Restriction supplémentaire pour restreindre à une équipe précise.
-     */
-    protected function applyTeamFilter(Builder $builder, string $table, string $teamId): void
-    {
-        switch ($table) {
-            case 'teams':
-                $builder->where($table . '.id', $teamId);
-                break;
-            case 'users':
-                $builder->where($table . '.team_id', $teamId);
-                break;
-            case 'accounts':
-            case 'contacts':
-            case 'activities':
-            case 'tour_plans':
-            case 'sample_movements':
-            case 'objectifs':
-                $builder->whereIn($table . '.user_id', function ($query) use ($teamId) {
-                    $query->select('id')->from('users')->where('team_id', $teamId);
-                });
-                break;
-            case 'products':
-                // Produits accessibles par équipe = on prend les produits de la filiale de l'équipe
-                $builder->whereIn($table . '.subsidiary_id', function ($query) use ($teamId) {
-                    $query->select('subsidiary_id')->from('teams')
-                          ->join('territories', 'teams.territory_id', '=', 'territories.id')
-                          ->join('regions', 'territories.region_id', '=', 'regions.id')
-                          ->where('teams.id', $teamId);
-                });
-                break;
-        }
+        // Dans une implémentation complète, on ferait des jointures depuis le niveau bas vers subsidiary.
+        // Pour des raisons de performance, l'ID de subsidiary est souvent dénormalisé sur les entités métier,
+        // ou on peut le requêter une seule fois et le cacher.
+        return DB::table('users')->where($levelColumn, $levelId)->value('subsidiary_id');
     }
 }
