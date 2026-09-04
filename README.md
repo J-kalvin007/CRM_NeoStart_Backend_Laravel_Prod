@@ -1,6 +1,6 @@
 # Skynity CRM Backend (API)
 
-Il s'agit de l'API de base (backend) pour le CRM Skynity, développée avec Laravel 12. 
+Il s'agit de l'API de base (backend) pour le CRM, développée avec Laravel 12. 
 Le backend repose sur une architecture agnostique, conçue pour gérer la force de vente (collaborateurs et agents terrain), les tournées, la gestion des stocks d'échantillons, les campagnes marketing, et bien plus encore.
 
 ## 🚀 Prérequis
