@@ -9,14 +9,16 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('kol_profiles', function (Blueprint $table) {
-            $table->id();
-            // Extension 1-1 d'un contact marqué is_kol = true.
-            $table->foreignId('contact_id')->unique()->constrained('contacts')->cascadeOnDelete();
+            $table->uuid('id')->primary();
+            $table->foreignUuid('contact_id')->unique()->constrained('contacts')->cascadeOnDelete();
+            
             $table->string('expertise')->nullable();
             $table->string('influence_institution')->nullable();
             $table->text('publications')->nullable();
             $table->text('relations_historique')->nullable();
             $table->text('engagement')->nullable();
+            $table->json('meta')->nullable();
+            
             $table->timestamps();
         });
     }
