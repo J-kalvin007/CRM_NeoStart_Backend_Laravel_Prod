@@ -36,42 +36,36 @@ Route::prefix('v1')->group(function () {
     // ── Endpoints protégés ────────────────────────────────────
     Route::middleware('auth:sanctum')->group(function () {
         
-        // ── Niveau 1 : Administrateurs (Groupe & Pays) ──────────────
-        Route::middleware(['role:Administrateur Groupe|Administrateur Pays'])->group(function () {
-            // Création de compte (Admin)
-            Route::post('/auth/invite', [AuthController::class, 'invite']);
+        // Création de compte (Admin)
+        Route::post('/auth/invite', [AuthController::class, 'invite']);
 
-            Route::apiResource('countries', CountryController::class);
-            Route::apiResource('subsidiaries', SubsidiaryController::class);
-            Route::apiResource('regions', RegionController::class);
-        });
+        Route::apiResource('countries', CountryController::class);
+        Route::apiResource('subsidiaries', SubsidiaryController::class);
+        Route::apiResource('regions', RegionController::class);
 
-        // ── Niveau 2 : Managers & Administrateurs ──────────────────
-        Route::middleware(['role:Administrateur Groupe|Administrateur Pays|Manager'])->group(function () {
-            Route::apiResource('territories', TerritoryController::class);
-            Route::apiResource('teams', TeamController::class);
-            Route::apiResource('campaigns', CampaignController::class);
-            Route::apiResource('kol-profiles', KolProfileController::class);
+        Route::apiResource('territories', TerritoryController::class);
+        Route::apiResource('teams', TeamController::class);
+        Route::apiResource('campaigns', CampaignController::class);
+        Route::apiResource('kol-profiles', KolProfileController::class);
+        
+        // Configuration (Tables paramétrables par l'Admin/Manager)
+        Route::prefix('config')->group(function () {
+            Route::get('account-types', [ConfigurationController::class, 'accountTypeIndex']);
+            Route::post('account-types', [ConfigurationController::class, 'accountTypeStore']);
+            Route::put('account-types/{id}', [ConfigurationController::class, 'accountTypeUpdate']);
+            Route::delete('account-types/{id}', [ConfigurationController::class, 'accountTypeDestroy']);
+
+            Route::get('contact-types', [ConfigurationController::class, 'contactTypeIndex']);
+            Route::post('contact-types', [ConfigurationController::class, 'contactTypeStore']);
+            Route::put('contact-types/{id}', [ConfigurationController::class, 'contactTypeUpdate']);
+            Route::delete('contact-types/{id}', [ConfigurationController::class, 'contactTypeDestroy']);
+
+            Route::get('product-types', [ConfigurationController::class, 'productTypeIndex']);
+            Route::post('product-types', [ConfigurationController::class, 'productTypeStore']);
+            Route::put('product-types/{id}', [ConfigurationController::class, 'productTypeUpdate']);
             
-            // Configuration (Tables paramétrables par l'Admin/Manager)
-            Route::prefix('config')->group(function () {
-                Route::get('account-types', [ConfigurationController::class, 'accountTypeIndex']);
-                Route::post('account-types', [ConfigurationController::class, 'accountTypeStore']);
-                Route::put('account-types/{id}', [ConfigurationController::class, 'accountTypeUpdate']);
-                Route::delete('account-types/{id}', [ConfigurationController::class, 'accountTypeDestroy']);
-
-                Route::get('contact-types', [ConfigurationController::class, 'contactTypeIndex']);
-                Route::post('contact-types', [ConfigurationController::class, 'contactTypeStore']);
-                Route::put('contact-types/{id}', [ConfigurationController::class, 'contactTypeUpdate']);
-                Route::delete('contact-types/{id}', [ConfigurationController::class, 'contactTypeDestroy']);
-
-                Route::get('product-types', [ConfigurationController::class, 'productTypeIndex']);
-                Route::post('product-types', [ConfigurationController::class, 'productTypeStore']);
-                Route::put('product-types/{id}', [ConfigurationController::class, 'productTypeUpdate']);
-                
-                // Settings (Mise à jour)
-                Route::post('settings', [SettingController::class, 'store']);
-            });
+            // Settings (Mise à jour)
+            Route::post('settings', [SettingController::class, 'store']);
         });
 
         // ── Niveau 3 : Public Authentifié (Délégués et autres) ─────
