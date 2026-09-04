@@ -74,8 +74,12 @@ Route::prefix('v1')->group(function () {
         });
 
         // ── Répertoire (Comptes & Contacts) ────────────────────
+        Route::post('accounts/check-duplicates', [AccountController::class, 'checkDuplicates']);
         Route::apiResource('accounts', AccountController::class);
+        
+        Route::post('contacts/check-duplicates', [ContactController::class, 'checkDuplicates']);
         Route::apiResource('contacts', ContactController::class);
+        
         Route::apiResource('categories', CategoryController::class);
 
         // ── Catalogue Produits ─────────────────────────────────
