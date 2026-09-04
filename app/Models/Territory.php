@@ -26,9 +26,9 @@ class Territory extends Model
         return $this->belongsTo(Region::class);
     }
 
-    public function teams()
+    public function zones()
     {
-        return $this->hasMany(Team::class);
+        return $this->hasMany(Zone::class);
     }
 
     public function manager()
