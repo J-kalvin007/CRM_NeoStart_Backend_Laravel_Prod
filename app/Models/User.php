@@ -38,6 +38,7 @@ class User extends Authenticatable
         'team_id',
         'manager_id',
         'status',
+        'fcm_token',
         'last_login_at',
         'force_password_change',
     ];

@@ -82,6 +82,9 @@ Route::prefix('v1')->group(function () {
         });
 
         // ── Niveau 3 : Public Authentifié (Délégués et autres) ─────
+        // FCM Token
+        Route::post('/user/fcm-token', [AuthController::class, 'updateFcmToken']);
+
         Route::get('/me', [AuthController::class, 'me']);
         Route::post('/logout', [AuthController::class, 'logout']);
 
