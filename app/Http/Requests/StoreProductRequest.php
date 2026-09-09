@@ -8,6 +8,15 @@ class StoreProductRequest extends FormRequest
 {
     public function authorize(): bool { return true; }
 
+    public function prepareForValidation()
+    {
+        if (!$this->has('subsidiary_id') && $this->user()) {
+            $this->merge([
+                'subsidiary_id' => $this->user()->subsidiary_id
+            ]);
+        }
+    }
+
     public function rules(): array
     {
         return [
@@ -18,6 +27,8 @@ class StoreProductRequest extends FormRequest
             'marque'          => 'nullable|string|max:150',
             'gamme'           => 'nullable|string|max:150',
             'prix_unitaire'   => 'nullable|numeric|min:0',
+            'pght'            => 'nullable|numeric|min:0',
+            'ppv'             => 'nullable|numeric|min:0',
             'devise'          => 'nullable|string|max:10',
             'stock_actuel'    => 'integer|min:0',
             'stock_alerte'    => 'integer|min:0',

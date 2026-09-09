@@ -18,7 +18,7 @@ class Product extends Model
     protected $fillable = [
         'subsidiary_id', 'product_type_id',
         'nom', 'code', 'marque', 'gamme',
-        'prix_unitaire', 'devise',
+        'prix_unitaire', 'pght', 'ppv', 'devise',
         'stock_actuel', 'stock_alerte',
         'description', 'image_url', 'statut',
         'meta',
@@ -26,6 +26,8 @@ class Product extends Model
 
     protected $casts = [
         'prix_unitaire' => 'float',
+        'pght'          => 'float',
+        'ppv'           => 'float',
         'stock_actuel'  => 'integer',
         'stock_alerte'  => 'integer',
         'meta'          => 'array',   // JSON automatiquement décodé
