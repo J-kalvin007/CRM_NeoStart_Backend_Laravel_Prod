@@ -3,9 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
-use App\Models\Objectif;
-use App\Models\Activity;
-use App\Models\Contact;
+use App\Models\User;
 use Illuminate\Http\Request;
 use OpenApi\Attributes as OA;
 use Illuminate\Support\Facades\DB;
@@ -13,110 +11,88 @@ use Illuminate\Support\Facades\DB;
 class AnalyticsController extends Controller
 {
     #[OA\Get(
-        path: '/api/v1/analytics/dashboard',
-        summary: 'Obtenir les données pour le tableau de bord (Indicateurs et Objectifs)',
+        path: '/api/v1/analytics/team-performance',
+        summary: 'Afficher les performances de l\'équipe du manager',
         security: [['bearerAuth' => []]],
-        tags: ['Analytics'],
+        tags: ['Manager Analytics'],
         responses: [
-            new OA\Response(response: 200, description: 'Statistiques du tableau de bord')
+            new OA\Response(
+                response: 200,
+                description: 'Performances de l\'équipe',
+                content: new OA\JsonContent(
+                    type: 'array',
+                    items: new OA\Items(
+                        properties: [
+                            new OA\Property(property: 'delegate', type: 'object', properties: [
+                                new OA\Property(property: 'id', type: 'string'),
+                                new OA\Property(property: 'name', type: 'string'),
+                            ]),
+                            new OA\Property(property: 'visit_count', type: 'integer'),
+                            new OA\Property(property: 'objective_rate', type: 'number', format: 'float'),
+                            new OA\Property(property: 'revenue', type: 'number', format: 'float'),
+                            new OA\Property(property: 'rank', type: 'integer'),
+                            new OA\Property(property: 'period', type: 'string')
+                        ]
+                    )
+                )
+            )
         ]
     )]
-    public function dashboard(Request $request)
+    public function teamPerformance(Request $request)
     {
-        $user = $request->user();
-        $startDate = now()->startOfMonth();
-        $endDate = now()->endOfMonth();
-
-        // 1. Les Objectifs de l'utilisateur avec l'indicateur associé
-        $objectifs = Objectif::with('indicator')
-            ->where('user_id', $user->id)
-            ->where('statut', 'actif')
-            ->get();
-
-        $objectivesData = $objectifs->map(function ($obj) {
-            return [
-                'id' => $obj->id,
-                'name' => $obj->indicator ? $obj->indicator->name : 'Objectif ' . $obj->id,
-                'target' => $obj->valeur_cible,
-                'achieved' => $obj->valeur_realisee,
-                'progress_percentage' => $obj->taux_realisation,
-                'unit' => $obj->indicator ? $obj->indicator->unit : '',
-            ];
-        });
-
-        // 2. Activités récentes (Aperçu)
-        $recentActivities = Activity::with('contact', 'account')
-            ->where('user_id', $user->id)
-            ->latest('date_activite')
-            ->take(5)
-            ->get();
-
-        // 3. KPIs
-        $visitesCount = Activity::where('user_id', $user->id)
-            ->where('activity_type', 'Visite')
-            ->whereBetween('date_activite', [$startDate, $endDate])
-            ->count();
-
-        $medecinsVusCount = Activity::where('user_id', $user->id)
-            ->where('activity_type', 'Visite')
-            ->whereBetween('date_activite', [$startDate, $endDate])
-            ->distinct('contact_id')
-            ->count('contact_id');
-
-        $totalActivitiesCount = Activity::where('user_id', $user->id)
-            ->whereBetween('date_activite', [$startDate, $endDate])
-            ->count();
-
-        $eventsCount = Activity::where('user_id', $user->id)
-            ->where('activity_type', 'Reunion') // Assumons que Réunion = Evénement dans ce contexte
-            ->whereBetween('date_activite', [$startDate, $endDate])
-            ->count();
-
-        // 4. Activity Breakdown
-        $activitiesBreakdown = Activity::where('user_id', $user->id)
-            ->whereBetween('date_activite', [$startDate, $endDate])
-            ->select('activity_type', DB::raw('count(*) as count'))
-            ->groupBy('activity_type')
-            ->get()
-            ->map(function ($item) {
-                return [
-                    'label' => $item->activity_type,
-                    'count' => $item->count
-                ];
-            });
-
-        // 5. Top Doctors
-        $topDoctors = Activity::with('contact')
-            ->where('user_id', $user->id)
-            ->whereNotNull('contact_id')
-            ->select('contact_id', DB::raw('count(*) as visit_count'))
-            ->groupBy('contact_id')
-            ->orderByDesc('visit_count')
-            ->take(4)
-            ->get()
-            ->map(function ($item) {
-                $contact = $item->contact;
-                return [
-                    'id' => $contact->id ?? $item->contact_id,
-                    'name' => $contact ? $contact->prenom . ' ' . $contact->nom : 'Contact ' . $item->contact_id,
-                    'specialty' => $contact->specialite ?? 'Généraliste',
-                    'hospital' => 'Hôpital / Clinique',
-                    'visitCount' => $item->visit_count,
-                    'avatarUrl' => 'https://i.pravatar.cc/150?u=' . $item->contact_id,
-                ];
-            });
-
+        // For a true implementation, we would query `activities` and `objectifs`
+        // Mocked response for now, mapped to frontend expectations.
         return response()->json([
-            'objectives' => $objectivesData,
-            'recent_activities' => $recentActivities,
-            'kpis' => [
-                'visites' => $visitesCount,
-                'medecins' => $medecinsVusCount,
-                'activites' => $totalActivitiesCount,
-                'evenements' => $eventsCount,
-            ],
-            'activities_breakdown' => $activitiesBreakdown,
-            'top_doctors' => $topDoctors,
+            [
+                'delegate' => [
+                    'id' => '00000000-0000-0000-0000-000000000001',
+                    'name' => 'Alice Doe',
+                ],
+                'visit_count' => 120,
+                'objective_rate' => 85.5,
+                'revenue' => 15000.00,
+                'rank' => 1,
+                'period' => 'monthly'
+            ]
+        ]);
+    }
+
+    #[OA\Get(
+        path: '/api/v1/users/locations',
+        summary: 'Afficher la dernière position GPS des délégués',
+        security: [['bearerAuth' => []]],
+        tags: ['Manager Analytics'],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: 'Liste des positions',
+                content: new OA\JsonContent(
+                    type: 'array',
+                    items: new OA\Items(
+                        properties: [
+                            new OA\Property(property: 'id', type: 'string'),
+                            new OA\Property(property: 'name', type: 'string'),
+                            new OA\Property(property: 'lat', type: 'number', format: 'float'),
+                            new OA\Property(property: 'lng', type: 'number', format: 'float'),
+                            new OA\Property(property: 'status', type: 'string'),
+                            new OA\Property(property: 'last_seen', type: 'string', format: 'date-time')
+                        ]
+                    )
+                )
+            )
+        ]
+    )]
+    public function usersLocations(Request $request)
+    {
+        return response()->json([
+            [
+                'id' => '00000000-0000-0000-0000-000000000001',
+                'name' => 'Alice Doe',
+                'lat' => 14.6928,
+                'lng' => -17.4467,
+                'status' => 'En visite',
+                'last_seen' => now()->toISOString()
+            ]
         ]);
     }
 }

@@ -22,9 +22,25 @@ class UpdateProductRequest extends FormRequest
      */
     public function rules(): array
     {
+        $productId = $this->route('product') ? $this->route('product')->id : $this->route('id');
+
         return [
-            //
+            'subsidiary_id'   => 'sometimes|required|uuid|exists:subsidiaries,id',
+            'product_type_id' => 'nullable|uuid|exists:product_types,id',
+            'nom'             => 'sometimes|required|string|max:255',
+            'code'            => 'nullable|string|max:100|unique:products,code,' . $productId,
+            'marque'          => 'nullable|string|max:150',
+            'gamme'           => 'nullable|string|max:150',
+            'prix_unitaire'   => 'nullable|numeric|min:0',
+            'pght'            => 'nullable|numeric|min:0',
+            'ppv'             => 'nullable|numeric|min:0',
+            'devise'          => 'nullable|string|max:10',
+            'stock_actuel'    => 'integer|min:0',
+            'stock_alerte'    => 'integer|min:0',
+            'description'     => 'nullable|string',
+            'image_url'       => 'nullable|url',
+            'statut'          => 'in:brouillon,actif,archive',
+            'meta'            => 'nullable|array',
         ];
     }
 }
-
