@@ -744,16 +744,108 @@
                 ]
             }
         },
-        "/api/v1/analytics/dashboard": {
+        "/api/v1/analytics/team-performance": {
             "get": {
                 "tags": [
-                    "Analytics"
+                    "Manager Analytics"
                 ],
-                "summary": "Obtenir les données pour le tableau de bord (Indicateurs et Objectifs)",
-                "operationId": "89ee0bb19258dd953425308a94aa8153",
+                "summary": "Afficher les performances de l'équipe du manager",
+                "operationId": "f71189f9ba0415b5de3575e5bb509363",
                 "responses": {
                     "200": {
-                        "description": "Statistiques du tableau de bord"
+                        "description": "Performances de l'équipe",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "properties": {
+                                            "delegate": {
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "string"
+                                                    },
+                                                    "name": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            },
+                                            "visit_count": {
+                                                "type": "integer"
+                                            },
+                                            "objective_rate": {
+                                                "type": "number",
+                                                "format": "float"
+                                            },
+                                            "revenue": {
+                                                "type": "number",
+                                                "format": "float"
+                                            },
+                                            "rank": {
+                                                "type": "integer"
+                                            },
+                                            "period": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "type": "object"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/users/locations": {
+            "get": {
+                "tags": [
+                    "Manager Analytics"
+                ],
+                "summary": "Afficher la dernière position GPS des délégués",
+                "operationId": "03e79f72d27ae2eb7dddf5be309e677d",
+                "responses": {
+                    "200": {
+                        "description": "Liste des positions",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "properties": {
+                                            "id": {
+                                                "type": "string"
+                                            },
+                                            "name": {
+                                                "type": "string"
+                                            },
+                                            "lat": {
+                                                "type": "number",
+                                                "format": "float"
+                                            },
+                                            "lng": {
+                                                "type": "number",
+                                                "format": "float"
+                                            },
+                                            "status": {
+                                                "type": "string"
+                                            },
+                                            "last_seen": {
+                                                "type": "string",
+                                                "format": "date-time"
+                                            }
+                                        },
+                                        "type": "object"
+                                    }
+                                }
+                            }
+                        }
                     }
                 },
                 "security": [
@@ -2290,6 +2382,55 @@
                 ]
             }
         },
+        "/api/v1/kols": {
+            "get": {
+                "tags": [
+                    "KOLs"
+                ],
+                "summary": "Lister les leaders d'opinion (KOLs)",
+                "operationId": "58715574bc7801529142683e8e0493d2",
+                "responses": {
+                    "200": {
+                        "description": "Liste des KOLs",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "properties": {
+                                            "id": {
+                                                "type": "string"
+                                            },
+                                            "name": {
+                                                "type": "string"
+                                            },
+                                            "specialty": {
+                                                "type": "string"
+                                            },
+                                            "institution": {
+                                                "type": "string"
+                                            },
+                                            "influence_score": {
+                                                "type": "integer"
+                                            },
+                                            "relationship_status": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "type": "object"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/kol-profiles": {
             "get": {
                 "tags": [
@@ -3285,166 +3426,45 @@
         "/api/v1/sample-movements": {
             "get": {
                 "tags": [
-                    "SampleMovements"
+                    "Stocks"
                 ],
-                "summary": "Lister les mouvements de stock d'échantillons",
+                "summary": "Lister les stocks d'échantillons du délégué",
                 "operationId": "798f1846062bf444055ee4ada2d5c693",
-                "parameters": [
-                    {
-                        "name": "product_id",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid"
-                        }
-                    },
-                    {
-                        "name": "movement_type",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "type": "string",
-                            "enum": [
-                                "reception",
-                                "attribution",
-                                "distribution",
-                                "retour",
-                                "destruction",
-                                "inventaire"
-                            ]
-                        }
-                    },
-                    {
-                        "name": "lot_number",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                ],
                 "responses": {
                     "200": {
-                        "description": "Liste des mouvements de stock"
-                    }
-                },
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ]
-            },
-            "post": {
-                "tags": [
-                    "SampleMovements"
-                ],
-                "summary": "Enregistrer un mouvement de stock",
-                "description": "Crée un mouvement de stock (réception, distribution, retour...) et met à jour automatiquement le stock du produit.",
-                "operationId": "4cabe6c19847e30a67294f8d4ebfb372",
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "required": [
-                                    "product_id",
-                                    "movement_type",
-                                    "quantity"
-                                ],
-                                "properties": {
-                                    "product_id": {
-                                        "type": "string",
-                                        "format": "uuid"
-                                    },
-                                    "activity_id": {
-                                        "type": "string",
-                                        "format": "uuid",
-                                        "nullable": true
-                                    },
-                                    "movement_type": {
-                                        "type": "string",
-                                        "enum": [
-                                            "reception",
-                                            "attribution",
-                                            "distribution",
-                                            "retour",
-                                            "destruction",
-                                            "inventaire"
-                                        ]
-                                    },
-                                    "quantity": {
-                                        "type": "integer",
-                                        "minimum": 1
-                                    },
-                                    "lot_number": {
-                                        "type": "string",
-                                        "nullable": true
-                                    },
-                                    "expiry_date": {
-                                        "type": "string",
-                                        "format": "date",
-                                        "nullable": true
-                                    },
-                                    "signature_url": {
-                                        "type": "string",
-                                        "nullable": true
-                                    },
-                                    "qr_code": {
-                                        "type": "string",
-                                        "nullable": true
-                                    },
-                                    "remarques": {
-                                        "type": "string",
-                                        "nullable": true
-                                    },
-                                    "local_uuid": {
-                                        "type": "string",
-                                        "format": "uuid",
-                                        "nullable": true
+                        "description": "Liste des stocks avec quantités disponibles et distribuées",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "properties": {
+                                            "product": {
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "string"
+                                                    },
+                                                    "name": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            },
+                                            "quantity_available": {
+                                                "type": "integer"
+                                            },
+                                            "quantity_distributed": {
+                                                "type": "integer"
+                                            },
+                                            "alert_threshold": {
+                                                "type": "integer"
+                                            }
+                                        },
+                                        "type": "object"
                                     }
-                                },
-                                "type": "object"
+                                }
                             }
                         }
-                    }
-                },
-                "responses": {
-                    "201": {
-                        "description": "Mouvement enregistré avec succès"
-                    },
-                    "422": {
-                        "description": "Données invalides"
-                    }
-                },
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ]
-            }
-        },
-        "/api/v1/sample-movements/{id}": {
-            "get": {
-                "tags": [
-                    "SampleMovements"
-                ],
-                "summary": "Détails d'un mouvement de stock",
-                "operationId": "77cff27ece738bded1093848e25bf487",
-                "parameters": [
-                    {
-                        "name": "id",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Détails du mouvement"
                     }
                 },
                 "security": [
@@ -4490,6 +4510,58 @@
                 ]
             }
         },
+        "/api/v1/trainings": {
+            "get": {
+                "tags": [
+                    "Trainings"
+                ],
+                "summary": "Lister les formations e-learning",
+                "operationId": "fc36fe969a4f48e303ee0b0e0b412339",
+                "responses": {
+                    "200": {
+                        "description": "Liste des formations",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "properties": {
+                                            "id": {
+                                                "type": "string"
+                                            },
+                                            "title": {
+                                                "type": "string"
+                                            },
+                                            "description": {
+                                                "type": "string"
+                                            },
+                                            "duration_minutes": {
+                                                "type": "integer"
+                                            },
+                                            "type": {
+                                                "type": "string"
+                                            },
+                                            "progress": {
+                                                "type": "number"
+                                            },
+                                            "status": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "type": "object"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/zones": {
             "get": {
                 "tags": [
@@ -4664,8 +4736,8 @@
             "description": "Activities"
         },
         {
-            "name": "Analytics",
-            "description": "Analytics"
+            "name": "Manager Analytics",
+            "description": "Manager Analytics"
         },
         {
             "name": "Authentication",
@@ -4692,6 +4764,10 @@
             "description": "Countries"
         },
         {
+            "name": "KOLs",
+            "description": "KOLs"
+        },
+        {
             "name": "KOL Profiles",
             "description": "KOL Profiles"
         },
@@ -4712,8 +4788,8 @@
             "description": "Regions"
         },
         {
-            "name": "SampleMovements",
-            "description": "SampleMovements"
+            "name": "Stocks",
+            "description": "Stocks"
         },
         {
             "name": "Geography",
@@ -4738,6 +4814,10 @@
         {
             "name": "TourPlans",
             "description": "TourPlans"
+        },
+        {
+            "name": "Trainings",
+            "description": "Trainings"
         }
     ]
 }

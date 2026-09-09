@@ -18,7 +18,34 @@ class DocumentController extends Controller
                   ->where('documentable_id', $request->documentable_id);
         }
 
-        $documents = $query->paginate(15);
+        $documents = $query->get()->map(function ($doc) {
+            // Map the internal types to frontend display types
+            $mappedType = 'NOTICE';
+            if ($doc->type === 'presentation') $mappedType = 'E-DETAILING';
+            if ($doc->type === 'video') $mappedType = 'VIDEO';
+            if ($doc->type === 'pdf') $mappedType = 'BROCHURE';
+
+            $status = 'VALIDE';
+            if (!$doc->is_active) $status = 'ARCHIVE';
+            if ($doc->expiration_date && \Carbon\Carbon::parse($doc->expiration_date)->isPast()) {
+                $status = 'EXPIRE';
+            }
+
+            return [
+                'id' => $doc->id,
+                'reference' => 'DOC-' . substr($doc->id, 0, 6),
+                'titre' => $doc->title,
+                'type' => $mappedType,
+                'produit' => $doc->documentable_type === 'App\\Models\\Product' ? 'Produit Associé' : 'Général',
+                'version' => 'v' . $doc->version,
+                'taille' => '2.4 MB', // mock size
+                'dateExpiration' => $doc->expiration_date ? \Carbon\Carbon::parse($doc->expiration_date)->format('Y-m-d') : 'N/A',
+                'statut' => $status,
+                'paysAutorises' => ['FR', 'CI', 'SN'], // mock for now
+                'url' => $doc->file_path
+            ];
+        });
+        
         return response()->json($documents);
     }
 

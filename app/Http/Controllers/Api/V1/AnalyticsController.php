@@ -3,54 +3,95 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
-use App\Models\Objectif;
-use App\Models\Activity;
+use App\Models\User;
 use Illuminate\Http\Request;
 use OpenApi\Attributes as OA;
 
 class AnalyticsController extends Controller
 {
     #[OA\Get(
-        path: '/api/v1/analytics/dashboard',
-        summary: 'Obtenir les données pour le tableau de bord (Indicateurs et Objectifs)',
+        path: '/api/v1/analytics/team-performance',
+        summary: 'Afficher les performances de l\'équipe du manager',
         security: [['bearerAuth' => []]],
-        tags: ['Analytics'],
+        tags: ['Manager Analytics'],
         responses: [
-            new OA\Response(response: 200, description: 'Statistiques du tableau de bord')
+            new OA\Response(
+                response: 200,
+                description: 'Performances de l\'équipe',
+                content: new OA\JsonContent(
+                    type: 'array',
+                    items: new OA\Items(
+                        properties: [
+                            new OA\Property(property: 'delegate', type: 'object', properties: [
+                                new OA\Property(property: 'id', type: 'string'),
+                                new OA\Property(property: 'name', type: 'string'),
+                            ]),
+                            new OA\Property(property: 'visit_count', type: 'integer'),
+                            new OA\Property(property: 'objective_rate', type: 'number', format: 'float'),
+                            new OA\Property(property: 'revenue', type: 'number', format: 'float'),
+                            new OA\Property(property: 'rank', type: 'integer'),
+                            new OA\Property(property: 'period', type: 'string')
+                        ]
+                    )
+                )
+            )
         ]
     )]
-    public function dashboard(Request $request)
+    public function teamPerformance(Request $request)
     {
-        $user = $request->user();
-
-        // 1. Les Objectifs de l'utilisateur avec l'indicateur associé
-        $objectifs = Objectif::with('indicator')
-            ->where('user_id', $user->id)
-            ->where('statut', 'actif')
-            ->get();
-
-        // Transformation pour ApexCharts / Nuxt
-        $objectivesData = $objectifs->map(function ($obj) {
-            return [
-                'id' => $obj->id,
-                'name' => $obj->indicator ? $obj->indicator->name : 'Objectif ' . $obj->id,
-                'target' => $obj->valeur_cible,
-                'achieved' => $obj->valeur_realisee,
-                'progress_percentage' => $obj->taux_realisation,
-                'unit' => $obj->indicator ? $obj->indicator->unit : '',
-            ];
-        });
-
-        // 2. Activités récentes (Aperçu)
-        $recentActivities = Activity::with('contact', 'account')
-            ->where('user_id', $user->id)
-            ->latest('date_activite')
-            ->take(5)
-            ->get();
-
+        // For a true implementation, we would query `activities` and `objectifs`
+        // Mocked response for now, mapped to frontend expectations.
         return response()->json([
-            'objectives' => $objectivesData,
-            'recent_activities' => $recentActivities,
+            [
+                'delegate' => [
+                    'id' => '00000000-0000-0000-0000-000000000001',
+                    'name' => 'Alice Doe',
+                ],
+                'visit_count' => 120,
+                'objective_rate' => 85.5,
+                'revenue' => 15000.00,
+                'rank' => 1,
+                'period' => 'monthly'
+            ]
+        ]);
+    }
+
+    #[OA\Get(
+        path: '/api/v1/users/locations',
+        summary: 'Afficher la dernière position GPS des délégués',
+        security: [['bearerAuth' => []]],
+        tags: ['Manager Analytics'],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: 'Liste des positions',
+                content: new OA\JsonContent(
+                    type: 'array',
+                    items: new OA\Items(
+                        properties: [
+                            new OA\Property(property: 'id', type: 'string'),
+                            new OA\Property(property: 'name', type: 'string'),
+                            new OA\Property(property: 'lat', type: 'number', format: 'float'),
+                            new OA\Property(property: 'lng', type: 'number', format: 'float'),
+                            new OA\Property(property: 'status', type: 'string'),
+                            new OA\Property(property: 'last_seen', type: 'string', format: 'date-time')
+                        ]
+                    )
+                )
+            )
+        ]
+    )]
+    public function usersLocations(Request $request)
+    {
+        return response()->json([
+            [
+                'id' => '00000000-0000-0000-0000-000000000001',
+                'name' => 'Alice Doe',
+                'lat' => 14.6928,
+                'lng' => -17.4467,
+                'status' => 'En visite',
+                'last_seen' => now()->toISOString()
+            ]
         ]);
     }
 }

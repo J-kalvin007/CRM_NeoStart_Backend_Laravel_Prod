@@ -6,6 +6,8 @@ use App\Http\Controllers\Api\V1\CountryController;
 use App\Http\Controllers\Api\V1\SubsidiaryController;
 use App\Http\Controllers\Api\V1\RegionController;
 use App\Http\Controllers\Api\V1\TerritoryController;
+use App\Http\Controllers\Api\V1\ZoneController;
+use App\Http\Controllers\Api\V1\SectorController;
 use App\Http\Controllers\Api\V1\TeamController;
 use App\Http\Controllers\Api\V1\ConfigurationController;
 use App\Http\Controllers\Api\V1\AccountController;
@@ -16,6 +18,7 @@ use App\Http\Controllers\Api\V1\TourPlanController;
 use App\Http\Controllers\Api\V1\ActivityController;
 use App\Http\Controllers\Api\V1\SampleMovementController;
 use App\Http\Controllers\Api\V1\TaskController;
+use App\Http\Controllers\Api\V1\UserController;
 use App\Http\Controllers\Api\V1\OpportunityController;
 use App\Http\Controllers\Api\V1\OrderController;
 use App\Http\Controllers\Api\V1\SaleController;
@@ -61,6 +64,11 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('campaigns', CampaignController::class);
         Route::apiResource('kol-profiles', KolProfileController::class);
 
+        // Utilisateurs, Rôles & Permissions
+        Route::apiResource('users', UserController::class);
+        Route::apiResource('roles', RoleController::class);
+        Route::get('permissions', [PermissionController::class, 'index']);
+
         // Configuration (Tables paramétrables par l'Admin/Manager)
         Route::prefix('config')->group(function () {
             Route::get('account-types', [ConfigurationController::class, 'accountTypeIndex']);
@@ -76,6 +84,7 @@ Route::prefix('v1')->group(function () {
             Route::get('product-types', [ConfigurationController::class, 'productTypeIndex']);
             Route::post('product-types', [ConfigurationController::class, 'productTypeStore']);
             Route::put('product-types/{id}', [ConfigurationController::class, 'productTypeUpdate']);
+            Route::delete('product-types/{id}', [ConfigurationController::class, 'productTypeDestroy']);
 
             // Settings (Mise à jour)
             Route::post('settings', [SettingController::class, 'store']);
@@ -126,6 +135,10 @@ Route::prefix('v1')->group(function () {
 
         // -- Statistiques & Dashboards --
         Route::get('/analytics/dashboard', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'dashboard']);
+        Route::get('/analytics/team-performance', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'teamPerformance']);
+        Route::get('/users/locations', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'usersLocations']);
+        Route::get('/trainings', [\App\Http\Controllers\Api\V1\TrainingController::class, 'index']);
+        Route::get('/kols', [\App\Http\Controllers\Api\V1\KolController::class, 'index']);
 
         // ── Notes de Frais (Expenses) ──────────────────────────
         Route::apiResource('expenses', ExpenseController::class);
