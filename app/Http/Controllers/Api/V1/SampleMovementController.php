@@ -1,7 +1,5 @@
 <?php
-
 namespace App\Http\Controllers\Api\V1;
-
 use App\Http\Controllers\Controller;
 use App\Models\SampleMovement;
 use Illuminate\Http\Request;

@@ -34,6 +34,9 @@ use App\Http\Controllers\Api\V1\CampaignController;
 use App\Http\Controllers\Api\V1\KolProfileController;
 use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\SettingController;
+use App\Http\Controllers\Api\V1\LeaveController;
+use App\Http\Controllers\Api\V1\TrainingController;
+use App\Http\Controllers\Api\V1\ConversationController;
 
 Route::get('/login', fn() => response()->json(['message' => 'Non authentifié'], 401))->name('login');
 
@@ -155,5 +158,32 @@ Route::prefix('v1')->group(function () {
 
         // ── Objectifs & Performance ────────────────────────────
         Route::apiResource('objectifs', ObjectifController::class);
+
+        // ── Congés (Leaves) ────────────────────────────────────
+        Route::get('leaves', [LeaveController::class, 'index']);
+        Route::post('leaves', [LeaveController::class, 'store']);
+        Route::patch('leaves/{id}/status', [LeaveController::class, 'updateStatus']);
+
+        // ── Formations (Trainings) ─────────────────────────────
+        Route::get('trainings', [TrainingController::class, 'index']);
+        Route::get('trainings/{id}', [TrainingController::class, 'show']);
+        Route::patch('trainings/{id}/progress', [TrainingController::class, 'updateProgress']);
+
+        // ── Messagerie Interne ─────────────────────────────────
+        Route::get('conversations', [ConversationController::class, 'index']);
+        Route::get('conversations/{id}/messages', [ConversationController::class, 'messages']);
+        Route::post('conversations/{id}/messages', [ConversationController::class, 'sendMessage']);
+
+        // ── Stock délégué (alias sample-movements avec filtre user) ─
+        Route::get('my-stock', [SampleMovementController::class, 'myStock']);
+
+        // ── Approbation de dépenses (PATCH) ─────────────────────
+        Route::patch('expenses/{expense}/status', [ExpenseController::class, 'updateStatus']);
+
+        // ── KOL alias (compatibilité mobile) ─────────────────────
+        Route::get('kols', [KolProfileController::class, 'index']);
+
+        // ── Performance Équipe ─────────────────────────────────
+        Route::get('analytics/team-performance', [\App\Http\Controllers\Api\V1\ManagerDashboardController::class, 'teamPerformance']);
     });
 });
