@@ -12,7 +12,7 @@
         {{-- Header --}}
         <div style="padding: 32px 40px 20px 40px; text-align: center; border-bottom: 1px solid #e5e7eb;">
             <h1 style="margin: 0; color: #111827; font-size: 22px; font-weight: 700; letter-spacing: -0.3px;">
-                🎉 Bienvenue sur la plateforme CRM
+                 Bienvenue sur la plateforme CRM
             </h1>
             <p style="margin: 8px 0 0 0; color: #6b7280; font-size: 14px;">
                 Un compte a été créé pour vous
