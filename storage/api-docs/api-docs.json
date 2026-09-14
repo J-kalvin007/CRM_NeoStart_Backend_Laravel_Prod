@@ -2350,7 +2350,7 @@
                 "operationId": "e9e2a36340d4688ab3f673d9e754a0ce",
                 "responses": {
                     "200": {
-                        "description": "Succès",
+                        "description": "Liste des pays",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -2362,10 +2362,35 @@
                                                 "format": "uuid"
                                             },
                                             "name": {
-                                                "type": "string"
+                                                "type": "string",
+                                                "example": "Togo"
                                             },
                                             "iso_code": {
-                                                "type": "string"
+                                                "type": "string",
+                                                "example": "TG"
+                                            },
+                                            "currency": {
+                                                "type": "string",
+                                                "example": "XOF",
+                                                "nullable": true
+                                            },
+                                            "language": {
+                                                "type": "string",
+                                                "example": "fr",
+                                                "nullable": true
+                                            },
+                                            "timezone": {
+                                                "type": "string",
+                                                "example": "Africa/Lome",
+                                                "nullable": true
+                                            },
+                                            "regulatory_settings": {
+                                                "type": "object",
+                                                "nullable": true
+                                            },
+                                            "status": {
+                                                "type": "boolean",
+                                                "example": true
                                             }
                                         },
                                         "type": "object"
@@ -2373,6 +2398,216 @@
                                 }
                             }
                         }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Countries"
+                ],
+                "summary": "Créer un pays",
+                "operationId": "a7df34f9712005984b59ab0f47ed86db",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "name",
+                                    "iso_code"
+                                ],
+                                "properties": {
+                                    "name": {
+                                        "type": "string",
+                                        "example": "Togo"
+                                    },
+                                    "iso_code": {
+                                        "description": "Code ISO 3 lettres max",
+                                        "type": "string",
+                                        "example": "TG"
+                                    },
+                                    "currency": {
+                                        "type": "string",
+                                        "example": "XOF",
+                                        "nullable": true
+                                    },
+                                    "language": {
+                                        "type": "string",
+                                        "example": "fr",
+                                        "nullable": true
+                                    },
+                                    "timezone": {
+                                        "type": "string",
+                                        "example": "Africa/Lome",
+                                        "nullable": true
+                                    },
+                                    "regulatory_settings": {
+                                        "type": "object",
+                                        "nullable": true
+                                    },
+                                    "status": {
+                                        "type": "boolean",
+                                        "example": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Pays créé avec succès"
+                    },
+                    "422": {
+                        "description": "Validation échouée (iso_code déjà existant, champs manquants...)"
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/countries/{id}": {
+            "get": {
+                "tags": [
+                    "Countries"
+                ],
+                "summary": "Afficher un pays",
+                "operationId": "a8837d03086467ee2c36ffc22c7b3142",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Détails du pays"
+                    },
+                    "404": {
+                        "description": "Pays introuvable"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Countries"
+                ],
+                "summary": "Modifier un pays",
+                "operationId": "53a474ab547d103e520e7b7fdb01aaab",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "iso_code": {
+                                        "type": "string"
+                                    },
+                                    "currency": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "language": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "timezone": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "regulatory_settings": {
+                                        "type": "object",
+                                        "nullable": true
+                                    },
+                                    "status": {
+                                        "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Pays mis à jour"
+                    },
+                    "422": {
+                        "description": "Validation échouée"
+                    },
+                    "404": {
+                        "description": "Pays introuvable"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Countries"
+                ],
+                "summary": "Supprimer un pays",
+                "description": "Supprime un pays. Attention : la suppression échoue si des filiales ou utilisateurs y sont rattachés.",
+                "operationId": "66a7b1edafe591546f2c5b2cefdf70a8",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Pays supprimé"
+                    },
+                    "409": {
+                        "description": "Impossible de supprimer — des filiales ou utilisateurs y sont rattachés"
+                    },
+                    "404": {
+                        "description": "Pays introuvable"
                     }
                 },
                 "security": [
@@ -4915,6 +5150,10 @@
     },
     "tags": [
         {
+            "name": "Countries",
+            "description": "Gestion des pays"
+        },
+        {
             "name": "Permissions",
             "description": "Consultation des permissions disponibles (lecture seule — gérées par le système)"
         },
@@ -4953,10 +5192,6 @@
         {
             "name": "Contacts",
             "description": "Contacts"
-        },
-        {
-            "name": "Countries",
-            "description": "Countries"
         },
         {
             "name": "KOLs",
