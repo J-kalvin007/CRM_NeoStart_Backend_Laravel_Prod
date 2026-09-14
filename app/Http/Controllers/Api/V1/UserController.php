@@ -34,6 +34,11 @@ class UserController extends Controller
     public function store(StoreUserRequest $request)
     {
         $data = $request->validated();
+
+        // Convertir 'active'/'inactive' → boolean pour la colonne DB
+        if (isset($data['status'])) {
+            $data['status'] = $data['status'] === 'active' ? 1 : 0;
+        }
         
         $data['password'] = Hash::make(Str::random(12));
         $data['force_password_change'] = true;
@@ -61,6 +66,11 @@ class UserController extends Controller
     {
         $user = User::findOrFail($id);
         $data = $request->validated();
+
+        // Convertir 'active'/'inactive' → boolean pour la colonne DB
+        if (isset($data['status'])) {
+            $data['status'] = $data['status'] === 'active' ? 1 : 0;
+        }
 
         $user->update($data);
 
