@@ -72,6 +72,7 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('roles', RoleController::class);
         Route::get('permissions', [PermissionController::class, 'index']);
 
+
         // Configuration (Tables paramétrables par l'Admin/Manager)
         Route::prefix('config')->group(function () {
             Route::get('account-types', [ConfigurationController::class, 'accountTypeIndex']);

@@ -14,14 +14,22 @@ use Illuminate\Support\Str;
 use App\Mail\UserInvitationMail;
 use OpenApi\Attributes as OA;
 
-/**
- * @OA\Tag(
- *     name="Users",
- *     description="Gestion des utilisateurs"
- * )
- */
+#[OA\Tag(name: 'Users', description: 'Gestion des utilisateurs')]
 class UserController extends Controller
 {
+    #[OA\Get(
+        path: '/api/v1/users',
+        summary: 'Lister les utilisateurs',
+        security: [['bearerAuth' => []]],
+        tags: ['Users'],
+        parameters: [
+            new OA\Parameter(name: 'team_id', in: 'query', required: false, description: 'Filtrer par équipe', schema: new OA\Schema(type: 'string', format: 'uuid'))
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Liste des utilisateurs avec rôles et équipe'),
+            new OA\Response(response: 401, description: 'Non authentifié'),
+        ]
+    )]
     public function index(Request $request)
     {
         $query = User::with(['roles', 'team']);
@@ -33,6 +41,39 @@ class UserController extends Controller
         return UserResource::collection($query->get());
     }
 
+    #[OA\Post(
+        path: '/api/v1/users',
+        summary: 'Créer un utilisateur',
+        description: 'Crée un compte utilisateur avec un mot de passe temporaire généré automatiquement. Un email d\'invitation contenant les identifiants est envoyé à l\'utilisateur. Il devra changer son mot de passe (min. 8 caractères) dès sa première connexion.',
+        security: [['bearerAuth' => []]],
+        tags: ['Users'],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['name', 'email', 'status'],
+                properties: [
+                    new OA\Property(property: 'name',          type: 'string',  example: 'Jean Dupont'),
+                    new OA\Property(property: 'email',         type: 'string',  format: 'email', example: 'jean.dupont@crm.local'),
+                    new OA\Property(property: 'phone',         type: 'string',  nullable: true, example: '+22890000000'),
+                    new OA\Property(property: 'status',        type: 'string',  enum: ['active', 'inactive'], example: 'active'),
+                    new OA\Property(property: 'team_id',       type: 'string',  format: 'uuid', nullable: true),
+                    new OA\Property(property: 'manager_id',    type: 'string',  format: 'uuid', nullable: true),
+                    new OA\Property(property: 'country_id',    type: 'string',  format: 'uuid', nullable: true),
+                    new OA\Property(property: 'subsidiary_id', type: 'string',  format: 'uuid', nullable: true),
+                    new OA\Property(property: 'region_id',     type: 'string',  format: 'uuid', nullable: true),
+                    new OA\Property(property: 'territory_id',  type: 'string',  format: 'uuid', nullable: true),
+                    new OA\Property(property: 'zone_id',       type: 'string',  format: 'uuid', nullable: true),
+                    new OA\Property(property: 'sector_id',     type: 'string',  format: 'uuid', nullable: true),
+                    new OA\Property(property: 'roles',         type: 'array',   items: new OA\Items(type: 'string'), example: ['delegue']),
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 201, description: 'Utilisateur créé, email d\'invitation envoyé automatiquement'),
+            new OA\Response(response: 422, description: 'Validation échouée (email déjà utilisé, champs manquants...)'),
+            new OA\Response(response: 401, description: 'Non authentifié'),
+        ]
+    )]
     public function store(StoreUserRequest $request)
     {
         $data = $request->validated();
@@ -64,12 +105,57 @@ class UserController extends Controller
         return response()->json(new UserResource($user->load(['roles', 'team', 'permissions'])), 201);
     }
 
+    #[OA\Get(
+        path: '/api/v1/users/{id}',
+        summary: 'Afficher un utilisateur',
+        security: [['bearerAuth' => []]],
+        tags: ['Users'],
+        parameters: [
+            new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Détails de l\'utilisateur avec rôles, permissions et équipe'),
+            new OA\Response(response: 404, description: 'Utilisateur introuvable'),
+            new OA\Response(response: 401, description: 'Non authentifié'),
+        ]
+    )]
     public function show(string $id)
     {
         $user = User::with(['roles', 'team', 'permissions'])->findOrFail($id);
         return new UserResource($user);
     }
 
+    #[OA\Put(
+        path: '/api/v1/users/{id}',
+        summary: 'Mettre à jour un utilisateur',
+        description: 'Met à jour les informations d\'un utilisateur. Le statut doit être "active" ou "inactive". Les rôles et permissions sont synchronisés si fournis.',
+        security: [['bearerAuth' => []]],
+        tags: ['Users'],
+        parameters: [
+            new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))
+        ],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                properties: [
+                    new OA\Property(property: 'name',          type: 'string'),
+                    new OA\Property(property: 'phone',         type: 'string', nullable: true),
+                    new OA\Property(property: 'status',        type: 'string', enum: ['active', 'inactive']),
+                    new OA\Property(property: 'team_id',       type: 'string', format: 'uuid', nullable: true),
+                    new OA\Property(property: 'manager_id',    type: 'string', format: 'uuid', nullable: true),
+                    new OA\Property(property: 'country_id',    type: 'string', format: 'uuid', nullable: true),
+                    new OA\Property(property: 'subsidiary_id', type: 'string', format: 'uuid', nullable: true),
+                    new OA\Property(property: 'roles',         type: 'array',  items: new OA\Items(type: 'string')),
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Utilisateur mis à jour'),
+            new OA\Response(response: 422, description: 'Validation échouée'),
+            new OA\Response(response: 404, description: 'Utilisateur introuvable'),
+            new OA\Response(response: 401, description: 'Non authentifié'),
+        ]
+    )]
     public function update(UpdateUserRequest $request, string $id)
     {
         $user = User::findOrFail($id);
@@ -93,6 +179,20 @@ class UserController extends Controller
         return new UserResource($user->load(['roles', 'team', 'permissions']));
     }
 
+    #[OA\Delete(
+        path: '/api/v1/users/{id}',
+        summary: 'Supprimer un utilisateur',
+        security: [['bearerAuth' => []]],
+        tags: ['Users'],
+        parameters: [
+            new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))
+        ],
+        responses: [
+            new OA\Response(response: 204, description: 'Utilisateur supprimé'),
+            new OA\Response(response: 404, description: 'Utilisateur introuvable'),
+            new OA\Response(response: 401, description: 'Non authentifié'),
+        ]
+    )]
     public function destroy(string $id)
     {
         $user = User::findOrFail($id);

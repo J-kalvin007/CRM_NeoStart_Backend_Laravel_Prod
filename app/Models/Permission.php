@@ -8,4 +8,6 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 class Permission extends SpatiePermission
 {
     use HasUuids;
+
+    protected $fillable = ['name', 'module', 'guard_name'];
 }
