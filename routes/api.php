@@ -54,6 +54,11 @@ Route::prefix('v1')->group(function () {
 
     Route::middleware('auth:sanctum')->group(function () {
 
+        // Session & Préférences utilisateur
+        Route::get('/me', [AuthController::class, 'me']);
+        Route::post('/logout', [AuthController::class, 'logout']);
+        Route::post('/auth/toggle-otp', [AuthController::class, 'toggleOtp']);
+
         // Création de compte (Admin)
         Route::post('/auth/invite', [AuthController::class, 'invite']);
 

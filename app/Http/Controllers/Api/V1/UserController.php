@@ -65,6 +65,7 @@ class UserController extends Controller
                     new OA\Property(property: 'zone_id',       type: 'string',  format: 'uuid', nullable: true),
                     new OA\Property(property: 'sector_id',     type: 'string',  format: 'uuid', nullable: true),
                     new OA\Property(property: 'roles',         type: 'array',   items: new OA\Items(type: 'string'), example: ['delegue']),
+                    new OA\Property(property: 'otp_enabled',   type: 'boolean', example: false, description: 'Activer la double authentification OTP pour cet utilisateur (défaut: false)'),
                 ]
             )
         ),
@@ -82,6 +83,9 @@ class UserController extends Controller
         if (isset($data['status'])) {
             $data['status'] = $data['status'] === 'active' ? 1 : 0;
         }
+
+        // Par défaut, l'OTP est désactivé
+        $data['otp_enabled'] = $request->boolean('otp_enabled', false);
 
         // Générer un mot de passe temporaire lisible (pour l'envoyer par email)
         $temporaryPassword = Str::upper(Str::random(4)) . rand(10, 99) . '!' . Str::random(4);
@@ -146,6 +150,7 @@ class UserController extends Controller
                     new OA\Property(property: 'country_id',    type: 'string', format: 'uuid', nullable: true),
                     new OA\Property(property: 'subsidiary_id', type: 'string', format: 'uuid', nullable: true),
                     new OA\Property(property: 'roles',         type: 'array',  items: new OA\Items(type: 'string')),
+                    new OA\Property(property: 'otp_enabled',   type: 'boolean', description: 'Activer ou désactiver l\'OTP'),
                 ]
             )
         ),

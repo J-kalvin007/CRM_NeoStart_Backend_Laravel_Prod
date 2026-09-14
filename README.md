@@ -78,9 +78,17 @@ Une table `settings` (clé/valeur) permet de configurer le nom de l'application,
 
 ## 🔐 Sécurité & Authentification
 
--   L'API utilise **Laravel Sanctum** pour l'authentification par jeton (Token Bearer).
--   La gestion des rôles et des accès (RBAC) est assurée par **Spatie Permission** (`super-admin`, `manager`, `user`).
--   Les données sont cloisonnées par périmètre géographique (Filiale/Pays) via le trait global `HasPerimeter`.
+- **Authentification par Jetons (Token Bearer)** : L'API utilise **Laravel Sanctum** pour sécuriser tous les accès.
+- **Gestion des Rôles & Permissions (RBAC)** : Assurée par **Spatie Permission**, organisée par modules métier (`super-admin`, `admin-pays`, `dir-general`, `manager`, `delegue`, etc.).
+- **Création d'utilisateurs & Mot de passe temporaire** :
+  - Lors de la création d'un utilisateur (`POST /api/v1/users`), un mot de passe temporaire aléatoire et robuste est généré automatiquement.
+  - Un email d'invitation contenant ses identifiants lui est envoyé.
+  - À sa première connexion (`POST /api/v1/login`), le système renvoie un statut `requires_password_change` (HTTP 403). L'utilisateur doit obligatoirement définir son propre mot de passe (min. 8 caractères via `POST /api/v1/auth/change-password`).
+- **Authentification à double facteur (OTP) optionnelle par utilisateur** :
+  - **Par défaut (`otp_enabled = false`)** : L'OTP n'est **pas requis**. Dès que l'utilisateur a changé son mot de passe temporaire (ou lors de ses connexions régulières), il reçoit directement son Token d'authentification et est connecté sans friction.
+  - **Activation individuelle** : L'utilisateur peut activer ou désactiver lui-même l'exigence d'un code OTP à 6 chiffres via l'endpoint protégé `POST /api/v1/auth/toggle-otp` (ou lors de la modification de son profil).
+  - **Si activé (`otp_enabled = true`)** : Un code OTP est généré, stocké en cache (valable 10 minutes) et envoyé par email (`POST /api/v1/verify-otp` nécessaire pour obtenir le Token).
+- **Cloisonnement géographique** : Les données sont cloisonnées par périmètre (Pays/Filiale/Région/Secteur) via le trait global `HasPerimeter`.
 
 ## 🧪 Tests manuels rapides
 
@@ -88,4 +96,4 @@ Si vous avez lancé les Seeders, voici les identifiants de test préconfigurés 
 - **Super Admin** : `admin@crm.local` (Mot de passe : `password`)
 - **Agent Terrain / Collaborateur** : `delegue@crm.local` (Mot de passe : `password`)
 
-*(Note : à la toute première connexion, l'API renverra un statut `force_password_change` pour simuler le changement de mot de passe obligatoire).*
+*(Note : à la toute première connexion, l'API renverra un statut `requires_password_change` pour simuler le changement de mot de passe obligatoire).*

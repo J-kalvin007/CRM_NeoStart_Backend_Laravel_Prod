@@ -943,8 +943,8 @@
                 "tags": [
                     "Authentication"
                 ],
-                "summary": "Connexion (Déclenche OTP ou demande changement de mot de passe)",
-                "description": "Vérifie les identifiants. Si c'est la première connexion, force le changement de mot de passe. Sinon, envoie le code OTP.",
+                "summary": "Connexion (Connexion directe ou déclenchement OTP si activé)",
+                "description": "Vérifie les identifiants. Si premier accès, force le changement de mot de passe. Si l'utilisateur a activé l'OTP, envoie le code à 6 chiffres. Sinon, connecte directement sans OTP.",
                 "operationId": "bae68d1c55329ecb6e41f48285840c8f",
                 "requestBody": {
                     "required": true,
@@ -973,8 +973,26 @@
                     }
                 },
                 "responses": {
+                    "200": {
+                        "description": "Connexion réussie (Token délivré directement si OTP désactivé)",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "token": {
+                                            "type": "string"
+                                        },
+                                        "user": {
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
                     "202": {
-                        "description": "OTP envoyé par email",
+                        "description": "OTP requis et envoyé par email (si activé sur le profil utilisateur)",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -994,7 +1012,7 @@
                         }
                     },
                     "403": {
-                        "description": "Changement de mot de passe requis",
+                        "description": "Changement de mot de passe requis (première connexion)",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -1024,7 +1042,8 @@
                 "tags": [
                     "Authentication"
                 ],
-                "summary": "Changer le mot de passe temporaire et déclencher l'OTP",
+                "summary": "Changer le mot de passe temporaire",
+                "description": "Définit le nouveau mot de passe de l'utilisateur. Si l'OTP est activé sur son compte, déclenche l'envoi du code. Sinon, le connecte directement.",
                 "operationId": "76cf7302f52a6d34a066a35f01453073",
                 "requestBody": {
                     "required": true,
@@ -1063,8 +1082,11 @@
                     }
                 },
                 "responses": {
+                    "200": {
+                        "description": "Mot de passe mis à jour avec succès, connexion directe"
+                    },
                     "202": {
-                        "description": "Mot de passe mis à jour, OTP envoyé"
+                        "description": "Mot de passe mis à jour, OTP envoyé par email (si OTP activé)"
                     },
                     "422": {
                         "description": "Ancien mot de passe incorrect ou nouveau non conforme"
@@ -1142,6 +1164,67 @@
                     },
                     "401": {
                         "description": "Non authentifié"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/auth/toggle-otp": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Activer ou désactiver l'authentification OTP (2FA)",
+                "description": "Permet à l'utilisateur connecté d'activer ou désactiver l'authentification par code OTP (2FA) lors de ses prochaines connexions.",
+                "operationId": "3919070facb7efdb97bc9e9222bef4c4",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "otp_enabled"
+                                ],
+                                "properties": {
+                                    "otp_enabled": {
+                                        "description": "true pour activer, false pour désactiver",
+                                        "type": "boolean",
+                                        "example": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Préférence OTP mise à jour avec succès",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "otp_enabled": {
+                                            "type": "boolean"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    },
+                    "422": {
+                        "description": "Données invalides"
                     }
                 },
                 "security": [
@@ -4799,6 +4882,11 @@
                                         "example": [
                                             "delegue"
                                         ]
+                                    },
+                                    "otp_enabled": {
+                                        "description": "Activer la double authentification OTP pour cet utilisateur (défaut: false)",
+                                        "type": "boolean",
+                                        "example": false
                                     }
                                 },
                                 "type": "object"
@@ -4922,6 +5010,10 @@
                                         "items": {
                                             "type": "string"
                                         }
+                                    },
+                                    "otp_enabled": {
+                                        "description": "Activer ou désactiver l'OTP",
+                                        "type": "boolean"
                                     }
                                 },
                                 "type": "object"

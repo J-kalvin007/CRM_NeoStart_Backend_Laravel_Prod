@@ -29,6 +29,7 @@ class UserResource extends JsonResource
             'zone_id' => $this->zone_id,
             'sector_id' => $this->sector_id,
             'last_login_at' => $this->last_login_at,
+            'otp_enabled' => (bool) $this->otp_enabled,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

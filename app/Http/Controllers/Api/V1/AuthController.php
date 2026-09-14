@@ -76,8 +76,8 @@ class AuthController extends Controller
 
     #[OA\Post(
         path: '/api/v1/login',
-        summary: 'Connexion (Déclenche OTP ou demande changement de mot de passe)',
-        description: 'Vérifie les identifiants. Si c\'est la première connexion, force le changement de mot de passe. Sinon, envoie le code OTP.',
+        summary: 'Connexion (Connexion directe ou déclenchement OTP si activé)',
+        description: 'Vérifie les identifiants. Si premier accès, force le changement de mot de passe. Si l\'utilisateur a activé l\'OTP, envoie le code à 6 chiffres. Sinon, connecte directement sans OTP.',
         tags: ['Authentication'],
         requestBody: new OA\RequestBody(
             required: true,
@@ -91,8 +91,16 @@ class AuthController extends Controller
         ),
         responses: [
             new OA\Response(
+                response: 200,
+                description: 'Connexion réussie (Token délivré directement si OTP désactivé)',
+                content: new OA\JsonContent(properties: [
+                    new OA\Property(property: 'token', type: 'string'),
+                    new OA\Property(property: 'user', type: 'object')
+                ])
+            ),
+            new OA\Response(
                 response: 202,
-                description: 'OTP envoyé par email',
+                description: 'OTP requis et envoyé par email (si activé sur le profil utilisateur)',
                 content: new OA\JsonContent(properties: [
                     new OA\Property(property: 'status', type: 'string', example: 'requires_otp'),
                     new OA\Property(property: 'user_id', type: 'string', format: 'uuid')
@@ -100,7 +108,7 @@ class AuthController extends Controller
             ),
             new OA\Response(
                 response: 403,
-                description: 'Changement de mot de passe requis',
+                description: 'Changement de mot de passe requis (première connexion)',
                 content: new OA\JsonContent(properties: [
                     new OA\Property(property: 'status', type: 'string', example: 'requires_password_change'),
                     new OA\Property(property: 'user_id', type: 'string', format: 'uuid')
@@ -124,7 +132,7 @@ class AuthController extends Controller
             ]);
         }
 
-        // Vérification du changement de mot de passe obligatoire
+        // Vérification du changement de mot de passe obligatoire (première connexion)
         if ($user->force_password_change) {
             return response()->json([
                 'status' => 'requires_password_change',
@@ -133,32 +141,33 @@ class AuthController extends Controller
             ], 403);
         }
 
-        // Si l'email a déjà été vérifié par un OTP précédent, on connecte directement
-        if (!is_null($user->email_verified_at)) {
-            $user->update(['last_login_at' => now()]);
-            $token = $user->createToken('auth-token')->plainTextToken;
+        // Si l'utilisateur a activé l'authentification OTP sur son profil
+        if ($user->otp_enabled) {
+            $otpCode = (string) random_int(100000, 999999);
+            Cache::put('login_otp_' . $user->id, $otpCode, now()->addMinutes(10));
+            Mail::to($user->email)->send(new LoginOtpMail($user, $otpCode));
 
             return response()->json([
-                'token' => $token,
-                'user' => $user->load(['roles', 'permissions', 'country', 'subsidiary', 'team'])
-            ]);
+                'status' => 'requires_otp',
+                'message' => 'Un code de vérification a été envoyé à votre adresse email.',
+                'user_id' => $user->id
+            ], 202);
         }
 
-        // Sinon (Première connexion), génération de l'OTP à 6 chiffres pour vérifier l'email
-        $otpCode = (string) random_int(100000, 999999);
-        Cache::put('login_otp_' . $user->id, $otpCode, now()->addMinutes(10));
-        Mail::to($user->email)->send(new LoginOtpMail($user, $otpCode));
+        // Par défaut (OTP désactivé) : Connexion directe sans code
+        $user->update(['last_login_at' => now()]);
+        $token = $user->createToken('auth-token')->plainTextToken;
 
         return response()->json([
-            'status' => 'requires_otp',
-            'message' => 'Un code de vérification a été envoyé à votre adresse email.',
-            'user_id' => $user->id
-        ], 202);
+            'token' => $token,
+            'user' => $user->load(['roles', 'permissions', 'country', 'subsidiary', 'team'])
+        ], 200);
     }
 
     #[OA\Post(
         path: '/api/v1/auth/change-password',
-        summary: 'Changer le mot de passe temporaire et déclencher l\'OTP',
+        summary: 'Changer le mot de passe temporaire',
+        description: 'Définit le nouveau mot de passe de l\'utilisateur. Si l\'OTP est activé sur son compte, déclenche l\'envoi du code. Sinon, le connecte directement.',
         tags: ['Authentication'],
         requestBody: new OA\RequestBody(
             required: true,
@@ -173,7 +182,8 @@ class AuthController extends Controller
             )
         ),
         responses: [
-            new OA\Response(response: 202, description: 'Mot de passe mis à jour, OTP envoyé'),
+            new OA\Response(response: 200, description: 'Mot de passe mis à jour avec succès, connexion directe'),
+            new OA\Response(response: 202, description: 'Mot de passe mis à jour, OTP envoyé par email (si OTP activé)'),
             new OA\Response(response: 422, description: 'Ancien mot de passe incorrect ou nouveau non conforme')
         ]
     )]
@@ -193,22 +203,38 @@ class AuthController extends Controller
             ]);
         }
 
-        // Mise à jour du mot de passe et retrait du flag
-        $user->update([
+        // Mise à jour du mot de passe et retrait du flag de mot de passe temporaire
+        $updateData = [
             'password' => Hash::make($request->new_password),
             'force_password_change' => false,
-        ]);
+        ];
+        if (is_null($user->email_verified_at)) {
+            $updateData['email_verified_at'] = now();
+        }
+        $user->update($updateData);
 
-        // Transition fluide : on génère l'OTP directement
-        $otpCode = (string) random_int(100000, 999999);
-        Cache::put('login_otp_' . $user->id, $otpCode, now()->addMinutes(10));
-        Mail::to($user->email)->send(new LoginOtpMail($user, $otpCode));
+        // Si l'utilisateur a activé l'authentification OTP
+        if ($user->otp_enabled) {
+            $otpCode = (string) random_int(100000, 999999);
+            Cache::put('login_otp_' . $user->id, $otpCode, now()->addMinutes(10));
+            Mail::to($user->email)->send(new LoginOtpMail($user, $otpCode));
+
+            return response()->json([
+                'status' => 'requires_otp',
+                'message' => 'Mot de passe mis à jour avec succès. Un code OTP a été envoyé à votre email.',
+                'user_id' => $user->id
+            ], 202);
+        }
+
+        // Par défaut (OTP non activé) : Connexion directe sans friction
+        $user->update(['last_login_at' => now()]);
+        $token = $user->createToken('auth-token')->plainTextToken;
 
         return response()->json([
-            'status' => 'requires_otp',
-            'message' => 'Mot de passe mis à jour avec succès. Un code OTP a été envoyé à votre email.',
-            'user_id' => $user->id
-        ], 202);
+            'message' => 'Mot de passe mis à jour avec succès.',
+            'token' => $token,
+            'user' => $user->load(['roles', 'permissions', 'country', 'subsidiary', 'team'])
+        ], 200);
     }
 
     #[OA\Post(
@@ -307,6 +333,54 @@ class AuthController extends Controller
         $user->save();
 
         return response()->json(['message' => 'FCM Token updated successfully']);
+    }
+
+    #[OA\Post(
+        path: '/api/v1/auth/toggle-otp',
+        summary: 'Activer ou désactiver l\'authentification OTP (2FA)',
+        description: 'Permet à l\'utilisateur connecté d\'activer ou désactiver l\'authentification par code OTP (2FA) lors de ses prochaines connexions.',
+        security: [['bearerAuth' => []]],
+        tags: ['Authentication'],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['otp_enabled'],
+                properties: [
+                    new OA\Property(property: 'otp_enabled', type: 'boolean', example: true, description: 'true pour activer, false pour désactiver')
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: 'Préférence OTP mise à jour avec succès',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'message', type: 'string'),
+                        new OA\Property(property: 'otp_enabled', type: 'boolean')
+                    ]
+                )
+            ),
+            new OA\Response(response: 401, description: 'Non authentifié'),
+            new OA\Response(response: 422, description: 'Données invalides')
+        ]
+    )]
+    public function toggleOtp(Request $request)
+    {
+        $validated = $request->validate([
+            'otp_enabled' => 'required|boolean',
+        ]);
+
+        $user = $request->user();
+        $user->otp_enabled = $validated['otp_enabled'];
+        $user->save();
+
+        return response()->json([
+            'message' => $user->otp_enabled
+                ? 'Authentification à double facteur (OTP) activée avec succès.'
+                : 'Authentification à double facteur (OTP) désactivée avec succès.',
+            'otp_enabled' => (bool) $user->otp_enabled,
+        ]);
     }
 
     #[OA\Post(

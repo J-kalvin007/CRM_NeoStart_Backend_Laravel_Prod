@@ -32,6 +32,7 @@ class UpdateUserRequest extends FormRequest
             'territory_id' => ['nullable', 'uuid'],
             'zone_id' => ['nullable', 'uuid'],
             'sector_id' => ['nullable', 'uuid'],
+            'otp_enabled' => ['nullable', 'boolean'],
         ];
     }
 }

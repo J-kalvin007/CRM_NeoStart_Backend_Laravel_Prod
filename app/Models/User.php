@@ -42,6 +42,7 @@ class User extends Authenticatable
         'fcm_token',
         'last_login_at',
         'force_password_change',
+        'otp_enabled',
     ];
 
     /**
@@ -67,6 +68,7 @@ class User extends Authenticatable
             'status' => 'boolean',
             'last_login_at' => 'datetime',
             'force_password_change' => 'boolean',
+            'otp_enabled' => 'boolean',
         ];
     }
 
