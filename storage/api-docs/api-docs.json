@@ -2715,6 +2715,455 @@
                 ]
             }
         },
+        "/api/v1/expenses": {
+            "get": {
+                "tags": [
+                    "Expenses"
+                ],
+                "summary": "Lister les notes de frais",
+                "description": "Retourne la liste paginée des notes de frais. Un délégué voit ses propres notes, tandis qu'un manager ou administrateur peut filtrer sur les membres de son équipe.",
+                "operationId": "b1b77dc505b7fd85a1ae7f1b3880f8af",
+                "parameters": [
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "description": "Statut du workflow",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "draft",
+                                "submitted",
+                                "approved",
+                                "rejected",
+                                "paid"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "type",
+                        "in": "query",
+                        "description": "Catégorie de dépense",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "travel",
+                                "meal",
+                                "accommodation",
+                                "material",
+                                "other"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "user_id",
+                        "in": "query",
+                        "description": "Filtrer par utilisateur (Managers/Admins)",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "date_from",
+                        "in": "query",
+                        "description": "Date de début (YYYY-MM-DD)",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "date_to",
+                        "in": "query",
+                        "description": "Date de fin (YYYY-MM-DD)",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 1
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Liste des notes de frais paginée"
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Expenses"
+                ],
+                "summary": "Créer une note de frais",
+                "description": "Enregistre une nouvelle note de frais à l'état brouillon (draft). La dépense peut être rattachée à une Visite médicale (Activity) ou à un Congrès (Event).",
+                "operationId": "7eca81a4560f60faba9c02b3071397ab",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "title",
+                                    "type",
+                                    "amount",
+                                    "expense_date"
+                                ],
+                                "properties": {
+                                    "title": {
+                                        "type": "string",
+                                        "example": "Déjeuner de travail Dr. Lawson"
+                                    },
+                                    "type": {
+                                        "type": "string",
+                                        "example": "meal",
+                                        "enum": [
+                                            "travel",
+                                            "meal",
+                                            "accommodation",
+                                            "material",
+                                            "other"
+                                        ]
+                                    },
+                                    "amount": {
+                                        "type": "number",
+                                        "format": "float",
+                                        "example": 15000
+                                    },
+                                    "currency": {
+                                        "type": "string",
+                                        "example": "XOF",
+                                        "default": "XOF"
+                                    },
+                                    "expense_date": {
+                                        "type": "string",
+                                        "format": "date",
+                                        "example": "2026-09-14"
+                                    },
+                                    "expensable_id": {
+                                        "description": "ID de la visite ou de l'événement associé",
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    },
+                                    "expensable_type": {
+                                        "type": "string",
+                                        "example": "App\\Models\\Activity",
+                                        "nullable": true
+                                    },
+                                    "receipt_file_path": {
+                                        "description": "Chemin ou URL du justificatif / photo du reçu",
+                                        "type": "string",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Note de frais créée au statut draft"
+                    },
+                    "422": {
+                        "description": "Validation échouée"
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/expenses/{id}": {
+            "get": {
+                "tags": [
+                    "Expenses"
+                ],
+                "summary": "Afficher une note de frais",
+                "operationId": "c0caaad2f7dc79419123743597023413",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Détails de la note de frais"
+                    },
+                    "403": {
+                        "description": "Accès non autorisé"
+                    },
+                    "404": {
+                        "description": "Note de frais introuvable"
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Expenses"
+                ],
+                "summary": "Modifier une note de frais",
+                "description": "Modifie une note de frais. Cette action n'est possible que tant que la note est à l'état draft (brouillon) ou rejected (rejetée).",
+                "operationId": "2c85f04b86f024df4c3e1103e50e8b01",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "title": {
+                                        "type": "string"
+                                    },
+                                    "type": {
+                                        "type": "string",
+                                        "enum": [
+                                            "travel",
+                                            "meal",
+                                            "accommodation",
+                                            "material",
+                                            "other"
+                                        ]
+                                    },
+                                    "amount": {
+                                        "type": "number",
+                                        "format": "float"
+                                    },
+                                    "expense_date": {
+                                        "type": "string",
+                                        "format": "date"
+                                    },
+                                    "receipt_file_path": {
+                                        "type": "string",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Note de frais modifiée avec succès"
+                    },
+                    "403": {
+                        "description": "Modification interdite (note déjà soumise ou validée)"
+                    },
+                    "404": {
+                        "description": "Note de frais introuvable"
+                    },
+                    "422": {
+                        "description": "Données invalides"
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Expenses"
+                ],
+                "summary": "Supprimer une note de frais",
+                "description": "Supprime définitivement une note de frais. Possible uniquement si elle est en draft (brouillon) ou rejected (rejetée).",
+                "operationId": "5ce6215b38e6452bda795185454fe930",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Note de frais supprimée avec succès"
+                    },
+                    "403": {
+                        "description": "Suppression interdite (note déjà soumise ou validée)"
+                    },
+                    "404": {
+                        "description": "Note de frais introuvable"
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/expenses/{id}/submit": {
+            "post": {
+                "tags": [
+                    "Expenses"
+                ],
+                "summary": "Soumettre une note de frais pour approbation",
+                "description": "Fait passer la note de frais du statut draft ou rejected à submitted. La note est alors verrouillée et envoyée au manager pour validation.",
+                "operationId": "e86fcd6722addd0ebcfa96dc59a28334",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Note de frais soumise au manager avec succès"
+                    },
+                    "400": {
+                        "description": "Statut invalide pour la soumission"
+                    },
+                    "404": {
+                        "description": "Note de frais introuvable"
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/expenses/{id}/status": {
+            "patch": {
+                "tags": [
+                    "Expenses"
+                ],
+                "summary": "Valider ou rejeter une note de frais (Manager / Direction)",
+                "description": "Permet au manager de valider (approved) ou de refuser (rejected) une note de frais soumise. En cas de rejet, un motif explicatif est requis.",
+                "operationId": "12ac7c81f3b398e99a483af01faf0119",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "status"
+                                ],
+                                "properties": {
+                                    "status": {
+                                        "type": "string",
+                                        "example": "approved",
+                                        "enum": [
+                                            "approved",
+                                            "rejected",
+                                            "pending"
+                                        ]
+                                    },
+                                    "rejection_reason": {
+                                        "description": "Requis si status=rejected",
+                                        "type": "string",
+                                        "example": "Reçu illisible ou justificatif manquant",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Statut de la note de frais mis à jour"
+                    },
+                    "422": {
+                        "description": "Données de validation invalides"
+                    },
+                    "404": {
+                        "description": "Note de frais introuvable"
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/kols": {
             "get": {
                 "tags": [
@@ -5575,6 +6024,10 @@
         {
             "name": "Countries",
             "description": "Gestion des pays et réglementations nationales"
+        },
+        {
+            "name": "Expenses",
+            "description": "Gestion des notes de frais et dépenses terrain"
         },
         {
             "name": "Permissions",
