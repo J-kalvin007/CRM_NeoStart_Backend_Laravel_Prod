@@ -9,7 +9,9 @@ use App\Http\Requests\StoreUserRequest;
 use App\Http\Requests\UpdateUserRequest;
 use App\Http\Resources\UserResource;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use App\Mail\UserInvitationMail;
 use OpenApi\Attributes as OA;
 
 /**
@@ -39,8 +41,11 @@ class UserController extends Controller
         if (isset($data['status'])) {
             $data['status'] = $data['status'] === 'active' ? 1 : 0;
         }
-        
-        $data['password'] = Hash::make(Str::random(12));
+
+        // Générer un mot de passe temporaire lisible (pour l'envoyer par email)
+        $temporaryPassword = Str::upper(Str::random(4)) . rand(10, 99) . '!' . Str::random(4);
+
+        $data['password'] = Hash::make($temporaryPassword);
         $data['force_password_change'] = true;
 
         $user = User::create($data);
@@ -52,6 +57,9 @@ class UserController extends Controller
         if (isset($data['permissions'])) {
             $user->syncPermissions($data['permissions']);
         }
+
+        // Envoyer l'email d'invitation avec le mot de passe temporaire en clair
+        Mail::to($user->email)->send(new UserInvitationMail($user, $temporaryPassword));
 
         return response()->json(new UserResource($user->load(['roles', 'team', 'permissions'])), 201);
     }
