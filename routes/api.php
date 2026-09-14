@@ -34,6 +34,7 @@ use App\Http\Controllers\Api\V1\CampaignController;
 use App\Http\Controllers\Api\V1\KolProfileController;
 use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\SettingController;
+use App\Http\Controllers\Api\V1\AppBrandingController;
 use App\Http\Controllers\Api\V1\LeaveController;
 use App\Http\Controllers\Api\V1\TrainingController;
 use App\Http\Controllers\Api\V1\ConversationController;
@@ -44,6 +45,9 @@ Route::prefix('v1')->group(function () {
 
     // ── Configuration Publique (Logo, Nom App) ────────────────
     Route::get('/settings', [SettingController::class, 'index']);
+
+    // ── Branding public (accessible sans authentification) ───────
+    Route::get('/branding', [AppBrandingController::class, 'show']);
 
     // ── Authentification ──────────────────────────────────────
     Route::post('/login', [AuthController::class, 'login']);
@@ -95,8 +99,17 @@ Route::prefix('v1')->group(function () {
             Route::put('product-types/{id}', [ConfigurationController::class, 'productTypeUpdate']);
             Route::delete('product-types/{id}', [ConfigurationController::class, 'productTypeDestroy']);
 
-            // Settings (Mise à jour)
+            // Settings (Mise à jour générique)
             Route::post('settings', [SettingController::class, 'store']);
+        });
+
+        // ── Branding (Nom, Logo, Favicon) ─────────────────────────
+        Route::prefix('branding')->group(function () {
+            Route::put('name', [AppBrandingController::class, 'updateName']);
+            Route::post('logo', [AppBrandingController::class, 'uploadLogo']);
+            Route::delete('logo', [AppBrandingController::class, 'deleteLogo']);
+            Route::post('favicon', [AppBrandingController::class, 'uploadFavicon']);
+            Route::delete('favicon', [AppBrandingController::class, 'deleteFavicon']);
         });
 
         // ── Niveau 3 : Public Authentifié (Délégués et autres) ─────

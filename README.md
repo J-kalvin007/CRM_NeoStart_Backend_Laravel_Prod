@@ -67,14 +67,55 @@ Assurez-vous que le planificateur de tâches de Laravel est configuré sur votre
 *   **Workflow Campagnes (`CampaignObserver`)** :
     *   Empêche les sauts de statuts illogiques (`creation` -> `validation` -> `deploiement`...). Lève une erreur API HTTP 422 si la séquence métier n'est pas respectée.
 
-## 🎨 Personnalisation & Configuration (Settings)
+## 🎨 Branding Dynamique (Nom, Logo, Favicon)
 
-Le CRM est conçu pour être personnalisé en "marque blanche" par filiale.
-Une table `settings` (clé/valeur) permet de configurer le nom de l'application, les couleurs et le logo.
+Le CRM est conçu pour être personnalisé en « marque blanche » par filiale.
+La table `settings` (clé/valeur) stocke les entrées `app_name`, `logo_path` et `favicon_path`.
+Chaque paramètre peut être global (filiale = null) ou spécifique à une filiale (prioritaire sur le global).
 
-- **Route publique** : `GET /api/v1/settings` (Permet au Front-End d'afficher le logo avant même la connexion).
-- **Upload du Logo** : `POST /api/v1/settings` (Accepte les `multipart/form-data` avec le fichier image `logo`). Le chemin est converti dynamiquement en URL publique complète (`https://.../storage/logos/...`).
-- **Périmètre** : En passant un `subsidiary_id`, chaque filiale peut surcharger la configuration globale avec son propre logo.
+### Endpoints de branding
+
+| Méthode | URL | Auth | Description |
+|---------|-----|------|-------------|
+| `GET` | `/api/v1/branding` | ❌ public | Récupère nom + URLs logo et favicon |
+| `PUT` | `/api/v1/branding/name` | ✅ Bearer | Met à jour le nom de l'application |
+| `POST` | `/api/v1/branding/logo` | ✅ Bearer | Upload / remplace le logo |
+| `DELETE` | `/api/v1/branding/logo` | ✅ Bearer | Supprime le logo |
+| `POST` | `/api/v1/branding/favicon` | ✅ Bearer | Upload / remplace la favicon |
+| `DELETE` | `/api/v1/branding/favicon` | ✅ Bearer | Supprime la favicon |
+
+### Contraintes de validation
+
+| Fichier | Formats autorisés | Taille maximale | Recommandation |
+|---------|-------------------|-----------------|----------------|
+| **Logo** | `jpeg`, `jpg`, `png`, `webp` | **2 Mo** | Ratio 16:9 ou carré, min. 200 px |
+| **Favicon** | `png`, `ico` | **512 Ko** | Carré 32×32 px ou 64×64 px |
+
+- L'ancien fichier est automatiquement supprimé du stockage lors de chaque remplacement.
+- Les URLs retournées par l'API sont des URLs absolues prêtes à l'emploi (pas de chemins relatifs).
+- Le paramètre `subsidiary_id` (optionnel) permet de surcharger par filiale.
+
+### Exemple — Récupérer le branding avant login
+
+```http
+GET /api/v1/branding
+```
+```json
+{
+  "app_name": "MyCRM Pro",
+  "logo_url": "https://example.com/storage/branding/logo_AbCdEfGhIjKl.png",
+  "favicon_url": "https://example.com/storage/branding/favicon_XyZwVuTs.ico"
+}
+```
+
+### Exemple — Uploader un logo (curl)
+
+```bash
+curl -X POST https://example.com/api/v1/branding/logo \
+  -H "Authorization: Bearer <TOKEN>" \
+  -F "logo=@/path/to/logo.png" \
+  -F "subsidiary_id=<uuid-facultatif>"
+```
 
 ## 🌍 Gestion des Pays & Territoires (Multi-Pays)
 

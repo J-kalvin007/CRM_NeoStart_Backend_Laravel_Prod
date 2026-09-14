@@ -855,6 +855,337 @@
                 ]
             }
         },
+        "/api/v1/branding": {
+            "get": {
+                "tags": [
+                    "App Branding"
+                ],
+                "summary": "Récupérer la configuration de branding de l'application",
+                "description": "Retourne le nom, le logo et la favicon de l'application.\n- Si `subsidiary_id` est fourni, les paramètres spécifiques à la filiale surchargent les globaux.\n- Les URLs de logo et favicon sont des URLs absolues prêtes à l'emploi.\n- **Accessible sans authentification** pour permettre l'affichage avant la connexion.",
+                "operationId": "cef5151ee7a274bf28fbad2e2931d387",
+                "parameters": [
+                    {
+                        "name": "subsidiary_id",
+                        "in": "query",
+                        "description": "UUID de la filiale. Si fourni, les paramètres filiale-specific surchargent les globaux.",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Configuration de branding",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "app_name": {
+                                            "type": "string",
+                                            "example": "MyCRM",
+                                            "nullable": true
+                                        },
+                                        "logo_url": {
+                                            "type": "string",
+                                            "format": "uri",
+                                            "example": "https://example.com/storage/branding/logo.png",
+                                            "nullable": true
+                                        },
+                                        "favicon_url": {
+                                            "type": "string",
+                                            "format": "uri",
+                                            "example": "https://example.com/storage/branding/favicon.ico",
+                                            "nullable": true
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/branding/name": {
+            "put": {
+                "tags": [
+                    "App Branding"
+                ],
+                "summary": "Mettre à jour le nom de l'application",
+                "description": "Met à jour la clé `app_name` dans la table settings. Passer `subsidiary_id` pour un réglage par filiale.",
+                "operationId": "c6695e83162ae9af3123dc198d3ec3f4",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "app_name"
+                                ],
+                                "properties": {
+                                    "app_name": {
+                                        "type": "string",
+                                        "example": "MyCRM Pro",
+                                        "maxLength": 100
+                                    },
+                                    "subsidiary_id": {
+                                        "description": "Laisser null pour un paramètre global",
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Nom mis à jour avec succès",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "key": {
+                                            "type": "string",
+                                            "example": "app_name"
+                                        },
+                                        "value": {
+                                            "type": "string",
+                                            "example": "MyCRM Pro"
+                                        },
+                                        "subsidiary_id": {
+                                            "type": "string",
+                                            "format": "uuid",
+                                            "nullable": true
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    },
+                    "422": {
+                        "description": "Validation échouée"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/branding/logo": {
+            "post": {
+                "tags": [
+                    "App Branding"
+                ],
+                "summary": "Uploader / remplacer le logo de l'application",
+                "description": "Upload du logo affiché dans l'interface (header, page de connexion, etc.).\n\n**Contraintes fichier :**\n- Formats acceptés : `jpeg`, `jpg`, `png`, `webp`\n- Taille maximale : **2 Mo**\n- L'ancien fichier est automatiquement supprimé du stockage.\n\nL'URL du logo est retournée dans le champ `logo_url`.",
+                "operationId": "4649f50ef75cfb805b73fa562425c4c5",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "required": [
+                                    "logo"
+                                ],
+                                "properties": {
+                                    "logo": {
+                                        "description": "Fichier logo (jpeg, jpg, png, webp — max 2 Mo)",
+                                        "type": "string",
+                                        "format": "binary"
+                                    },
+                                    "subsidiary_id": {
+                                        "description": "Laisser vide pour un logo global",
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Logo uploadé avec succès",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "logo_url": {
+                                            "type": "string",
+                                            "format": "uri"
+                                        },
+                                        "subsidiary_id": {
+                                            "type": "string",
+                                            "format": "uuid",
+                                            "nullable": true
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    },
+                    "422": {
+                        "description": "Fichier invalide (format ou taille refusé)"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "App Branding"
+                ],
+                "summary": "Supprimer le logo de l'application",
+                "description": "Supprime le fichier logo du stockage et retire l'entrée de la table settings.",
+                "operationId": "fa61f0a0aa96188f10b9d8e649a52294",
+                "parameters": [
+                    {
+                        "name": "subsidiary_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Logo supprimé avec succès"
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/branding/favicon": {
+            "post": {
+                "tags": [
+                    "App Branding"
+                ],
+                "summary": "Uploader / remplacer la favicon (icône de l'onglet)",
+                "description": "Upload de la favicon affichée dans les onglets du navigateur.\n\n**Contraintes fichier :**\n- Formats acceptés : `png`, `ico`\n- Taille maximale : **512 Ko**\n- L'ancien fichier est automatiquement supprimé.\n\n> **Recommandation** : utiliser une image carrée de **32×32 px** ou **64×64 px** en PNG pour une compatibilité maximale.",
+                "operationId": "6043f9f572a3a7680f06edfaff8d57dd",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "required": [
+                                    "favicon"
+                                ],
+                                "properties": {
+                                    "favicon": {
+                                        "description": "Fichier favicon (png ou ico — max 512 Ko, recommandé 32×32 ou 64×64 px)",
+                                        "type": "string",
+                                        "format": "binary"
+                                    },
+                                    "subsidiary_id": {
+                                        "description": "Laisser vide pour une favicon globale",
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Favicon uploadée avec succès",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "favicon_url": {
+                                            "type": "string",
+                                            "format": "uri"
+                                        },
+                                        "subsidiary_id": {
+                                            "type": "string",
+                                            "format": "uuid",
+                                            "nullable": true
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    },
+                    "422": {
+                        "description": "Fichier invalide (format ou taille refusé)"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "App Branding"
+                ],
+                "summary": "Supprimer la favicon de l'application",
+                "description": "Supprime le fichier favicon du stockage et retire l'entrée de la table settings.",
+                "operationId": "a5afc7157d4da0bb68e905f50f17a2f4",
+                "parameters": [
+                    {
+                        "name": "subsidiary_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Favicon supprimée avec succès"
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/auth/invite": {
             "post": {
                 "tags": [
@@ -6021,6 +6352,10 @@
         }
     },
     "tags": [
+        {
+            "name": "App Branding",
+            "description": "Personnalisation dynamique de l'identité visuelle de l'application (nom, logo, favicon)."
+        },
         {
             "name": "Countries",
             "description": "Gestion des pays et réglementations nationales"
