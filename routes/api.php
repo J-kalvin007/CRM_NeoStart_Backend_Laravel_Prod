@@ -137,10 +137,10 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('events', EventController::class);
         Route::apiResource('documents', DocumentController::class);
 
-        // ── Logistique Échantillons ────────────────────────────
-        Route::get('sample-movements', [SampleMovementController::class, 'index']);
-        Route::post('sample-movements', [SampleMovementController::class, 'store']);
-        Route::get('sample-movements/{id}', [SampleMovementController::class, 'show']);
+        // ── Logistique & Stocks Échantillons ────────────────────
+        Route::get('my-stock', [SampleMovementController::class, 'myStock']);
+        Route::apiResource('sample-movements', SampleMovementController::class);
+        Route::apiResource('stocks', SampleMovementController::class);
 
         // -- Statistiques & Dashboards --
         Route::get('/analytics/dashboard', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'dashboard']);
@@ -180,8 +180,6 @@ Route::prefix('v1')->group(function () {
         Route::get('conversations/{id}/messages', [ConversationController::class, 'messages']);
         Route::post('conversations/{id}/messages', [ConversationController::class, 'sendMessage']);
 
-        // ── Stock délégué (alias sample-movements avec filtre user) ─
-        Route::get('my-stock', [SampleMovementController::class, 'myStock']);
 
         // ── Approbation de dépenses (PATCH) ─────────────────────
         Route::patch('expenses/{expense}/status', [ExpenseController::class, 'updateStatus']);

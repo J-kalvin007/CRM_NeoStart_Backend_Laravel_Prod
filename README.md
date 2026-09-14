@@ -76,6 +76,27 @@ Une table `settings` (clé/valeur) permet de configurer le nom de l'application,
 - **Upload du Logo** : `POST /api/v1/settings` (Accepte les `multipart/form-data` avec le fichier image `logo`). Le chemin est converti dynamiquement en URL publique complète (`https://.../storage/logos/...`).
 - **Périmètre** : En passant un `subsidiary_id`, chaque filiale peut surcharger la configuration globale avec son propre logo.
 
+## 🌍 Gestion des Pays & Territoires (Multi-Pays)
+
+L'API propose un CRUD complet pour piloter les pays d'implantation :
+- **Endpoints disponibles** (`/api/v1/countries`) :
+  - `GET /api/v1/countries` : Liste tous les pays avec leurs filiales rattachées.
+  - `POST /api/v1/countries` : Créer un nouveau pays (`name`, `iso_code` unique, `currency`, `language`, `timezone`, `regulatory_settings`, `status`).
+  - `GET /api/v1/countries/{id}` : Détails d'un pays avec ses filiales.
+  - `PUT /api/v1/countries/{id}` : Modifier un pays.
+  - `DELETE /api/v1/countries/{id}` : Supprimer un pays (protégé contre la suppression si des filiales y sont encore rattachées).
+
+## 📦 Gestion des Stocks & Échantillons
+
+Le module de stock assure la traçabilité complète des échantillons médicaux et dotations délégués (normes pharmaceutiques) :
+- **État du stock délégué** : `GET /api/v1/my-stock` (calcul en temps réel des quantités disponibles, distribuées et alertes par lot).
+- **Mouvements de stock (CRUD complet)** : `GET`, `POST`, `PUT`, `DELETE` sur `/api/v1/sample-movements` (et alias `/api/v1/stocks`).
+  - **Création (`POST`)** : Entrée en stock, réapprovisionnement, attribution, distribution terrain.
+  - **Modification (`PUT/PATCH`)** : Correction des quantités, lots ou dates de péremption.
+  - **Suppression (`DELETE`)** : Annulation d'un mouvement avec réajustement automatique des stocks.
+  - **Types de mouvements** : `reception` (entrée/réassort), `attribution`, `distribution`, `retour`, `destruction` (périmés/perte), `inventaire`.
+  - **Traçabilité** : Numéro de lot (`lot_number`), date de péremption (`expiry_date`), signature et QR code.
+
 ## 🔐 Sécurité & Authentification
 
 - **Authentification par Jetons (Token Bearer)** : L'API utilise **Laravel Sanctum** pour sécuriser tous les accès.

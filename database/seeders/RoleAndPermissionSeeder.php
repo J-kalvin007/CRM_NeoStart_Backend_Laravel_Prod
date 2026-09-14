@@ -129,9 +129,14 @@ class RoleAndPermissionSeeder extends Seeder
                 'samples.view-all',
                 'samples.create',
                 'samples.edit',
+                'samples.delete',
             ],
 
             'Équipes & Hiérarchie' => [
+                'countries.view',
+                'countries.create',
+                'countries.edit',
+                'countries.delete',
                 'teams.view',
                 'teams.create',
                 'teams.edit',

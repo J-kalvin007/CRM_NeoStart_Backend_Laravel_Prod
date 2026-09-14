@@ -2433,7 +2433,7 @@
                 "operationId": "e9e2a36340d4688ab3f673d9e754a0ce",
                 "responses": {
                     "200": {
-                        "description": "Liste des pays",
+                        "description": "Liste des pays récupérée avec succès",
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -2481,6 +2481,9 @@
                                 }
                             }
                         }
+                    },
+                    "401": {
+                        "description": "Non authentifié"
                     }
                 },
                 "security": [
@@ -2494,6 +2497,7 @@
                     "Countries"
                 ],
                 "summary": "Créer un pays",
+                "description": "Enregistre un nouveau pays avec ses paramètres réglementaires, sa monnaie, son fuseau horaire et son statut.",
                 "operationId": "a7df34f9712005984b59ab0f47ed86db",
                 "requestBody": {
                     "required": true,
@@ -2510,7 +2514,7 @@
                                         "example": "Togo"
                                     },
                                     "iso_code": {
-                                        "description": "Code ISO 3 lettres max",
+                                        "description": "Code ISO 2 ou 3 lettres unique",
                                         "type": "string",
                                         "example": "TG"
                                     },
@@ -2535,7 +2539,8 @@
                                     },
                                     "status": {
                                         "type": "boolean",
-                                        "example": true
+                                        "example": true,
+                                        "default": true
                                     }
                                 },
                                 "type": "object"
@@ -2548,7 +2553,7 @@
                         "description": "Pays créé avec succès"
                     },
                     "422": {
-                        "description": "Validation échouée (iso_code déjà existant, champs manquants...)"
+                        "description": "Validation échouée (iso_code déjà utilisé ou champs invalides)"
                     },
                     "401": {
                         "description": "Non authentifié"
@@ -2566,7 +2571,7 @@
                 "tags": [
                     "Countries"
                 ],
-                "summary": "Afficher un pays",
+                "summary": "Afficher les détails d'un pays",
                 "operationId": "a8837d03086467ee2c36ffc22c7b3142",
                 "parameters": [
                     {
@@ -2581,10 +2586,13 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "Détails du pays"
+                        "description": "Détails du pays avec ses filiales"
                     },
                     "404": {
                         "description": "Pays introuvable"
+                    },
+                    "401": {
+                        "description": "Non authentifié"
                     }
                 },
                 "security": [
@@ -2598,6 +2606,7 @@
                     "Countries"
                 ],
                 "summary": "Modifier un pays",
+                "description": "Met à jour les informations d'un pays (nom, monnaie, langue, fuseau horaire, paramètres réglementaires, statut).",
                 "operationId": "53a474ab547d103e520e7b7fdb01aaab",
                 "parameters": [
                     {
@@ -2649,13 +2658,16 @@
                 },
                 "responses": {
                     "200": {
-                        "description": "Pays mis à jour"
+                        "description": "Pays mis à jour avec succès"
                     },
                     "422": {
                         "description": "Validation échouée"
                     },
                     "404": {
                         "description": "Pays introuvable"
+                    },
+                    "401": {
+                        "description": "Non authentifié"
                     }
                 },
                 "security": [
@@ -2669,7 +2681,7 @@
                     "Countries"
                 ],
                 "summary": "Supprimer un pays",
-                "description": "Supprime un pays. Attention : la suppression échoue si des filiales ou utilisateurs y sont rattachés.",
+                "description": "Supprime un pays. La suppression est protégée et rejetée si des filiales y sont encore rattachées.",
                 "operationId": "66a7b1edafe591546f2c5b2cefdf70a8",
                 "parameters": [
                     {
@@ -2683,14 +2695,17 @@
                     }
                 ],
                 "responses": {
-                    "204": {
-                        "description": "Pays supprimé"
+                    "200": {
+                        "description": "Pays supprimé avec succès"
                     },
                     "409": {
-                        "description": "Impossible de supprimer — des filiales ou utilisateurs y sont rattachés"
+                        "description": "Conflit : des filiales sont rattachées à ce pays"
                     },
                     "404": {
                         "description": "Pays introuvable"
+                    },
+                    "401": {
+                        "description": "Non authentifié"
                     }
                 },
                 "security": [
@@ -3627,43 +3642,359 @@
                 "tags": [
                     "Stocks"
                 ],
-                "summary": "Lister les stocks d'échantillons du délégué",
+                "summary": "Lister les mouvements de stock d'échantillons",
                 "operationId": "798f1846062bf444055ee4ada2d5c693",
+                "parameters": [
+                    {
+                        "name": "product_id",
+                        "in": "query",
+                        "description": "Filtrer par produit",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "user_id",
+                        "in": "query",
+                        "description": "Filtrer par utilisateur/délégué",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "movement_type",
+                        "in": "query",
+                        "description": "Type de mouvement",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "reception",
+                                "attribution",
+                                "distribution",
+                                "retour",
+                                "destruction",
+                                "inventaire"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "lot_number",
+                        "in": "query",
+                        "description": "Numéro de lot",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "date_from",
+                        "in": "query",
+                        "description": "Date de début (YYYY-MM-DD)",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "date_to",
+                        "in": "query",
+                        "description": "Date de fin (YYYY-MM-DD)",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    }
+                ],
                 "responses": {
                     "200": {
-                        "description": "Liste des stocks avec quantités disponibles et distribuées",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "properties": {
-                                            "product": {
-                                                "properties": {
-                                                    "id": {
-                                                        "type": "string"
-                                                    },
-                                                    "name": {
-                                                        "type": "string"
-                                                    }
-                                                },
-                                                "type": "object"
-                                            },
-                                            "quantity_available": {
-                                                "type": "integer"
-                                            },
-                                            "quantity_distributed": {
-                                                "type": "integer"
-                                            },
-                                            "alert_threshold": {
-                                                "type": "integer"
-                                            }
-                                        },
-                                        "type": "object"
+                        "description": "Liste des mouvements paginée"
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Stocks"
+                ],
+                "summary": "Créer un mouvement de stock (Entrée / Sortie / Réassort / Distribution)",
+                "operationId": "4cabe6c19847e30a67294f8d4ebfb372",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "product_id",
+                                    "movement_type",
+                                    "quantity"
+                                ],
+                                "properties": {
+                                    "product_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "example": "d3b07384-d113-4f57-9d7a-8869152c9748"
+                                    },
+                                    "user_id": {
+                                        "description": "Délégué bénéficiaire (défaut: utilisateur connecté)",
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    },
+                                    "movement_type": {
+                                        "type": "string",
+                                        "example": "reception",
+                                        "enum": [
+                                            "reception",
+                                            "attribution",
+                                            "distribution",
+                                            "retour",
+                                            "destruction",
+                                            "inventaire"
+                                        ]
+                                    },
+                                    "quantity": {
+                                        "type": "integer",
+                                        "example": 50,
+                                        "minimum": 1
+                                    },
+                                    "lot_number": {
+                                        "type": "string",
+                                        "example": "LOT-2026-X9",
+                                        "nullable": true
+                                    },
+                                    "expiry_date": {
+                                        "type": "string",
+                                        "format": "date",
+                                        "example": "2027-12-31",
+                                        "nullable": true
+                                    },
+                                    "activity_id": {
+                                        "description": "Activité associée en cas de distribution terrain",
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    },
+                                    "signature_url": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "qr_code": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "remarques": {
+                                        "type": "string",
+                                        "example": "Réassort dotation mensuelle",
+                                        "nullable": true
                                     }
-                                }
+                                },
+                                "type": "object"
                             }
                         }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Mouvement de stock créé avec succès"
+                    },
+                    "422": {
+                        "description": "Validation échouée"
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/my-stock": {
+            "get": {
+                "tags": [
+                    "Stocks"
+                ],
+                "summary": "Consulter l'état consolidé du stock du délégué connecté",
+                "operationId": "a48b1aa2181c5f32208c8243e5f69b03",
+                "responses": {
+                    "200": {
+                        "description": "Synthèse du stock par produit avec quantités disponibles et distribuées"
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/sample-movements/{id}": {
+            "get": {
+                "tags": [
+                    "Stocks"
+                ],
+                "summary": "Détails d'un mouvement de stock",
+                "operationId": "77cff27ece738bded1093848e25bf487",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Détails du mouvement"
+                    },
+                    "404": {
+                        "description": "Mouvement introuvable"
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Stocks"
+                ],
+                "summary": "Modifier un mouvement de stock",
+                "description": "Permet de corriger la quantité, le numéro de lot, la date de péremption ou les remarques d'un mouvement.",
+                "operationId": "cfef792009ce3855723a8976916a558d",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "quantity": {
+                                        "type": "integer",
+                                        "minimum": 1
+                                    },
+                                    "movement_type": {
+                                        "type": "string",
+                                        "enum": [
+                                            "reception",
+                                            "attribution",
+                                            "distribution",
+                                            "retour",
+                                            "destruction",
+                                            "inventaire"
+                                        ]
+                                    },
+                                    "lot_number": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "expiry_date": {
+                                        "type": "string",
+                                        "format": "date",
+                                        "nullable": true
+                                    },
+                                    "signature_url": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "qr_code": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "remarques": {
+                                        "type": "string",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Mouvement mis à jour avec succès"
+                    },
+                    "404": {
+                        "description": "Mouvement introuvable"
+                    },
+                    "422": {
+                        "description": "Données invalides"
+                    },
+                    "401": {
+                        "description": "Non authentifié"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Stocks"
+                ],
+                "summary": "Supprimer un mouvement de stock",
+                "description": "Supprime un mouvement de stock erroné et réajuste les compteurs.",
+                "operationId": "6fec33f2f443b4dfc3ae561c5fae97e9",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Mouvement supprimé avec succès"
+                    },
+                    "404": {
+                        "description": "Mouvement introuvable"
+                    },
+                    "401": {
+                        "description": "Non authentifié"
                     }
                 },
                 "security": [
@@ -5243,11 +5574,15 @@
     "tags": [
         {
             "name": "Countries",
-            "description": "Gestion des pays"
+            "description": "Gestion des pays et réglementations nationales"
         },
         {
             "name": "Permissions",
             "description": "Consultation des permissions disponibles (lecture seule — gérées par le système)"
+        },
+        {
+            "name": "Stocks",
+            "description": "Gestion des stocks et mouvements d'échantillons médicaux"
         },
         {
             "name": "Users",
@@ -5304,10 +5639,6 @@
         {
             "name": "Regions",
             "description": "Regions"
-        },
-        {
-            "name": "Stocks",
-            "description": "Stocks"
         },
         {
             "name": "Geography",
