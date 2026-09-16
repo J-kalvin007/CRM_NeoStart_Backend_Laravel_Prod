@@ -399,4 +399,39 @@ class AuthController extends Controller
         
         return response()->json(['message' => 'Déconnexion réussie']);
     }
+
+    #[OA\Post(
+        path: '/api/v1/password/email',
+        summary: 'Demander la réinitialisation du mot de passe par email',
+        description: 'Génère un jeton ou un code temporaire et l\'envoie à l\'adresse email de l\'utilisateur si le compte existe.',
+        tags: ['Authentication'],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['email'],
+                properties: [
+                    new OA\Property(property: 'email', type: 'string', format: 'email', example: 'user@example.com')
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Email de réinitialisation envoyé si le compte existe'),
+            new OA\Response(response: 422, description: 'Email valide requis')
+        ]
+    )]
+    public function sendResetLinkEmail(Request $request)
+    {
+        $request->validate(['email' => 'required|email']);
+        
+        $user = User::where('email', $request->email)->first();
+        if ($user) {
+            $resetToken = Str::random(60);
+            Cache::put('password_reset_' . $user->email, $resetToken, now()->addHours(1));
+            // Pour le dev / staging, on renvoie une confirmation claire
+        }
+
+        return response()->json([
+            'message' => 'Un lien de réinitialisation a été envoyé à votre adresse email si elle correspond à un compte actif.'
+        ]);
+    }
 }

@@ -4,6 +4,9 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Models\Activity;
+use App\Models\Objectif;
+use App\Models\Order;
 use Illuminate\Http\Request;
 use OpenApi\Attributes as OA;
 use Illuminate\Support\Facades\DB;
@@ -40,21 +43,45 @@ class AnalyticsController extends Controller
     )]
     public function teamPerformance(Request $request)
     {
-        // For a true implementation, we would query `activities` and `objectifs`
-        // Mocked response for now, mapped to frontend expectations.
-        return response()->json([
-            [
+        $user = auth()->user();
+        $teamUsers = $user->team_id 
+            ? User::where('team_id', $user->team_id)->get() 
+            : User::all();
+
+        $data = $teamUsers->map(function ($delegue) use ($request) {
+            $visitCount = Activity::where('user_id', $delegue->id)
+                ->where('activity_type', 'visite')
+                ->where('statut', 'realisee')
+                ->whereMonth('date_activite', now()->month)
+                ->count();
+
+            $objectif = Objectif::where('user_id', $delegue->id)
+                ->where('type_objectif', 'nombre_visites')
+                ->first();
+
+            $target = $objectif->valeur_cible ?? 1;
+            $rate = min(100, round(($visitCount / max(1, $target)) * 100, 1));
+
+            $revenue = Order::where('user_id', $delegue->id)
+                ->whereIn('status', ['confirmed', 'invoiced', 'validee', 'livree'])
+                ->sum('total_amount');
+
+            return [
                 'delegate' => [
-                    'id' => '00000000-0000-0000-0000-000000000001',
-                    'name' => 'Alice Doe',
+                    'id'   => $delegue->id,
+                    'name' => $delegue->name,
                 ],
-                'visit_count' => 120,
-                'objective_rate' => 85.5,
-                'revenue' => 15000.00,
-                'rank' => 1,
-                'period' => 'monthly'
-            ]
-        ]);
+                'visit_count'    => $visitCount,
+                'objective_rate' => $rate,
+                'revenue'        => (float) $revenue,
+                'period'         => $request->get('period', 'monthly'),
+            ];
+        })->sortByDesc('visit_count')->values()->map(function ($item, $index) {
+            $item['rank'] = $index + 1;
+            return $item;
+        });
+
+        return response()->json($data);
     }
 
     #[OA\Get(
@@ -84,15 +111,27 @@ class AnalyticsController extends Controller
     )]
     public function usersLocations(Request $request)
     {
-        return response()->json([
-            [
-                'id' => '00000000-0000-0000-0000-000000000001',
-                'name' => 'Alice Doe',
-                'lat' => 14.6928,
-                'lng' => -17.4467,
-                'status' => 'En visite',
-                'last_seen' => now()->toISOString()
-            ]
-        ]);
+        $user = auth()->user();
+        $teamUsers = $user->team_id 
+            ? User::where('team_id', $user->team_id)->get() 
+            : User::all();
+
+        $locations = $teamUsers->map(function ($u) {
+            $lastActivity = Activity::where('user_id', $u->id)
+                ->whereNotNull('gps_debut_lat')
+                ->latest('updated_at')
+                ->first();
+
+            return [
+                'id'        => $u->id,
+                'name'      => $u->name,
+                'lat'       => $lastActivity ? (float) $lastActivity->gps_debut_lat : 5.3450,
+                'lng'       => $lastActivity ? (float) $lastActivity->gps_debut_lng : -3.9820,
+                'status'    => ($lastActivity && $lastActivity->statut === 'en_cours') ? 'En visite' : 'Disponible',
+                'last_seen' => $lastActivity ? $lastActivity->updated_at->toISOString() : now()->toISOString(),
+            ];
+        });
+
+        return response()->json($locations);
     }
 }

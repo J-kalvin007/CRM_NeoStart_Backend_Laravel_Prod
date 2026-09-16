@@ -1,161 +1,150 @@
-# Skynity CRM Backend (API)
+# CRM-SKYNITY Backend API (Laravel 12)
 
-Il s'agit de l'API de base (backend) pour le CRM, développée avec Laravel 12. 
-Le backend repose sur une architecture agnostique, conçue pour gérer la force de vente (collaborateurs et agents terrain), les tournées, la gestion des stocks d'échantillons, les campagnes marketing, et bien plus encore.
+[![PHP Version](https://img.shields.io/badge/PHP-8.2%2B-blue)](https://php.net)
+[![Laravel](https://img.shields.io/badge/Laravel-12.x-red)](https://laravel.com)
+[![OpenAPI/Swagger](https://img.shields.io/badge/Swagger-OpenAPI%203.0-green)](http://localhost:8000/api/documentation)
 
-## 🚀 Prérequis
+L'API **CRM-SKYNITY** est la solution de **Sales Force Automation (SFA)** et de gestion de la relation client spécialement conçue pour la promotion médicale, l'industrie pharmaceutique et la gestion commerciale terrain.
 
-- **PHP** : >= 8.2
-- **Composer** : >= 2.0
-- **Base de données** : MySQL ou PostgreSQL
-- **Serveur web** : Nginx / Apache / Serveur interne PHP
+---
 
-## ⚙️ Installation & Configuration
+## 📑 Table des Matières
+1. [Spécifications Métier & Workflow](#-spécifications-métier--workflow)
+2. [Audit des Tâches Réalisées (Réponse à `taches_restantes_backend.md`)](#-audit-des-tâches-réalisées-réponse-à-taches_restantes_backendmd)
+3. [Architecture & Modèle RBAC](#-architecture--modèle-rbac)
+4. [Installation & Prise en Main](#-installation--prise-en-main)
+5. [Documentation API Swagger Interactive](#-documentation-api-swagger-interactive)
+6. [Seeders & Données de Test Autonomes](#-seeders--données-de-test-autonomes)
+7. [Automatisations & Tâches en Arrière-plan](#-automatisations--tâches-en-arrière-plan)
 
-1. **Cloner le dépôt et installer les dépendances**
-   ```bash
-   git clone <votre_depot>
-   cd CRM-backend
-   composer install
-   ```
+---
 
-2. **Configurer l'environnement**
-   Copiez le fichier d'exemple et configurez votre base de données :
-   ```bash
-   cp .env.example .env
-   php artisan key:generate
-   ```
-   *N'oubliez pas de configurer vos identifiants de base de données dans le `.env` (`DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`).*
+## 📘 Spécifications Métier & Workflow
 
-3. **Construire la base de données et les données de test (Seeders)**
-   Cette commande génère toute la structure (tables, UUID, clés étrangères) et peuple la base avec des rôles, des utilisateurs (`admin@crm.local`, `utilisateur@crm.local`), des filiales, des contacts professionnels et des historiques de visites.
-   ```bash
-   php artisan migrate:fresh --seed
-   ```
+Le backend orchestre le cycle de vie complet des équipes terrain et des managers. Pour une analyse exhaustive du workflow et des schémas d'architecture, consultez :
+* 📄 [`workflow_crm.md`](workflow_crm.md) : Spécification du Workflow & Architecture Métier du CRM.
+* 📋 [`taches_restantes_backend.md`](taches_restantes_backend.md) : Cahier des charges et audit d'implémentation.
 
-4. **Lancer le serveur de développement**
-   ```bash
-   php artisan serve
-   ```
+---
 
-## 📖 Documentation API (Swagger)
+## ✅ Audit des Tâches Réalisées (Réponse à `taches_restantes_backend.md`)
 
-L'API est entièrement documentée avec L5-Swagger (OpenAPI 3). 
-Une fois le serveur lancé, vous pouvez consulter la documentation et tester les endpoints interactivement à l'adresse suivante :
+Toutes les exigences identifiées dans le document [`taches_restantes_backend.md`](taches_restantes_backend.md) ont été finalisées et intégrées :
 
-**[http://localhost:8000/api/documentation](http://localhost:8000/api/documentation)**
+### 1. Remplacement des Endpoints Mocks par des Algorithmes Réels
+* ✅ **Optimisation de Tournée GPS (`POST /api/v1/tour-plans/optimize`)** :
+  * Implémentation de l'**Algorithme du Plus Proche Voisin (*Nearest Neighbor*)** basé sur la formule Haversine ($6371 \text{ km}$).
+  * Tri dynamique des activités par proximité GPS, calcul de la distance totale et estimation de la durée.
+* ✅ **KPIs de Performance d'Équipe (`GET /api/v1/analytics/team-performance`)** :
+  * Requête d'agrégation Eloquent calculant en temps réel pour chaque délégué de l'équipe : nombre de visites réalisées dans le mois, taux d'atteinte d'objectifs et chiffre d'affaires des commandes validées (`Order`).
+* ✅ **Géolocalisation Temps Réel (`GET /api/v1/users/locations`)** :
+  * Extraction des dernières coordonnées GPS enregistrées lors des Check-in/Check-out (`gps_debut_lat`, `gps_debut_lng`) des délégués.
+* ✅ **Réinitialisation de Mot de Passe (`POST /api/v1/password/email`)** :
+  * Ajout de la route publique et de la méthode `sendResetLinkEmail` avec génération de token temporaire stocké en cache.
+* ✅ **Nettoyage des Données Statiques dans `OrderController` et `DocumentController`** :
+  * Calcul dynamique de la somme des quantités d'articles commandés (`items()->sum('quantity')`).
+  * Calcul de la taille réelle des fichiers documents (`Storage::size`) avec formatage en Mo.
 
-*Pour régénérer la documentation après avoir modifié les annotations dans les contrôleurs, exécutez :*
+---
+
+## 🏰 Architecture & Modèle RBAC
+
+### 1. Hiérarchie Territoriale (7 Niveaux)
+```
+Pays (Country) ──> Filiale (Subsidiary) ──> Région (Region) ──> Territoire (Territory) ──> Zone ──> Secteur ──> Équipe
+```
+
+### 2. Scopes & Matrice des 7 Rôles Systèmes (`Spatie Permission`)
+| Rôle | Scope Spatie | Périmètre & Attributions |
+| :--- | :--- | :--- |
+| **`super-admin`** | `scope:global` | Configuration globale multi-pays, gestion des tenants, rôles et logs. |
+| **`admin-pays`** | `scope:country` | Administration de la filiale, gestion des utilisateurs, territoires et catalogues. |
+| **`dir-general`** | `scope:subsidiary` | Dashboard Exécutif BI, suivi du CA et taux d'atteinte des objectifs stratégiques. |
+| **`dir-commercial`**| `scope:subsidiary` | Pilotage du pipeline d'opportunités, validation des remises et fixation des quotas. |
+| **`dir-medical`** | `scope:subsidiary` | Gestion des KOL, validation des supports ADV et gouvernance scientifique. |
+| **`manager`** | `scope:team` / `scope:region` | Validation des plannings (TourPlan), suivi GPS d'équipe et approbation des frais. |
+| **`delegue`** | `scope:team` | Visites terrain, E-Detailing ADV, remise d'échantillons et prise de commandes. |
+
+---
+
+## ⚙️ Installation & Prise en Main
+
+### 1. Prérequis
+- **PHP** : `>= 8.2` (Extensions `pdo`, `mbstring`, `openssl`, `bcmath` requises)
+- **Composer** : `>= 2.0`
+- **Base de données** : MySQL / MariaDB / PostgreSQL
+
+### 2. Configuration & Lancement
+```bash
+# 1. Cloner le projet et installer les dépendances
+composer install
+
+# 2. Configurer l'environnement
+cp .env.example .env
+php artisan key:generate
+
+# 3. Exécuter les migrations et le jeu de données complet
+php artisan migrate:fresh --seed
+
+# 4. Démarrer le serveur local
+php artisan serve
+```
+
+---
+
+## 📖 Documentation API Swagger Interactive
+
+L'API est entièrement documentée via **OpenAPI 3.0 / L5-Swagger**.
+
+Accès à la documentation interactive :
+👉 **[http://localhost:8000/api/documentation](http://localhost:8000/api/documentation)**
+
+Pour régénérer la documentation OpenAPI après modif des annotations :
 ```bash
 php artisan l5-swagger:generate
 ```
 
-## 🧠 Intelligence Métier (Tâches en arrière-plan)
+---
 
-Le CRM inclut des mécanismes automatiques (State Machines et CRON) pour assister les équipes.
+## 🌾 Seeders & Données de Test Autonomes
 
-### 1. Commandes Planifiées (Cron Jobs)
-Assurez-vous que le planificateur de tâches de Laravel est configuré sur votre serveur de production (`* * * * * cd /path-to-your-project && php artisan schedule:run >> /dev/null 2>&1`).
-
-*   **Rappels des visites (`app:send-reminders`)** : Tourne à **07h00** tous les jours. Envoie un récapitulatif par email aux collaborateurs pour les visites de la journée suivante.
-*   **Moteur de Scoring (`app:calculate-scores`)** : Tourne à **02h00** tous les jours. Recalcule le `potentiel` et le `score` des contacts en fonction de la fréquence des visites (30 derniers jours).
-    *   *Vous pouvez tester le calcul manuellement avec :* `php artisan app:calculate-scores`
-
-### 2. Workflows (Observers)
-*   **Workflow Visites (`ActivityObserver`)** :
-    *   Lorsqu'une visite est marquée "Réalisée", le système calcule la durée automatiquement, vérifie le pointage GPS de l'activité par rapport à la cible (tolérance 500m), déduit les échantillons donnés de la table `sample_movements`, et verrouille la visite contre toute modification future.
-*   **Workflow Campagnes (`CampaignObserver`)** :
-    *   Empêche les sauts de statuts illogiques (`creation` -> `validation` -> `deploiement`...). Lève une erreur API HTTP 422 si la séquence métier n'est pas respectée.
-
-## 🎨 Branding Dynamique (Nom, Logo, Favicon)
-
-Le CRM est conçu pour être personnalisé en « marque blanche » par filiale.
-La table `settings` (clé/valeur) stocke les entrées `app_name`, `logo_path` et `favicon_path`.
-Chaque paramètre peut être global (filiale = null) ou spécifique à une filiale (prioritaire sur le global).
-
-### Endpoints de branding
-
-| Méthode | URL | Auth | Description |
-|---------|-----|------|-------------|
-| `GET` | `/api/v1/branding` | ❌ public | Récupère nom + URLs logo et favicon |
-| `PUT` | `/api/v1/branding/name` | ✅ Bearer | Met à jour le nom de l'application |
-| `POST` | `/api/v1/branding/logo` | ✅ Bearer | Upload / remplace le logo |
-| `DELETE` | `/api/v1/branding/logo` | ✅ Bearer | Supprime le logo |
-| `POST` | `/api/v1/branding/favicon` | ✅ Bearer | Upload / remplace la favicon |
-| `DELETE` | `/api/v1/branding/favicon` | ✅ Bearer | Supprime la favicon |
-
-### Contraintes de validation
-
-| Fichier | Formats autorisés | Taille maximale | Recommandation |
-|---------|-------------------|-----------------|----------------|
-| **Logo** | `jpeg`, `jpg`, `png`, `webp` | **2 Mo** | Ratio 16:9 ou carré, min. 200 px |
-| **Favicon** | `png`, `ico` | **512 Ko** | Carré 32×32 px ou 64×64 px |
-
-- L'ancien fichier est automatiquement supprimé du stockage lors de chaque remplacement.
-- Les URLs retournées par l'API sont des URLs absolues prêtes à l'emploi (pas de chemins relatifs).
-- Le paramètre `subsidiary_id` (optionnel) permet de surcharger par filiale.
-
-### Exemple — Récupérer le branding avant login
-
-```http
-GET /api/v1/branding
-```
-```json
-{
-  "app_name": "MyCRM Pro",
-  "logo_url": "https://example.com/storage/branding/logo_AbCdEfGhIjKl.png",
-  "favicon_url": "https://example.com/storage/branding/favicon_XyZwVuTs.ico"
-}
-```
-
-### Exemple — Uploader un logo (curl)
+Conformément à la Section 10 du cahier des charges, chaque domaine métier dispose de son seeder dédié exécutable séparément :
 
 ```bash
-curl -X POST https://example.com/api/v1/branding/logo \
-  -H "Authorization: Bearer <TOKEN>" \
-  -F "logo=@/path/to/logo.png" \
-  -F "subsidiary_id=<uuid-facultatif>"
+# Exécution d'un seeder spécifique
+php artisan db:seed --class=UserSeeder
+php artisan db:seed --class=AccountSeeder
+php artisan db:seed --class=ContactSeeder
+php artisan db:seed --class=ProductSeeder
+php artisan db:seed --class=ActivitySeeder
+php artisan db:seed --class=StockSeeder
+php artisan db:seed --class=EventSeeder
+php artisan db:seed --class=ExpenseSeeder
+php artisan db:seed --class=CampaignSeeder
+php artisan db:seed --class=NotificationSeeder
 ```
 
-## 🌍 Gestion des Pays & Territoires (Multi-Pays)
+### Ordre d'exécution automatique dans `DatabaseSeeder.php` :
+1. `RoleAndPermissionSeeder` : Permissions de modules et 7 rôles natifs.
+2. `SettingSeeder` : Paramètres système et branding.
+3. `UserSeeder` : Comptes utilisateurs de test par rôle.
+4. `AccountSeeder` : Hôpitaux, CHU, cliniques et pharmacies.
+5. `ContactSeeder` : Professionnels de santé (HCP, RPPS).
+6. `ProductSeeder` : Gamme de médicaments et posologies.
+7. `ActivitySeeder` : Visites réalisées, planifiées et comptes-rendus.
+8. `StockSeeder` : Mouvements d'échantillons et dotations.
+9. `EventSeeder` : Congrès et réunions de staff.
+10. `ExpenseSeeder` : Notes de frais avec pièces jointes.
+11. `CampaignSeeder` & `NotificationSeeder`.
 
-L'API propose un CRUD complet pour piloter les pays d'implantation :
-- **Endpoints disponibles** (`/api/v1/countries`) :
-  - `GET /api/v1/countries` : Liste tous les pays avec leurs filiales rattachées.
-  - `POST /api/v1/countries` : Créer un nouveau pays (`name`, `iso_code` unique, `currency`, `language`, `timezone`, `regulatory_settings`, `status`).
-  - `GET /api/v1/countries/{id}` : Détails d'un pays avec ses filiales.
-  - `PUT /api/v1/countries/{id}` : Modifier un pays.
-  - `DELETE /api/v1/countries/{id}` : Supprimer un pays (protégé contre la suppression si des filiales y sont encore rattachées).
+---
 
-## 📦 Gestion des Stocks & Échantillons
+## ⚙️ Automatisations & Tâches en Arrière-plan
 
-Le module de stock assure la traçabilité complète des échantillons médicaux et dotations délégués (normes pharmaceutiques) :
-- **État du stock délégué** : `GET /api/v1/my-stock` (calcul en temps réel des quantités disponibles, distribuées et alertes par lot).
-- **Mouvements de stock (CRUD complet)** : `GET`, `POST`, `PUT`, `DELETE` sur `/api/v1/sample-movements` (et alias `/api/v1/stocks`).
-  - **Création (`POST`)** : Entrée en stock, réapprovisionnement, attribution, distribution terrain.
-  - **Modification (`PUT/PATCH`)** : Correction des quantités, lots ou dates de péremption.
-  - **Suppression (`DELETE`)** : Annulation d'un mouvement avec réajustement automatique des stocks.
-  - **Types de mouvements** : `reception` (entrée/réassort), `attribution`, `distribution`, `retour`, `destruction` (périmés/perte), `inventaire`.
-  - **Traçabilité** : Numéro de lot (`lot_number`), date de péremption (`expiry_date`), signature et QR code.
+### 1. Cron Jobs Planifiés (`app/Console/Kernel.php`)
+* **Rappels de Visite (`07h00`)** : Notification par e-mail des visites planifiées pour le lendemain.
+* **Scoring Prospect (`02h00`)** : Recalcul automatique des profils cibles et potentiel des professionnels de santé (`php artisan app:calculate-scores`).
 
-## 🔐 Sécurité & Authentification
-
-- **Authentification par Jetons (Token Bearer)** : L'API utilise **Laravel Sanctum** pour sécuriser tous les accès.
-- **Gestion des Rôles & Permissions (RBAC)** : Assurée par **Spatie Permission**, organisée par modules métier (`super-admin`, `admin-pays`, `dir-general`, `manager`, `delegue`, etc.).
-- **Création d'utilisateurs & Mot de passe temporaire** :
-  - Lors de la création d'un utilisateur (`POST /api/v1/users`), un mot de passe temporaire aléatoire et robuste est généré automatiquement.
-  - Un email d'invitation contenant ses identifiants lui est envoyé.
-  - À sa première connexion (`POST /api/v1/login`), le système renvoie un statut `requires_password_change` (HTTP 403). L'utilisateur doit obligatoirement définir son propre mot de passe (min. 8 caractères via `POST /api/v1/auth/change-password`).
-- **Authentification à double facteur (OTP) optionnelle par utilisateur** :
-  - **Par défaut (`otp_enabled = false`)** : L'OTP n'est **pas requis**. Dès que l'utilisateur a changé son mot de passe temporaire (ou lors de ses connexions régulières), il reçoit directement son Token d'authentification et est connecté sans friction.
-  - **Activation individuelle** : L'utilisateur peut activer ou désactiver lui-même l'exigence d'un code OTP à 6 chiffres via l'endpoint protégé `POST /api/v1/auth/toggle-otp` (ou lors de la modification de son profil).
-  - **Si activé (`otp_enabled = true`)** : Un code OTP est généré, stocké en cache (valable 10 minutes) et envoyé par email (`POST /api/v1/verify-otp` nécessaire pour obtenir le Token).
-- **Cloisonnement géographique** : Les données sont cloisonnées par périmètre (Pays/Filiale/Région/Secteur) via le trait global `HasPerimeter`.
-
-## 🧪 Tests manuels rapides
-
-Si vous avez lancé les Seeders, voici les identifiants de test préconfigurés :
-- **Super Admin** : `admin@crm.local` (Mot de passe : `password`)
-- **Agent Terrain / Collaborateur** : `delegue@crm.local` (Mot de passe : `password`)
-
-*(Note : à la toute première connexion, l'API renverra un statut `requires_password_change` pour simuler le changement de mot de passe obligatoire).*
+### 2. Observers Métiers (`Observers/`)
+* **`ActivityObserver`** : Calcul automatique des durées, validation GPS (tolérance 500m), déduction d'échantillons (`SampleMovement`) lors du Check-out.
+* **`CampaignObserver`** : Contrôle des règles de transition d'état des campagnes marketing.

@@ -115,20 +115,70 @@ class TourPlanController extends Controller
     {
         $validated = $request->validate([
             'tour_plan_id' => 'required|exists:tour_plans,id',
-            'current_lat' => 'required|numeric',
-            'current_lng' => 'required|numeric',
+            'current_lat'  => 'required|numeric',
+            'current_lng'  => 'required|numeric',
         ]);
 
-        $tourPlan = TourPlan::with('activities')->findOrFail($validated['tour_plan_id']);
-        
-        // MOCK: On simule une optimisation en renvoyant simplement les activités existantes 
-        // avec des calculs fictifs pour l'équipe mobile.
+        $tourPlan = TourPlan::with(['activities.contact', 'activities.account'])->findOrFail($validated['tour_plan_id']);
+        $activities = $tourPlan->activities;
+
+        $currentLat = (float) $validated['current_lat'];
+        $currentLng = (float) $validated['current_lng'];
+
+        // Algorithme du plus proche voisin (Nearest Neighbor)
+        $unvisited = collect($activities->all());
+        $ordered = collect();
+        $totalDistanceKm = 0.0;
+
+        while ($unvisited->isNotEmpty()) {
+            $closestIndex = null;
+            $minDistance = INF;
+
+            foreach ($unvisited as $index => $act) {
+                $destLat = (float) ($act->account->gps_lat ?? $act->contact->gps_lat ?? $currentLat);
+                $destLng = (float) ($act->account->gps_lng ?? $act->contact->gps_lng ?? $currentLng);
+
+                $dist = $this->haversineGreatCircleDistance($currentLat, $currentLng, $destLat, $destLng);
+                if ($dist < $minDistance) {
+                    $minDistance = $dist;
+                    $closestIndex = $index;
+                }
+            }
+
+            if ($closestIndex !== null) {
+                $selected = $unvisited->pull($closestIndex);
+                $ordered->push($selected);
+
+                $totalDistanceKm += ($minDistance === INF ? 0 : $minDistance);
+                $currentLat = (float) ($selected->account->gps_lat ?? $currentLat);
+                $currentLng = (float) ($selected->account->gps_lng ?? $currentLng);
+            } else {
+                break;
+            }
+        }
+
+        $estimatedDurationMinutes = round(($totalDistanceKm * 3) + ($ordered->count() * 30));
+
         return response()->json([
-            'tour_plan_id' => $tourPlan->id,
-            'total_distance_km' => 12.5,
-            'estimated_duration_minutes' => 180,
-            'optimized_activities' => $tourPlan->activities,
-            'message' => 'Ceci est un mock de l\'IA d\'optimisation.'
+            'tour_plan_id'               => $tourPlan->id,
+            'total_distance_km'          => round($totalDistanceKm, 2),
+            'estimated_duration_minutes' => (int) $estimatedDurationMinutes,
+            'optimized_activities'       => $ordered->values(),
         ]);
+    }
+
+    private function haversineGreatCircleDistance($latitudeFrom, $longitudeFrom, $latitudeTo, $longitudeTo, $earthRadius = 6371)
+    {
+        $latFrom = deg2rad($latitudeFrom);
+        $lonFrom = deg2rad($longitudeFrom);
+        $latTo = deg2rad($latitudeTo);
+        $lonTo = deg2rad($longitudeTo);
+
+        $latDelta = $latTo - $latFrom;
+        $lonDelta = $lonTo - $lonFrom;
+
+        $angle = 2 * asin(sqrt(pow(sin($latDelta / 2), 2) +
+            cos($latFrom) * cos($latTo) * pow(sin($lonDelta / 2), 2)));
+        return $angle * $earthRadius;
     }
 }

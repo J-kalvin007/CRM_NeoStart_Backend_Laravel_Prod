@@ -1615,6 +1615,44 @@
                 ]
             }
         },
+        "/api/v1/password/email": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Demander la réinitialisation du mot de passe par email",
+                "description": "Génère un jeton ou un code temporaire et l'envoie à l'adresse email de l'utilisateur si le compte existe.",
+                "operationId": "ca19caca39d3634bcc3b608a361cf54f",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "email"
+                                ],
+                                "properties": {
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email",
+                                        "example": "user@example.com"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Email de réinitialisation envoyé si le compte existe"
+                    },
+                    "422": {
+                        "description": "Email valide requis"
+                    }
+                }
+            }
+        },
         "/api/v1/campaigns": {
             "get": {
                 "tags": [

@@ -11,19 +11,20 @@ class OrderController extends Controller
 {
     public function index()
     {
-        $orders = Order::with(['account', 'opportunity', 'user'])->get()->map(function ($order) {
+        $orders = Order::with(['account', 'opportunity', 'user', 'items'])->get()->map(function ($order) {
+            $itemsCount = $order->items ? $order->items->sum('quantity') : 0;
             return [
                 'id' => $order->id,
                 'reference' => $order->order_number,
-                'clientNom' => $order->account ? $order->account->nom : 'Client Inconnu',
-                'clientType' => $order->account ? $order->account->type : 'pharmacie',
-                'produitsCount' => rand(5, 50), // Mocked for now, normally sum of order items
-                'montantTotal' => $order->total_amount,
+                'clientNom' => $order->account ? $order->account->nom : 'Client Officine',
+                'clientType' => $order->account ? ($order->account->type ?? 'pharmacie') : 'pharmacie',
+                'produitsCount' => $itemsCount > 0 ? (int) $itemsCount : 1,
+                'montantTotal' => (float) $order->total_amount,
                 'devise' => 'FCFA',
                 'statut' => $order->status, // draft, pending, confirmed, cancelled, invoiced
                 'dateCommande' => $order->order_date,
-                'grossisteRelais' => 'CAMEG Togo', // Mocked or read from custom field
-                'remiseAppliquee' => 5 // Mocked or read from order discount
+                'grossisteRelais' => $order->grossiste_relais ?? 'Grossiste Répartiteur',
+                'remiseAppliquee' => (float) ($order->discount_rate ?? 0)
             ];
         });
 

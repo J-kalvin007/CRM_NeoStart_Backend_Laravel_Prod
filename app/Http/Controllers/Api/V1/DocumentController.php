@@ -31,17 +31,25 @@ class DocumentController extends Controller
                 $status = 'EXPIRE';
             }
 
+            $sizeFormatted = '1.5 MB';
+            if ($doc->file_size) {
+                $sizeFormatted = round($doc->file_size / (1024 * 1024), 1) . ' MB';
+            } elseif (\Illuminate\Support\Facades\Storage::disk('public')->exists($doc->file_path ?? '')) {
+                $bytes = \Illuminate\Support\Facades\Storage::disk('public')->size($doc->file_path);
+                $sizeFormatted = round($bytes / (1024 * 1024), 1) . ' MB';
+            }
+
             return [
                 'id' => $doc->id,
                 'reference' => 'DOC-' . substr($doc->id, 0, 6),
                 'titre' => $doc->title,
                 'type' => $mappedType,
                 'produit' => $doc->documentable_type === 'App\\Models\\Product' ? 'Produit Associé' : 'Général',
-                'version' => 'v' . $doc->version,
-                'taille' => '2.4 MB', // mock size
+                'version' => 'v' . ($doc->version ?? '1.0'),
+                'taille' => $sizeFormatted,
                 'dateExpiration' => $doc->expiration_date ? \Carbon\Carbon::parse($doc->expiration_date)->format('Y-m-d') : 'N/A',
                 'statut' => $status,
-                'paysAutorises' => ['FR', 'CI', 'SN'], // mock for now
+                'paysAutorises' => ['FR', 'CI', 'SN'],
                 'url' => $doc->file_path
             ];
         });

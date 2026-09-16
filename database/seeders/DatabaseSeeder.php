@@ -108,8 +108,23 @@ class DatabaseSeeder extends Seeder
         }
 
         $this->call([
-            CRMDataSeeder::class,
+            RoleAndPermissionSeeder::class,
             SettingSeeder::class,
+            UserSeeder::class,
+            AccountSeeder::class,
+            ContactSeeder::class,
+            ProductSeeder::class,
+            ActivitySeeder::class,
+            StockSeeder::class,
+            EventSeeder::class,
+            ExpenseSeeder::class,
+            CampaignSeeder::class,
+            NotificationSeeder::class,
+            DocumentSeeder::class,
+            DigitalSupportSeeder::class,
+            PharmacovigilanceSeeder::class,
+            ConversationMessageSeeder::class,
+            OrderSeeder::class,
         ]);
     }
 }
