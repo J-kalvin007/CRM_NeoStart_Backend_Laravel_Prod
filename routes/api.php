@@ -128,6 +128,15 @@ Route::prefix('v1')->group(function () {
         // ── Répertoire (Comptes & Contacts) ────────────────────
         Route::post('accounts/check-duplicates', [AccountController::class, 'checkDuplicates']);
         Route::apiResource('accounts', AccountController::class);
+        Route::apiResource('specialities', App\Http\Controllers\Api\V1\SpecialityController::class);
+        Route::apiResource('segmentations', App\Http\Controllers\Api\V1\SegmentationController::class);
+        Route::apiResource('potentials', App\Http\Controllers\Api\V1\PotentialController::class);
+        Route::apiResource('influences', App\Http\Controllers\Api\V1\InfluenceController::class);
+        Route::apiResource('galenic-forms', App\Http\Controllers\Api\V1\GalenicFormController::class);
+        Route::apiResource('activity-types', App\Http\Controllers\Api\V1\ActivityTypeController::class);
+        Route::apiResource('activity-results', App\Http\Controllers\Api\V1\ActivityResultController::class);
+        Route::apiResource('event-formats', App\Http\Controllers\Api\V1\EventFormatController::class);
+
 
         Route::post('contacts/check-duplicates', [ContactController::class, 'checkDuplicates']);
         Route::apiResource('contacts', ContactController::class);

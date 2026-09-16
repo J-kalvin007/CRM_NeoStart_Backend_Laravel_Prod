@@ -772,6 +772,284 @@
                 ]
             }
         },
+        "/api/v1/activity-results": {
+            "get": {
+                "tags": [
+                    "Résultats d'Activité"
+                ],
+                "summary": "Get list of Résultats d'Activité",
+                "operationId": "46d52ddf8045fbc788a40361b8c44410",
+                "responses": {
+                    "200": {
+                        "description": "Successful operation"
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Résultats d'Activité"
+                ],
+                "summary": "Create a new ActivityResult",
+                "operationId": "9d80f828ec7832331bd927c3aaef17c0",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "code": {
+                                        "type": "string"
+                                    },
+                                    "description": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Created successfully"
+                    }
+                }
+            }
+        },
+        "/api/v1/activity-results/{id}": {
+            "get": {
+                "tags": [
+                    "Résultats d'Activité"
+                ],
+                "summary": "Get a specific ActivityResult",
+                "operationId": "61008041f6b09e5a7d1aad82aa380ecb",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful operation"
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "Résultats d'Activité"
+                ],
+                "summary": "Update an existing ActivityResult",
+                "operationId": "bd8372c5b15f4b3cd2bc4aeaa0ac78ee",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "code": {
+                                        "type": "string"
+                                    },
+                                    "description": {
+                                        "type": "string"
+                                    },
+                                    "is_active": {
+                                        "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Updated successfully"
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Résultats d'Activité"
+                ],
+                "summary": "Delete a ActivityResult",
+                "operationId": "25982ffdc00fe9815b13a2cdec3b9f23",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Deleted successfully"
+                    }
+                }
+            }
+        },
+        "/api/v1/activity-types": {
+            "get": {
+                "tags": [
+                    "Types d'Activité"
+                ],
+                "summary": "Get list of Types d'Activité",
+                "operationId": "f838a591e5e69259e622626ff305d665",
+                "responses": {
+                    "200": {
+                        "description": "Successful operation"
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Types d'Activité"
+                ],
+                "summary": "Create a new ActivityType",
+                "operationId": "f50ca28968ab3666951ea2d86763d73b",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "code": {
+                                        "type": "string"
+                                    },
+                                    "description": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Created successfully"
+                    }
+                }
+            }
+        },
+        "/api/v1/activity-types/{id}": {
+            "get": {
+                "tags": [
+                    "Types d'Activité"
+                ],
+                "summary": "Get a specific ActivityType",
+                "operationId": "3571bf15dd2a3b886240006afadc29a7",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful operation"
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "Types d'Activité"
+                ],
+                "summary": "Update an existing ActivityType",
+                "operationId": "dc63d472022c1adcf118da66e99c2c96",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "code": {
+                                        "type": "string"
+                                    },
+                                    "description": {
+                                        "type": "string"
+                                    },
+                                    "is_active": {
+                                        "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Updated successfully"
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Types d'Activité"
+                ],
+                "summary": "Delete a ActivityType",
+                "operationId": "e5376f6c7b358e920dcc002f7b836c16",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Deleted successfully"
+                    }
+                }
+            }
+        },
         "/api/v1/analytics/team-performance": {
             "get": {
                 "tags": [
@@ -889,7 +1167,7 @@
                     "App Branding"
                 ],
                 "summary": "Récupérer la configuration de branding de l'application",
-                "description": "Retourne le nom, le logo et la favicon de l'application.\n- Si `subsidiary_id` est fourni, les paramètres spécifiques à la filiale surchargent les globaux.\n- Les URLs de logo et favicon sont des URLs absolues prêtes à l'emploi.\n- **Accessible sans authentification** pour permettre l'affichage avant la connexion.",
+                "description": "Retourne le nom, le logo et la favicon de l'application.\r\n- Si `subsidiary_id` est fourni, les paramètres spécifiques à la filiale surchargent les globaux.\r\n- Les URLs de logo et favicon sont des URLs absolues prêtes à l'emploi.\r\n- **Accessible sans authentification** pour permettre l'affichage avant la connexion.",
                 "operationId": "cef5151ee7a274bf28fbad2e2931d387",
                 "parameters": [
                     {
@@ -1016,7 +1294,7 @@
                     "App Branding"
                 ],
                 "summary": "Uploader / remplacer le logo de l'application",
-                "description": "Upload du logo affiché dans l'interface (header, page de connexion, etc.).\n\n**Contraintes fichier :**\n- Formats acceptés : `jpeg`, `jpg`, `png`, `webp`\n- Taille maximale : **2 Mo**\n- L'ancien fichier est automatiquement supprimé du stockage.\n\nL'URL du logo est retournée dans le champ `logo_url`.",
+                "description": "Upload du logo affiché dans l'interface (header, page de connexion, etc.).\r\n\r\n**Contraintes fichier :**\r\n- Formats acceptés : `jpeg`, `jpg`, `png`, `webp`\r\n- Taille maximale : **2 Mo**\r\n- L'ancien fichier est automatiquement supprimé du stockage.\r\n\r\nL'URL du logo est retournée dans le champ `logo_url`.",
                 "operationId": "4649f50ef75cfb805b73fa562425c4c5",
                 "requestBody": {
                     "required": true,
@@ -1118,7 +1396,7 @@
                     "App Branding"
                 ],
                 "summary": "Uploader / remplacer la favicon (icône de l'onglet)",
-                "description": "Upload de la favicon affichée dans les onglets du navigateur.\n\n**Contraintes fichier :**\n- Formats acceptés : `png`, `ico`\n- Taille maximale : **512 Ko**\n- L'ancien fichier est automatiquement supprimé.\n\n> **Recommandation** : utiliser une image carrée de **32×32 px** ou **64×64 px** en PNG pour une compatibilité maximale.",
+                "description": "Upload de la favicon affichée dans les onglets du navigateur.\r\n\r\n**Contraintes fichier :**\r\n- Formats acceptés : `png`, `ico`\r\n- Taille maximale : **512 Ko**\r\n- L'ancien fichier est automatiquement supprimé.\r\n\r\n> **Recommandation** : utiliser une image carrée de **32×32 px** ou **64×64 px** en PNG pour une compatibilité maximale.",
                 "operationId": "6043f9f572a3a7680f06edfaff8d57dd",
                 "requestBody": {
                     "required": true,
@@ -3274,6 +3552,145 @@
                 ]
             }
         },
+        "/api/v1/event-formats": {
+            "get": {
+                "tags": [
+                    "Formats d'Événement"
+                ],
+                "summary": "Get list of Formats d'Événement",
+                "operationId": "25432f08c560706c8641f38ef8d1ed12",
+                "responses": {
+                    "200": {
+                        "description": "Successful operation"
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Formats d'Événement"
+                ],
+                "summary": "Create a new EventFormat",
+                "operationId": "766334e8ff5f578775e6d6f050d5d30a",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "code": {
+                                        "type": "string"
+                                    },
+                                    "description": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Created successfully"
+                    }
+                }
+            }
+        },
+        "/api/v1/event-formats/{id}": {
+            "get": {
+                "tags": [
+                    "Formats d'Événement"
+                ],
+                "summary": "Get a specific EventFormat",
+                "operationId": "eba7277f74a3fdbfaae0d00882fe15a1",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful operation"
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "Formats d'Événement"
+                ],
+                "summary": "Update an existing EventFormat",
+                "operationId": "c4c14d8f188b52a1df13de050513e20e",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "code": {
+                                        "type": "string"
+                                    },
+                                    "description": {
+                                        "type": "string"
+                                    },
+                                    "is_active": {
+                                        "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Updated successfully"
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Formats d'Événement"
+                ],
+                "summary": "Delete a EventFormat",
+                "operationId": "babe1b0c7e6512996019811664c4e550",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Deleted successfully"
+                    }
+                }
+            }
+        },
         "/api/v1/expenses": {
             "get": {
                 "tags": [
@@ -3721,6 +4138,284 @@
                         "bearerAuth": []
                     }
                 ]
+            }
+        },
+        "/api/v1/galenic-forms": {
+            "get": {
+                "tags": [
+                    "Formes Galéniques"
+                ],
+                "summary": "Get list of Formes Galéniques",
+                "operationId": "6866c38592c6b2eb0a4f17e0d6b09fbb",
+                "responses": {
+                    "200": {
+                        "description": "Successful operation"
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Formes Galéniques"
+                ],
+                "summary": "Create a new GalenicForm",
+                "operationId": "631da7515ccc7b3f78e195df8e3cca32",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "code": {
+                                        "type": "string"
+                                    },
+                                    "description": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Created successfully"
+                    }
+                }
+            }
+        },
+        "/api/v1/galenic-forms/{id}": {
+            "get": {
+                "tags": [
+                    "Formes Galéniques"
+                ],
+                "summary": "Get a specific GalenicForm",
+                "operationId": "26e6eef04c40e35fa9d57a288bc1823f",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful operation"
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "Formes Galéniques"
+                ],
+                "summary": "Update an existing GalenicForm",
+                "operationId": "6316c64293c4bfe6f26867e1b98d1d4d",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "code": {
+                                        "type": "string"
+                                    },
+                                    "description": {
+                                        "type": "string"
+                                    },
+                                    "is_active": {
+                                        "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Updated successfully"
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Formes Galéniques"
+                ],
+                "summary": "Delete a GalenicForm",
+                "operationId": "e8ce41d3a2a000d47d0503940dcae275",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Deleted successfully"
+                    }
+                }
+            }
+        },
+        "/api/v1/influences": {
+            "get": {
+                "tags": [
+                    "Influences"
+                ],
+                "summary": "Get list of Influences",
+                "operationId": "6291afaeba205be805ade420a9815d68",
+                "responses": {
+                    "200": {
+                        "description": "Successful operation"
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Influences"
+                ],
+                "summary": "Create a new Influence",
+                "operationId": "fcd2a4e98d9211487369073e5c940fcd",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "code": {
+                                        "type": "string"
+                                    },
+                                    "description": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Created successfully"
+                    }
+                }
+            }
+        },
+        "/api/v1/influences/{id}": {
+            "get": {
+                "tags": [
+                    "Influences"
+                ],
+                "summary": "Get a specific Influence",
+                "operationId": "00f73fab89c0dfb69a335a62d3b1f68d",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful operation"
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "Influences"
+                ],
+                "summary": "Update an existing Influence",
+                "operationId": "4dc57ee15c667b1a64e9fb18900c459a",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "code": {
+                                        "type": "string"
+                                    },
+                                    "description": {
+                                        "type": "string"
+                                    },
+                                    "is_active": {
+                                        "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Updated successfully"
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Influences"
+                ],
+                "summary": "Delete a Influence",
+                "operationId": "efcf340ac6f9b1900ac5abfa2e17dd41",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Deleted successfully"
+                    }
+                }
             }
         },
         "/api/v1/kols": {
@@ -4344,6 +5039,145 @@
                         "bearerAuth": []
                     }
                 ]
+            }
+        },
+        "/api/v1/potentials": {
+            "get": {
+                "tags": [
+                    "Potentiels"
+                ],
+                "summary": "Get list of Potentiels",
+                "operationId": "1e44692b94ec98016260ab843dee2517",
+                "responses": {
+                    "200": {
+                        "description": "Successful operation"
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Potentiels"
+                ],
+                "summary": "Create a new Potential",
+                "operationId": "2731b5a9d0a3b41b46102494723b3835",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "code": {
+                                        "type": "string"
+                                    },
+                                    "description": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Created successfully"
+                    }
+                }
+            }
+        },
+        "/api/v1/potentials/{id}": {
+            "get": {
+                "tags": [
+                    "Potentiels"
+                ],
+                "summary": "Get a specific Potential",
+                "operationId": "2dafe7f2edb0a61fda9dd6a9569405ae",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful operation"
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "Potentiels"
+                ],
+                "summary": "Update an existing Potential",
+                "operationId": "dc9d81e8e63dc680230cf3b5446c93df",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "code": {
+                                        "type": "string"
+                                    },
+                                    "description": {
+                                        "type": "string"
+                                    },
+                                    "is_active": {
+                                        "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Updated successfully"
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Potentiels"
+                ],
+                "summary": "Delete a Potential",
+                "operationId": "c08ef5071f6ee2d905e3e4b44c8c8c1c",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Deleted successfully"
+                    }
+                }
             }
         },
         "/api/v1/products": {
@@ -5340,6 +6174,145 @@
                 ]
             }
         },
+        "/api/v1/segmentations": {
+            "get": {
+                "tags": [
+                    "Segmentations"
+                ],
+                "summary": "Get list of Segmentations",
+                "operationId": "50ab0a8641a8e24d1b3ca725e66f73b7",
+                "responses": {
+                    "200": {
+                        "description": "Successful operation"
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Segmentations"
+                ],
+                "summary": "Create a new Segmentation",
+                "operationId": "4f56c4dfaa9c2e0c598dcd69f049c7f3",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "code": {
+                                        "type": "string"
+                                    },
+                                    "description": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Created successfully"
+                    }
+                }
+            }
+        },
+        "/api/v1/segmentations/{id}": {
+            "get": {
+                "tags": [
+                    "Segmentations"
+                ],
+                "summary": "Get a specific Segmentation",
+                "operationId": "a2a2bf992676c0723ecc5afce21541ed",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful operation"
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "Segmentations"
+                ],
+                "summary": "Update an existing Segmentation",
+                "operationId": "a65bade0dd29ebc2b8d638ed33f56bc2",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "code": {
+                                        "type": "string"
+                                    },
+                                    "description": {
+                                        "type": "string"
+                                    },
+                                    "is_active": {
+                                        "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Updated successfully"
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Segmentations"
+                ],
+                "summary": "Delete a Segmentation",
+                "operationId": "173dd1868e8351470ca98f930e2fb8fb",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Deleted successfully"
+                    }
+                }
+            }
+        },
         "/api/v1/settings": {
             "get": {
                 "tags": [
@@ -5411,6 +6384,145 @@
                         "bearerAuth": []
                     }
                 ]
+            }
+        },
+        "/api/v1/specialities": {
+            "get": {
+                "tags": [
+                    "Spécialités"
+                ],
+                "summary": "Get list of Spécialités",
+                "operationId": "f272ea6c18429779a12fc06f6474fb26",
+                "responses": {
+                    "200": {
+                        "description": "Successful operation"
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Spécialités"
+                ],
+                "summary": "Create a new Speciality",
+                "operationId": "bbdffef8abddd467c6dcc6fd67ee2257",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "code": {
+                                        "type": "string"
+                                    },
+                                    "description": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Created successfully"
+                    }
+                }
+            }
+        },
+        "/api/v1/specialities/{id}": {
+            "get": {
+                "tags": [
+                    "Spécialités"
+                ],
+                "summary": "Get a specific Speciality",
+                "operationId": "ea9160ec495e6b9ac035b721785c0691",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful operation"
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "Spécialités"
+                ],
+                "summary": "Update an existing Speciality",
+                "operationId": "a848cf3d26d90ee5a3a312a8cae53640",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "code": {
+                                        "type": "string"
+                                    },
+                                    "description": {
+                                        "type": "string"
+                                    },
+                                    "is_active": {
+                                        "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Updated successfully"
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Spécialités"
+                ],
+                "summary": "Delete a Speciality",
+                "operationId": "495bf49a7d8f542180a6f88eb7f9c3ac",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Deleted successfully"
+                    }
+                }
             }
         },
         "/api/v1/subsidiaries": {
@@ -6807,6 +7919,14 @@
     },
     "tags": [
         {
+            "name": "Résultats d'Activité",
+            "description": "API Endpoints for Résultats d'Activité"
+        },
+        {
+            "name": "Types d'Activité",
+            "description": "API Endpoints for Types d'Activité"
+        },
+        {
             "name": "App Branding",
             "description": "Personnalisation dynamique de l'identité visuelle de l'application (nom, logo, favicon)."
         },
@@ -6815,16 +7935,40 @@
             "description": "Gestion des pays et réglementations nationales"
         },
         {
+            "name": "Formats d'Événement",
+            "description": "API Endpoints for Formats d'Événement"
+        },
+        {
             "name": "Expenses",
             "description": "Gestion des notes de frais et dépenses terrain"
+        },
+        {
+            "name": "Formes Galéniques",
+            "description": "API Endpoints for Formes Galéniques"
+        },
+        {
+            "name": "Influences",
+            "description": "API Endpoints for Influences"
         },
         {
             "name": "Permissions",
             "description": "Consultation des permissions disponibles (lecture seule — gérées par le système)"
         },
         {
+            "name": "Potentiels",
+            "description": "API Endpoints for Potentiels"
+        },
+        {
             "name": "Stocks",
             "description": "Gestion des stocks et mouvements d'échantillons médicaux"
+        },
+        {
+            "name": "Segmentations",
+            "description": "API Endpoints for Segmentations"
+        },
+        {
+            "name": "Spécialités",
+            "description": "API Endpoints for Spécialités"
         },
         {
             "name": "Users",
