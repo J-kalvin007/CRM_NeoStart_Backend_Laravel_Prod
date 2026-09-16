@@ -772,6 +772,108 @@
                 ]
             }
         },
+        "/api/v1/activities/{activity}/report": {
+            "put": {
+                "tags": [
+                    "Activity Reports"
+                ],
+                "summary": "Soumettre ou modifier un compte-rendu",
+                "operationId": "c49bbbfc48725c91daf0f0be627c1bcd",
+                "parameters": [
+                    {
+                        "name": "activity",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "report_content": {
+                                        "type": "string"
+                                    },
+                                    "report_status": {
+                                        "type": "string",
+                                        "enum": [
+                                            "draft",
+                                            "submitted"
+                                        ]
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Compte-rendu mis à jour"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/activities/{activity}/report/validate": {
+            "post": {
+                "tags": [
+                    "Activity Reports"
+                ],
+                "summary": "Valider ou rejeter un compte-rendu (Manager)",
+                "operationId": "25855e0757ceedbe7f65d5d1f30ddf9e",
+                "parameters": [
+                    {
+                        "name": "activity",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "status": {
+                                        "type": "string",
+                                        "enum": [
+                                            "validated",
+                                            "rejected"
+                                        ]
+                                    },
+                                    "rejection_reason": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Compte-rendu traité"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/activity-results": {
             "get": {
                 "tags": [
@@ -4467,6 +4569,45 @@
                 ]
             }
         },
+        "/api/v1/media/upload": {
+            "post": {
+                "tags": [
+                    "Medias"
+                ],
+                "summary": "Uploader un fichier",
+                "operationId": "7ff50fb7baeca2626aeb337957ff2001",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "properties": {
+                                    "file": {
+                                        "type": "string",
+                                        "format": "binary"
+                                    },
+                                    "folder": {
+                                        "description": "Dossier de destination (ex: signatures, avatars)",
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Fichier uploadé avec succès"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/notifications": {
             "get": {
                 "tags": [
@@ -6729,6 +6870,65 @@
                 ]
             }
         },
+        "/api/v1/sync/pull": {
+            "get": {
+                "tags": [
+                    "Synchronisation Offline"
+                ],
+                "summary": "Pull des données pour le mode offline",
+                "operationId": "06e24426fe61d9dd6a3da26d8b8e2707",
+                "parameters": [
+                    {
+                        "name": "last_sync",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Données synchronisées"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/sync/push": {
+            "post": {
+                "tags": [
+                    "Synchronisation Offline"
+                ],
+                "summary": "Push des modifications offline",
+                "operationId": "ace1ac312312ff45b495d76a0c7f898d",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Statut de synchronisation"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/teams": {
             "get": {
                 "tags": [
@@ -7919,6 +8119,10 @@
     },
     "tags": [
         {
+            "name": "Activity Reports",
+            "description": "Gestion des comptes-rendus de visites"
+        },
+        {
             "name": "Résultats d'Activité",
             "description": "API Endpoints for Résultats d'Activité"
         },
@@ -7951,6 +8155,10 @@
             "description": "API Endpoints for Influences"
         },
         {
+            "name": "Medias",
+            "description": "Gestion des fichiers et médias (Upload/Download)"
+        },
+        {
             "name": "Permissions",
             "description": "Consultation des permissions disponibles (lecture seule — gérées par le système)"
         },
@@ -7969,6 +8177,10 @@
         {
             "name": "Spécialités",
             "description": "API Endpoints for Spécialités"
+        },
+        {
+            "name": "Synchronisation Offline",
+            "description": "API de synchronisation pour le mode hors ligne mobile"
         },
         {
             "name": "Users",

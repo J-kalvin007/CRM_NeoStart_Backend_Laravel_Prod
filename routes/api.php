@@ -1,6 +1,9 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\V1\MediaController;
+use App\Http\Controllers\Api\V1\SyncController;
+use App\Http\Controllers\Api\V1\ActivityReportController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CountryController;
 use App\Http\Controllers\Api\V1\SubsidiaryController;
@@ -24,7 +27,6 @@ use App\Http\Controllers\Api\V1\OrderController;
 use App\Http\Controllers\Api\V1\SaleController;
 use App\Http\Controllers\Api\V1\EventController;
 use App\Http\Controllers\Api\V1\DocumentController;
-use App\Http\Controllers\Api\V1\SyncController;
 use App\Http\Controllers\Api\V1\CustomFieldController;
 use App\Http\Controllers\Api\V1\ExpenseController;
 use App\Http\Controllers\Api\V1\RoleController;
@@ -58,6 +60,18 @@ Route::prefix('v1')->group(function () {
     // ── Endpoints protégés ────────────────────────────────────
 
     Route::middleware('auth:sanctum')->group(function () {
+
+    // Sync
+    Route::get('/sync/pull', [SyncController::class, 'pull']);
+    Route::post('/sync/push', [SyncController::class, 'push']);
+
+    // Media
+    Route::post('/media/upload', [MediaController::class, 'upload']);
+
+    // Reports
+    Route::put('/activities/{activity}/report', [ActivityReportController::class, 'update']);
+    Route::post('/activities/{activity}/report/validate', [ActivityReportController::class, 'validateReport']);
+
 
         // Session & Préférences utilisateur
         Route::get('/me', [AuthController::class, 'me']);

@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\SampleMovement;
 use App\Models\Product;
+use App\Models\User;
+use App\Services\NotificationService;
 use App\Http\Resources\SampleMovementResource;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -208,6 +210,11 @@ class SampleMovementController extends Controller
 
             // Nouveau stock calculé
             $isPositive = in_array($normalizedType, ['reception', 'attribution', 'retour']);
+            
+            if (!$isPositive && $currentStock < $quantity) {
+                abort(422, "Stock insuffisant pour ce produit. Disponible: {$currentStock}");
+            }
+            
             $newStock = $isPositive ? ($currentStock + $quantity) : max(0, $currentStock - $quantity);
 
             $movement = SampleMovement::create([
@@ -230,6 +237,19 @@ class SampleMovementController extends Controller
             } elseif (in_array($normalizedType, ['distribution', 'destruction'])) {
                 if ($product->stock_actuel >= $quantity) {
                     $product->decrement('stock_actuel', $quantity);
+                }
+            }
+
+            if (!$isPositive && $newStock <= ($product->stock_alerte ?? 10)) {
+                $userObj = User::find($userId);
+                if ($userObj && $userObj->manager) {
+                    app(NotificationService::class)->send(
+                        $userObj->manager,
+                        'Alerte Stock Critique',
+                        "Le délégué {$userObj->name} a un stock critique ({$newStock}) pour le produit {$product->nom}.",
+                        'low_stock',
+                        ['product_id' => $product->id, 'user_id' => $userId]
+                    );
                 }
             }
 
