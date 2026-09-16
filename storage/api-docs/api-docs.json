@@ -665,11 +665,17 @@
                     }
                 ],
                 "requestBody": {
+                    "description": "Utilisez cette route pour le Check-in (statut: en_cours, gps_debut) et le Check-out (statut: realisee, gps_fin)",
                     "required": true,
                     "content": {
                         "application/json": {
                             "schema": {
                                 "properties": {
+                                    "date_activite": {
+                                        "description": "Ne peut pas être dans le passé",
+                                        "type": "string",
+                                        "format": "date"
+                                    },
                                     "notes": {
                                         "type": "string"
                                     },
@@ -684,10 +690,32 @@
                                         ]
                                     },
                                     "heure_debut": {
-                                        "type": "string"
+                                        "type": "string",
+                                        "example": "09:00"
                                     },
                                     "heure_fin": {
-                                        "type": "string"
+                                        "type": "string",
+                                        "example": "09:45"
+                                    },
+                                    "gps_debut_lat": {
+                                        "type": "number",
+                                        "format": "float",
+                                        "example": 5.345
+                                    },
+                                    "gps_debut_lng": {
+                                        "type": "number",
+                                        "format": "float",
+                                        "example": -3.982
+                                    },
+                                    "gps_fin_lat": {
+                                        "type": "number",
+                                        "format": "float",
+                                        "example": 5.3452
+                                    },
+                                    "gps_fin_lng": {
+                                        "type": "number",
+                                        "format": "float",
+                                        "example": -3.9821
                                     }
                                 },
                                 "type": "object"
@@ -3046,6 +3074,168 @@
                 ]
             }
         },
+        "/api/v1/digital-supports": {
+            "get": {
+                "tags": [
+                    "Digital Supports"
+                ],
+                "summary": "Lister les supports ADV (E-Detailing)",
+                "operationId": "b55d8c4cfd8897f1938900c39724e1ba",
+                "responses": {
+                    "200": {
+                        "description": "Liste récupérée avec succès"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Digital Supports"
+                ],
+                "summary": "Créer un nouveau support digital",
+                "operationId": "dd4ed24729deb9fac3baab953427be64",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "title",
+                                    "product_id",
+                                    "file_path"
+                                ],
+                                "properties": {
+                                    "title": {
+                                        "type": "string"
+                                    },
+                                    "product_id": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                    },
+                                    "version": {
+                                        "type": "string"
+                                    },
+                                    "total_slides": {
+                                        "type": "integer"
+                                    },
+                                    "file_path": {
+                                        "type": "string"
+                                    },
+                                    "thumbnail_url": {
+                                        "type": "string"
+                                    },
+                                    "is_active": {
+                                        "type": "boolean",
+                                        "default": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Support créé avec succès"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/digital-supports/{id}": {
+            "get": {
+                "tags": [
+                    "Digital Supports"
+                ],
+                "summary": "Afficher les détails d'un support digital",
+                "operationId": "ffebda4be11bedee1da82853bb690b46",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Détails du support"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Digital Supports"
+                ],
+                "summary": "Mettre à jour un support digital",
+                "operationId": "d7a00f3fdb9e30ee82e93726b71e0959",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Support mis à jour"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Digital Supports"
+                ],
+                "summary": "Supprimer un support digital",
+                "operationId": "b8654d1c0ecfa3895fad5438cd0887e4",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Support supprimé"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/expenses": {
             "get": {
                 "tags": [
@@ -3933,6 +4123,182 @@
                     },
                     "401": {
                         "description": "Non authentifié"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/pharmacovigilance-reports": {
+            "get": {
+                "tags": [
+                    "Pharmacovigilance"
+                ],
+                "summary": "Lister les déclarations de pharmacovigilance",
+                "operationId": "f6bf36564a7a71f686c4d066f73e2734",
+                "responses": {
+                    "200": {
+                        "description": "Liste récupérée avec succès"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Pharmacovigilance"
+                ],
+                "summary": "Soumettre une déclaration de pharmacovigilance",
+                "operationId": "e070a52e87b755bbd4940168e42f3720",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "contact_id",
+                                    "product_id",
+                                    "patient_initials",
+                                    "adverse_event_description",
+                                    "report_date"
+                                ],
+                                "properties": {
+                                    "contact_id": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                    },
+                                    "product_id": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                    },
+                                    "patient_initials": {
+                                        "type": "string",
+                                        "example": "J.D."
+                                    },
+                                    "patient_age": {
+                                        "type": "integer",
+                                        "example": 45
+                                    },
+                                    "patient_gender": {
+                                        "type": "string",
+                                        "enum": [
+                                            "M",
+                                            "F",
+                                            "Autre"
+                                        ]
+                                    },
+                                    "adverse_event_description": {
+                                        "type": "string"
+                                    },
+                                    "severity": {
+                                        "type": "string",
+                                        "example": "moderee"
+                                    },
+                                    "report_date": {
+                                        "type": "string",
+                                        "format": "date"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Déclaration créée avec succès"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/pharmacovigilance-reports/{id}": {
+            "get": {
+                "tags": [
+                    "Pharmacovigilance"
+                ],
+                "summary": "Afficher les détails d'une déclaration",
+                "operationId": "b8c50fcdd4b4b5713cdaf338fc05619b",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Détails de la déclaration"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Pharmacovigilance"
+                ],
+                "summary": "Mettre à jour une déclaration",
+                "operationId": "be5c4b123a852deb84dd3e4cb5fa5d72",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Déclaration mise à jour"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Pharmacovigilance"
+                ],
+                "summary": "Supprimer une déclaration",
+                "operationId": "7fee1e5b470deeb2ed534cbcc9b63bd6",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Déclaration supprimée"
                     }
                 },
                 "security": [
@@ -5820,6 +6186,56 @@
                 ]
             }
         },
+        "/api/v1/tour-plans/optimize": {
+            "post": {
+                "tags": [
+                    "Tour Plans"
+                ],
+                "summary": "Optimiser l'ordre d'une tournée par IA/GPS (Mock)",
+                "operationId": "030257ea40b8f031fd4ffa31f24b5ee9",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "tour_plan_id",
+                                    "current_lat",
+                                    "current_lng"
+                                ],
+                                "properties": {
+                                    "tour_plan_id": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                    },
+                                    "current_lat": {
+                                        "type": "number",
+                                        "format": "float",
+                                        "example": 5.34
+                                    },
+                                    "current_lng": {
+                                        "type": "number",
+                                        "format": "float",
+                                        "example": -4.01
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Tournée optimisée renvoyée avec la durée estimée et les km."
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/trainings": {
             "get": {
                 "tags": [
@@ -6409,6 +6825,10 @@
             "description": "Contacts"
         },
         {
+            "name": "Digital Supports",
+            "description": "Digital Supports"
+        },
+        {
             "name": "KOLs",
             "description": "KOLs"
         },
@@ -6419,6 +6839,10 @@
         {
             "name": "Objectifs",
             "description": "Objectifs"
+        },
+        {
+            "name": "Pharmacovigilance",
+            "description": "Pharmacovigilance"
         },
         {
             "name": "Products",
@@ -6451,6 +6875,10 @@
         {
             "name": "TourPlans",
             "description": "TourPlans"
+        },
+        {
+            "name": "Tour Plans",
+            "description": "Tour Plans"
         },
         {
             "name": "Trainings",

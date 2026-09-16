@@ -16,7 +16,7 @@ class StoreActivityRequest extends FormRequest
             'contact_id'     => 'nullable|uuid|exists:contacts,id',
             'account_id'     => 'nullable|uuid|exists:accounts,id',
             'activity_type'  => 'required|in:visite,appel,email,reunion,conference',
-            'date_activite'  => 'required|date',
+            'date_activite'  => 'required|date|after_or_equal:today',
             'heure_debut'    => 'nullable|date_format:H:i',
             'heure_fin'      => 'nullable|date_format:H:i|after:heure_debut',
             'gps_debut_lat'  => 'nullable|numeric|between:-90,90',

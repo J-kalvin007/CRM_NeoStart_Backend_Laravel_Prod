@@ -86,7 +86,49 @@ class TourPlanController extends Controller
     )]
     public function destroy(string $id)
     {
-        TourPlan::findOrFail($id)->delete();
+        $tourPlan = TourPlan::findOrFail($id);
+        $tourPlan->delete();
         return response()->json(null, 204);
+    }
+
+    #[OA\Post(
+        path: '/api/v1/tour-plans/optimize',
+        summary: 'Optimiser l\'ordre d\'une tournée par IA/GPS (Mock)',
+        security: [['bearerAuth' => []]],
+        tags: ['Tour Plans'],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['tour_plan_id', 'current_lat', 'current_lng'],
+                properties: [
+                    new OA\Property(property: 'tour_plan_id', type: 'string', format: 'uuid'),
+                    new OA\Property(property: 'current_lat', type: 'number', format: 'float', example: 5.34),
+                    new OA\Property(property: 'current_lng', type: 'number', format: 'float', example: -4.01),
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Tournée optimisée renvoyée avec la durée estimée et les km.'),
+        ]
+    )]
+    public function optimize(Request $request)
+    {
+        $validated = $request->validate([
+            'tour_plan_id' => 'required|exists:tour_plans,id',
+            'current_lat' => 'required|numeric',
+            'current_lng' => 'required|numeric',
+        ]);
+
+        $tourPlan = TourPlan::with('activities')->findOrFail($validated['tour_plan_id']);
+        
+        // MOCK: On simule une optimisation en renvoyant simplement les activités existantes 
+        // avec des calculs fictifs pour l'équipe mobile.
+        return response()->json([
+            'tour_plan_id' => $tourPlan->id,
+            'total_distance_km' => 12.5,
+            'estimated_duration_minutes' => 180,
+            'optimized_activities' => $tourPlan->activities,
+            'message' => 'Ceci est un mock de l\'IA d\'optimisation.'
+        ]);
     }
 }

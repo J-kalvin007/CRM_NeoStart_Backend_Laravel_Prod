@@ -144,12 +144,18 @@ class ActivityController extends Controller
         ],
         requestBody: new OA\RequestBody(
             required: true,
+            description: 'Utilisez cette route pour le Check-in (statut: en_cours, gps_debut) et le Check-out (statut: realisee, gps_fin)',
             content: new OA\JsonContent(
                 properties: [
+                    new OA\Property(property: 'date_activite', type: 'string', format: 'date', description: 'Ne peut pas être dans le passé'),
                     new OA\Property(property: 'notes', type: 'string'),
                     new OA\Property(property: 'statut', type: 'string', enum: ['planifiee', 'en_cours', 'realisee', 'manquee', 'annulee']),
-                    new OA\Property(property: 'heure_debut', type: 'string'),
-                    new OA\Property(property: 'heure_fin', type: 'string'),
+                    new OA\Property(property: 'heure_debut', type: 'string', example: '09:00'),
+                    new OA\Property(property: 'heure_fin', type: 'string', example: '09:45'),
+                    new OA\Property(property: 'gps_debut_lat', type: 'number', format: 'float', example: 5.3450),
+                    new OA\Property(property: 'gps_debut_lng', type: 'number', format: 'float', example: -3.9820),
+                    new OA\Property(property: 'gps_fin_lat', type: 'number', format: 'float', example: 5.3452),
+                    new OA\Property(property: 'gps_fin_lng', type: 'number', format: 'float', example: -3.9821),
                 ]
             )
         ),

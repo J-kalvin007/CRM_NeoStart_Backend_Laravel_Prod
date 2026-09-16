@@ -137,6 +137,7 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('products', ProductController::class);
 
         // ── Opérationnel Terrain (Visites, Tâches, Agenda) ──────
+        Route::post('tour-plans/optimize', [\App\Http\Controllers\Api\V1\TourPlanController::class, 'optimize']);
         Route::apiResource('tour-plans', TourPlanController::class);
         Route::apiResource('activities', ActivityController::class);
         Route::apiResource('tasks', TaskController::class);
@@ -149,6 +150,9 @@ Route::prefix('v1')->group(function () {
         // ── Événements & Marketing ─────────────────────────────
         Route::apiResource('events', EventController::class);
         Route::apiResource('documents', DocumentController::class);
+        Route::apiResource('digital-supports', \App\Http\Controllers\Api\V1\DigitalSupportController::class);
+        Route::apiResource('pharmacovigilance-reports', \App\Http\Controllers\Api\V1\PharmacovigilanceReportController::class);
+
 
         // ── Logistique & Stocks Échantillons ────────────────────
         Route::get('my-stock', [SampleMovementController::class, 'myStock']);

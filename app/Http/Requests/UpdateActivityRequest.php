@@ -23,10 +23,15 @@ class UpdateActivityRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'date_activite' => 'nullable|date|after_or_equal:today',
             'notes' => 'nullable|string',
             'statut' => 'nullable|string|in:planifiee,en_cours,realisee,manquee,annulee',
             'heure_debut' => 'nullable|string',
             'heure_fin' => 'nullable|string',
+            'gps_debut_lat'  => 'nullable|numeric|between:-90,90',
+            'gps_debut_lng'  => 'nullable|numeric|between:-180,180',
+            'gps_fin_lat'    => 'nullable|numeric|between:-90,90',
+            'gps_fin_lng'    => 'nullable|numeric|between:-180,180',
         ];
     }
 }
