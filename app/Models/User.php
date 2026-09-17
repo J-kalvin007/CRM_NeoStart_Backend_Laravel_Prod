@@ -72,19 +72,9 @@ class User extends Authenticatable
         ];
     }
 
-    public function country()
+    public function scopes()
     {
-        return $this->belongsTo(Country::class);
-    }
-
-    public function subsidiary()
-    {
-        return $this->belongsTo(Subsidiary::class);
-    }
-
-    public function team()
-    {
-        return $this->belongsTo(Team::class);
+        return $this->belongsToMany(OrganizationalUnit::class, 'user_scopes', 'user_id', 'organizational_unit_id')->withTimestamps();
     }
 
     public function manager()

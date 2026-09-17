@@ -56,14 +56,8 @@ class UserController extends Controller
                     new OA\Property(property: 'email',         type: 'string',  format: 'email', example: 'jean.dupont@crm.local'),
                     new OA\Property(property: 'phone',         type: 'string',  nullable: true, example: '+22890000000'),
                     new OA\Property(property: 'status',        type: 'string',  enum: ['active', 'inactive'], example: 'active'),
-                    new OA\Property(property: 'team_id',       type: 'string',  format: 'uuid', nullable: true),
                     new OA\Property(property: 'manager_id',    type: 'string',  format: 'uuid', nullable: true),
-                    new OA\Property(property: 'country_id',    type: 'string',  format: 'uuid', nullable: true),
-                    new OA\Property(property: 'subsidiary_id', type: 'string',  format: 'uuid', nullable: true),
-                    new OA\Property(property: 'region_id',     type: 'string',  format: 'uuid', nullable: true),
-                    new OA\Property(property: 'territory_id',  type: 'string',  format: 'uuid', nullable: true),
-                    new OA\Property(property: 'zone_id',       type: 'string',  format: 'uuid', nullable: true),
-                    new OA\Property(property: 'sector_id',     type: 'string',  format: 'uuid', nullable: true),
+                    new OA\Property(property: 'scopes',        type: 'array',   items: new OA\Items(type: 'string', format: 'uuid'), description: 'IDs des périmètres (organizational units)'),
                     new OA\Property(property: 'roles',         type: 'array',   items: new OA\Items(type: 'string'), example: ['delegue']),
                     new OA\Property(property: 'otp_enabled',   type: 'boolean', example: false, description: 'Activer la double authentification OTP pour cet utilisateur (défaut: false)'),
                 ]
@@ -101,6 +95,14 @@ class UserController extends Controller
 
         if (isset($data['permissions'])) {
             $user->syncPermissions($data['permissions']);
+        }
+        
+        // Validation stricte du périmètre (1 seul périmètre max si permission `restriction:single_scope`)
+        if (isset($data['scopes'])) {
+            if ($user->hasPermissionTo('restriction:single_scope') && count($data['scopes']) > 1) {
+                return response()->json(['message' => 'Ce rôle ne permet l\'affectation qu\'à un seul périmètre à la fois.'], 422);
+            }
+            $user->scopes()->sync($data['scopes']);
         }
 
         // Envoyer l'email d'invitation avec le mot de passe temporaire en clair
@@ -145,10 +147,8 @@ class UserController extends Controller
                     new OA\Property(property: 'name',          type: 'string'),
                     new OA\Property(property: 'phone',         type: 'string', nullable: true),
                     new OA\Property(property: 'status',        type: 'string', enum: ['active', 'inactive']),
-                    new OA\Property(property: 'team_id',       type: 'string', format: 'uuid', nullable: true),
                     new OA\Property(property: 'manager_id',    type: 'string', format: 'uuid', nullable: true),
-                    new OA\Property(property: 'country_id',    type: 'string', format: 'uuid', nullable: true),
-                    new OA\Property(property: 'subsidiary_id', type: 'string', format: 'uuid', nullable: true),
+                    new OA\Property(property: 'scopes',        type: 'array',  items: new OA\Items(type: 'string', format: 'uuid')),
                     new OA\Property(property: 'roles',         type: 'array',  items: new OA\Items(type: 'string')),
                     new OA\Property(property: 'otp_enabled',   type: 'boolean', description: 'Activer ou désactiver l\'OTP'),
                 ]
@@ -179,6 +179,14 @@ class UserController extends Controller
 
         if (isset($data['permissions'])) {
             $user->syncPermissions($data['permissions']);
+        }
+        
+        // Validation stricte du périmètre (1 seul périmètre max si permission `restriction:single_scope`)
+        if (isset($data['scopes'])) {
+            if ($user->hasPermissionTo('restriction:single_scope') && count($data['scopes']) > 1) {
+                return response()->json(['message' => 'Ce rôle ne permet l\'affectation qu\'à un seul périmètre à la fois.'], 422);
+            }
+            $user->scopes()->sync($data['scopes']);
         }
 
         return new UserResource($user->load(['roles', 'team', 'permissions']));

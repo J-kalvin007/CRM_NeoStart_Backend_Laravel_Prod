@@ -22,16 +22,7 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         // Clear cached permissions
-        app()[
-            SpecialitySeeder::class,
-            SegmentationSeeder::class,
-            PotentialSeeder::class,
-            InfluenceSeeder::class,
-            GalenicFormSeeder::class,
-            ActivityTypeSeeder::class,
-            ActivityResultSeeder::class,
-            EventFormatSeeder::class,
-\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
 
         // 1. Create Scope Permissions
         $scopePermissions = [
@@ -117,6 +108,14 @@ class DatabaseSeeder extends Seeder
         }
 
         $this->call([
+            SpecialitySeeder::class,
+            SegmentationSeeder::class,
+            PotentialSeeder::class,
+            InfluenceSeeder::class,
+            GalenicFormSeeder::class,
+            ActivityTypeSeeder::class,
+            ActivityResultSeeder::class,
+            EventFormatSeeder::class,
             RoleAndPermissionSeeder::class,
             SettingSeeder::class,
             UserSeeder::class,

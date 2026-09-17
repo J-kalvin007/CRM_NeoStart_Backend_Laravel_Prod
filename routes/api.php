@@ -98,6 +98,11 @@ Route::prefix('v1')->group(function () {
 
 
         // Configuration (Tables paramétrables par l'Admin/Manager)
+        Route::prefix('organization')->group(function () {
+            Route::get('tree', [\App\Http\Controllers\Api\V1\OrganizationController::class, 'tree']);
+            Route::get('flat', [\App\Http\Controllers\Api\V1\OrganizationController::class, 'flat']);
+        });
+
         Route::prefix('config')->group(function () {
             Route::get('account-types', [ConfigurationController::class, 'accountTypeIndex']);
             Route::post('account-types', [ConfigurationController::class, 'accountTypeStore']);
@@ -184,7 +189,7 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('stocks', SampleMovementController::class);
 
         // -- Statistiques & Dashboards --
-        Route::get('/analytics/dashboard', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'dashboard']);
+        // Route::get('/analytics/dashboard', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'dashboard']);
         Route::get('/analytics/team-performance', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'teamPerformance']);
         Route::get('/users/locations', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'usersLocations']);
         Route::get('/trainings', [\App\Http\Controllers\Api\V1\TrainingController::class, 'index']);
@@ -212,7 +217,7 @@ Route::prefix('v1')->group(function () {
         Route::patch('leaves/{id}/status', [LeaveController::class, 'updateStatus']);
 
         // ── Formations (Trainings) ─────────────────────────────
-        Route::get('trainings', [TrainingController::class, 'index']);
+        // Route::get('trainings', [TrainingController::class, 'index']);
         Route::get('trainings/{id}', [TrainingController::class, 'show']);
         Route::patch('trainings/{id}/progress', [TrainingController::class, 'updateProgress']);
 
@@ -226,9 +231,9 @@ Route::prefix('v1')->group(function () {
         Route::patch('expenses/{expense}/status', [ExpenseController::class, 'updateStatus']);
 
         // ── KOL alias (compatibilité mobile) ─────────────────────
-        Route::get('kols', [KolProfileController::class, 'index']);
-
-        // ── Performance Équipe ─────────────────────────────────
-        Route::get('analytics/team-performance', [\App\Http\Controllers\Api\V1\ManagerDashboardController::class, 'teamPerformance']);
+        // Route::get('kols', [KolProfileController::class, 'index']);
+ 
+         // ── Performance Équipe ─────────────────────────────────
+         // Route::get('analytics/team-performance', [\App\Http\Controllers\Api\V1\ManagerDashboardController::class, 'teamPerformance']);
     });
 });

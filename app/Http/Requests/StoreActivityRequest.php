@@ -11,11 +11,11 @@ class StoreActivityRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'subsidiary_id'  => 'required|uuid|exists:subsidiaries,id',
             'tour_plan_id'   => 'nullable|uuid|exists:tour_plans,id',
             'contact_id'     => 'nullable|uuid|exists:contacts,id',
             'account_id'     => 'nullable|uuid|exists:accounts,id',
-            'activity_type_id'=> 'required|uuid|exists:activity_types,id',
+            'activity_type'  => 'required|string',
+            'activity_type_id'=> 'nullable|uuid|exists:activity_types,id',
             'date_activite'  => 'required|date|after_or_equal:today',
             'heure_debut'    => 'nullable|date_format:H:i',
             'heure_fin'      => 'nullable|date_format:H:i|after:heure_debut',

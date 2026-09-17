@@ -16,15 +16,9 @@ class Team extends Model
     use HasActivityLogs;
 
     protected $fillable = [
-        'sector_id',
         'name',
         'manager_id',
     ];
-
-    public function sector()
-    {
-        return $this->belongsTo(Sector::class);
-    }
 
     public function members()
     {
