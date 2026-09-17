@@ -16,6 +16,7 @@ class SampleMovement extends Model
     protected $fillable = [
         'product_id',
         'user_id',
+        'contact_id',
         'activity_id',
         'movement_type',
         'quantity',
@@ -44,6 +45,11 @@ class SampleMovement extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function contact()
+    {
+        return $this->belongsTo(Contact::class);
     }
 
     public function activity()

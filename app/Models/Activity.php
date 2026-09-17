@@ -19,6 +19,7 @@ class Activity extends Model
         'tour_plan_id',
         'campaign_id',
         'user_id',
+        'accompanying_user_id',
         'contact_id',
         'account_id',
         'activity_type',
@@ -75,6 +76,11 @@ class Activity extends Model
         return $this->belongsTo(User::class, 'user_id');
     }
 
+    public function accompanyingUser()
+    {
+        return $this->belongsTo(User::class, 'accompanying_user_id');
+    }
+
     public function contact()
     {
         return $this->belongsTo(Contact::class);
@@ -95,6 +101,18 @@ class Activity extends Model
     public function sampleMovements()
     {
         return $this->hasMany(SampleMovement::class);
+    }
+
+    public function coachingSessions()
+    {
+        return $this->hasMany(CoachingSession::class);
+    }
+
+    public function objections()
+    {
+        return $this->belongsToMany(Objection::class, 'activity_objections')
+            ->withPivot(['physician_reaction', 'notes'])
+            ->withTimestamps();
     }
 
     /* ─── Business Logic ─────────────────────────────────────── */

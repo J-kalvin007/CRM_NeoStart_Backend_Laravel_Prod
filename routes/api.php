@@ -40,6 +40,9 @@ use App\Http\Controllers\Api\V1\AppBrandingController;
 use App\Http\Controllers\Api\V1\LeaveController;
 use App\Http\Controllers\Api\V1\TrainingController;
 use App\Http\Controllers\Api\V1\ConversationController;
+use App\Http\Controllers\Api\V1\ClmAnalyticController;
+use App\Http\Controllers\Api\V1\CoachingController;
+use App\Http\Controllers\Api\V1\ObjectionController;
 
 Route::get('/login', fn() => response()->json(['message' => 'Non authentifié'], 401))->name('login');
 
@@ -164,11 +167,15 @@ Route::prefix('v1')->group(function () {
 
         // ── Catalogue Produits ─────────────────────────────────
         Route::apiResource('products', ProductController::class);
+        Route::get('products/{product}/objections', [ObjectionController::class, 'indexByProduct']);
 
         // ── Opérationnel Terrain (Visites, Tâches, Agenda) ──────
         Route::post('tour-plans/optimize', [\App\Http\Controllers\Api\V1\TourPlanController::class, 'optimize']);
         Route::apiResource('tour-plans', TourPlanController::class);
+        Route::post('activities/duo', [CoachingController::class, 'scheduleDuoVisit']);
         Route::apiResource('activities', ActivityController::class);
+        Route::post('activities/{activity}/clm-analytics', [ClmAnalyticController::class, 'store']);
+        Route::post('activities/{activity}/objections', [ObjectionController::class, 'storeForActivity']);
         Route::apiResource('tasks', TaskController::class);
 
         // ── Cycle Commercial (Opportunités, Commandes, Ventes) ──
@@ -191,13 +198,23 @@ Route::prefix('v1')->group(function () {
         // -- Statistiques & Dashboards --
         // Route::get('/analytics/dashboard', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'dashboard']);
         Route::get('/analytics/team-performance', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'teamPerformance']);
+        Route::get('/analytics/edetailing-summary', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'edetailingSummary']);
+        Route::get('/marketing/objections-stats', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'objectionsStats']);
         Route::get('/users/locations', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'usersLocations']);
+        Route::get('/supervisor/alerts', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'alerts']);
         Route::get('/trainings', [\App\Http\Controllers\Api\V1\TrainingController::class, 'index']);
         Route::get('/kols', [\App\Http\Controllers\Api\V1\KolController::class, 'index']);
+
+        // -- Coaching & Visites en Duo --
+        Route::get('/coaching/delegates/{id}', [CoachingController::class, 'getSessions']);
+        Route::post('/coaching/sessions', [CoachingController::class, 'storeSession']);
 
         // ── Notes de Frais (Expenses) ──────────────────────────
         Route::apiResource('expenses', ExpenseController::class);
         Route::post('expenses/{expense}/submit', [ExpenseController::class, 'submit']);
+        Route::post('expenses/{expense}/validate', [ExpenseController::class, 'validateExpense']);
+        Route::post('expenses/{expense}/reject', [ExpenseController::class, 'rejectExpense']);
+        Route::post('expenses/{expense}/reimburse', [ExpenseController::class, 'reimburseExpense']);
 
         // ── Synchronisation Mobile Offline ───────────────────────
         Route::get('sync/pull', [SyncController::class, 'pull']);

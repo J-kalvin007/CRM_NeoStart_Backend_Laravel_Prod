@@ -163,7 +163,7 @@ class TourPlanController extends Controller
             'tour_plan_id'               => $tourPlan->id,
             'total_distance_km'          => round($totalDistanceKm, 2),
             'estimated_duration_minutes' => (int) $estimatedDurationMinutes,
-            'optimized_activities'       => $ordered->values(),
+            'ordered_activities'         => $ordered->values(),
         ]);
     }
 

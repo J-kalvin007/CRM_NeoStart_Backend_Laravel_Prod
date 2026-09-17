@@ -10,6 +10,8 @@ use App\Services\NotificationService;
 use App\Http\Resources\SampleMovementResource;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use OpenApi\Attributes as OA;
 
 #[OA\Tag(name: 'Stocks', description: 'Gestion des stocks et mouvements d\'échantillons médicaux')]
@@ -139,6 +141,8 @@ class SampleMovementController extends Controller
                     new OA\Property(property: 'lot_number',    type: 'string',  nullable: true, example: 'LOT-2026-X9'),
                     new OA\Property(property: 'expiry_date',   type: 'string',  format: 'date', nullable: true, example: '2027-12-31'),
                     new OA\Property(property: 'activity_id',   type: 'string',  format: 'uuid', nullable: true, description: 'Activité associée en cas de distribution terrain'),
+                    new OA\Property(property: 'contact_id',    type: 'string',  format: 'uuid', nullable: true, description: 'Médecin destinataire (requis si distribution)'),
+                    new OA\Property(property: 'signature_data',type: 'string',  nullable: true, description: 'Image base64 de la signature'),
                     new OA\Property(property: 'signature_url', type: 'string',  nullable: true),
                     new OA\Property(property: 'qr_code',       type: 'string',  nullable: true),
                     new OA\Property(property: 'remarques',     type: 'string',  nullable: true, example: 'Réassort dotation mensuelle'),
@@ -174,6 +178,7 @@ class SampleMovementController extends Controller
         $validated = $request->validate([
             'product_id'    => 'required|uuid|exists:products,id',
             'user_id'       => 'nullable|uuid|exists:users,id',
+            'contact_id'    => 'nullable|uuid|exists:contacts,id',
             'movement_type' => 'nullable|string|in:reception,attribution,distribution,retour,destruction,inventaire,entree,sortie,sortie_visite,perte',
             'quantity'      => 'nullable|integer|min:1',
             'quantite'      => 'nullable|integer|min:1',
@@ -182,6 +187,7 @@ class SampleMovementController extends Controller
             'expiry_date'   => 'nullable|date',
             'activity_id'   => 'nullable|uuid|exists:activities,id',
             'signature_url' => 'nullable|string|max:255',
+            'signature_data'=> 'nullable|string',
             'qr_code'       => 'nullable|string|max:255',
             'remarques'     => 'nullable|string|max:1000',
             'notes'         => 'nullable|string|max:1000',
@@ -192,7 +198,39 @@ class SampleMovementController extends Controller
         $expiryDate = $validated['expiry_date'] ?? null;
         $remarques = $validated['remarques'] ?? $request->input('notes');
 
-        return DB::transaction(function () use ($validated, $userId, $normalizedType, $quantity, $lotNumber, $expiryDate, $remarques) {
+        // Validation stricte en cas de distribution
+        if ($normalizedType === 'distribution') {
+            if (empty($validated['contact_id'])) {
+                return response()->json(['message' => 'Le contact (médecin) est obligatoire pour une distribution.'], 422);
+            }
+            if (empty($lotNumber)) {
+                return response()->json(['message' => 'Le numéro de lot est obligatoire pour une distribution.'], 422);
+            }
+        }
+
+        // Sauvegarde de la signature si fournie en base64
+        $signatureUrl = $validated['signature_url'] ?? null;
+        if (!empty($validated['signature_data'])) {
+            $base64Image = $validated['signature_data'];
+            if (preg_match('/^data:image\/(\w+);base64,/', $base64Image, $type)) {
+                $base64Image = substr($base64Image, strpos($base64Image, ',') + 1);
+                $type = strtolower($type[1]); // png, jpg, etc.
+                if (in_array($type, ['jpg', 'jpeg', 'png', 'gif'])) {
+                    $base64Image = base64_decode(str_replace(' ', '+', $base64Image));
+                    $fileName = 'signatures/' . Str::uuid() . '.' . $type;
+                    Storage::disk('public')->put($fileName, $base64Image);
+                    $signatureUrl = Storage::url($fileName);
+                }
+            } else {
+                // Si pas de préfixe data:image
+                $base64Image = base64_decode(str_replace(' ', '+', $base64Image));
+                $fileName = 'signatures/' . Str::uuid() . '.png';
+                Storage::disk('public')->put($fileName, $base64Image);
+                $signatureUrl = Storage::url($fileName);
+            }
+        }
+
+        return DB::transaction(function () use ($validated, $userId, $normalizedType, $quantity, $lotNumber, $expiryDate, $remarques, $signatureUrl) {
             $product = Product::findOrFail($validated['product_id']);
 
             // Calcul du stock actuel pour cet utilisateur et ce produit
@@ -212,7 +250,8 @@ class SampleMovementController extends Controller
             $isPositive = in_array($normalizedType, ['reception', 'attribution', 'retour']);
             
             if (!$isPositive && $currentStock < $quantity) {
-                abort(422, "Stock insuffisant pour ce produit. Disponible: {$currentStock}");
+                // Return explicitly the message required by Prompt 5
+                abort(response()->json(['message' => "Stock insuffisant. Solde disponible : {$currentStock} boîtes"], 422));
             }
             
             $newStock = $isPositive ? ($currentStock + $quantity) : max(0, $currentStock - $quantity);
@@ -220,12 +259,13 @@ class SampleMovementController extends Controller
             $movement = SampleMovement::create([
                 'product_id'    => $product->id,
                 'user_id'       => $userId,
+                'contact_id'    => $validated['contact_id'] ?? null,
                 'activity_id'   => $validated['activity_id'] ?? null,
                 'movement_type' => $normalizedType,
                 'quantity'      => $quantity,
                 'lot_number'    => $lotNumber,
                 'expiry_date'   => $expiryDate,
-                'signature_url' => $validated['signature_url'] ?? null,
+                'signature_url' => $signatureUrl,
                 'qr_code'       => $validated['qr_code'] ?? null,
                 'stock_apres'   => $newStock,
                 'remarques'     => $remarques,

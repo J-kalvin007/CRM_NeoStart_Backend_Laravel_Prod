@@ -26,6 +26,7 @@ use App\Models\Expense;
 use App\Models\Leave;
 use App\Models\Training;
 use App\Models\Conversation;
+use App\Models\Objectif;
 use OpenApi\Attributes as OA;
 
 #[OA\Tag(name: 'Synchronisation Offline', description: 'API de synchronisation pour le mode hors ligne mobile')]
@@ -83,6 +84,7 @@ class SyncController extends Controller
             'expenses' => $getModified(Expense::class),
             'leaves' => $getModified(Leave::class),
             'trainings' => $getModified(Training::class),
+            'objectifs' => $getModified(Objectif::class),
         ];
 
         $deleted = [
@@ -91,6 +93,7 @@ class SyncController extends Controller
             'activities' => $getDeleted(Activity::class),
             'tasks' => $getDeleted(Task::class),
             'tour_plans' => $getDeleted(TourPlan::class),
+            'objectifs' => $getDeleted(Objectif::class),
         ];
 
         return response()->json([
@@ -134,6 +137,7 @@ class SyncController extends Controller
                 'expenses' => Expense::class,
                 'leaves' => Leave::class,
                 'sample_movements' => SampleMovement::class,
+                'objectifs' => Objectif::class,
             ];
 
             foreach ($entitiesToProcess as $key => $modelClass) {

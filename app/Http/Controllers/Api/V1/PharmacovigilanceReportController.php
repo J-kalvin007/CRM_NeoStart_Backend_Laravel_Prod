@@ -4,7 +4,10 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\PharmacovigilanceReport;
+use App\Models\User;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 use OpenApi\Attributes as OA;
 
 class PharmacovigilanceReportController extends Controller
@@ -39,7 +42,7 @@ class PharmacovigilanceReportController extends Controller
                     new OA\Property(property: 'patient_age', type: 'integer', example: 45),
                     new OA\Property(property: 'patient_gender', type: 'string', enum: ['M', 'F', 'Autre']),
                     new OA\Property(property: 'adverse_event_description', type: 'string'),
-                    new OA\Property(property: 'severity', type: 'string', example: 'moderee'),
+                    new OA\Property(property: 'severity', type: 'string', enum: ['non_grave', 'moderee', 'grave', 'deces']),
                     new OA\Property(property: 'report_date', type: 'string', format: 'date'),
                 ]
             )
@@ -57,7 +60,7 @@ class PharmacovigilanceReportController extends Controller
             'patient_age' => 'nullable|integer',
             'patient_gender' => 'nullable|in:M,F,Autre',
             'adverse_event_description' => 'required|string',
-            'severity' => 'nullable|string',
+            'severity' => 'required|string|in:non_grave,moderee,grave,deces',
             'report_date' => 'required|date',
         ]);
 
@@ -65,6 +68,28 @@ class PharmacovigilanceReportController extends Controller
         $validated['status'] = 'soumis';
 
         $report = PharmacovigilanceReport::create($validated);
+
+        // Déclencher une alerte immédiate vers le superviseur (et/ou direction médicale)
+        $manager = User::where('id', auth()->user()->team->manager_id ?? null)->first();
+        if ($manager) {
+            app(NotificationService::class)->send(
+                $manager,
+                'Alerte Pharmacovigilance',
+                "Un signalement a été soumis par " . auth()->user()->name,
+                'pharmacovigilance',
+                ['report_id' => $report->id],
+                'URGENT'
+            );
+        }
+
+        // Si gravité grave ou décès, envoyer un email
+        if (in_array($report->severity, ['grave', 'deces'])) {
+            // Mock email sending
+            Mail::raw("Alerte PV Sévère soumise par " . auth()->user()->name . "\nDescription: " . $report->adverse_event_description, function($msg) {
+                $msg->to('pv-direction@example.com')->subject('ALERTE PHARMACOVIGILANCE URGENTE');
+            });
+        }
+
         return response()->json($report, 201);
     }
 
