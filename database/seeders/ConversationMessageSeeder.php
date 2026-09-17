@@ -25,10 +25,14 @@ class ConversationMessageSeeder extends Seeder
                 'updated_at' => now(),
             ]);
 
-            DB::table('conversation_user')->insert([
-                ['conversation_id' => $conversationId, 'user_id' => $delegueId, 'created_at' => now(), 'updated_at' => now()],
-                ['conversation_id' => $conversationId, 'user_id' => $managerId, 'created_at' => now(), 'updated_at' => now()],
-            ]);
+            $participants = [
+                ['conversation_id' => $conversationId, 'user_id' => $delegueId, 'created_at' => now(), 'updated_at' => now()]
+            ];
+            if ($managerId !== $delegueId) {
+                $participants[] = ['conversation_id' => $conversationId, 'user_id' => $managerId, 'created_at' => now(), 'updated_at' => now()];
+            }
+            
+            DB::table('conversation_user')->insert($participants);
 
             DB::table('messages')->insert([
                 [

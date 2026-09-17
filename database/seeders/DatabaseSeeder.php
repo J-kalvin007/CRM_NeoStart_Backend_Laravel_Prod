@@ -85,9 +85,7 @@ class DatabaseSeeder extends Seeder
             'zone_id' => $zone->id
         ]);
 
-        $team = Team::firstOrCreate(['name' => 'Équipe Paris Centre'], [
-            'sector_id' => $sector->id
-        ]);
+        $team = Team::firstOrCreate(['name' => 'Équipe Paris Centre']);
 
         // 3. Create Super Admin
         $admin = User::firstOrCreate(['email' => 'admin@crm.local'], [
