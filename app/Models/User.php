@@ -13,6 +13,13 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Spatie\Permission\Traits\HasRoles;
 use Laravel\Sanctum\HasApiTokens;
 use App\Models\Traits\HasPerimeter;
+use App\Models\Country;
+use App\Models\Subsidiary;
+use App\Models\Region;
+use App\Models\Territory;
+use App\Models\Zone;
+use App\Models\Sector;
+use App\Models\Team;
 
 class User extends Authenticatable
 {
@@ -85,5 +92,40 @@ class User extends Authenticatable
     public function subordinates()
     {
         return $this->hasMany(User::class, 'manager_id');
+    }
+
+    public function country()
+    {
+        return $this->belongsTo(Country::class, 'country_id');
+    }
+
+    public function subsidiary()
+    {
+        return $this->belongsTo(Subsidiary::class, 'subsidiary_id');
+    }
+
+    public function region()
+    {
+        return $this->belongsTo(Region::class, 'region_id');
+    }
+
+    public function territory()
+    {
+        return $this->belongsTo(Territory::class, 'territory_id');
+    }
+
+    public function zone()
+    {
+        return $this->belongsTo(Zone::class, 'zone_id');
+    }
+
+    public function sector()
+    {
+        return $this->belongsTo(Sector::class, 'sector_id');
+    }
+
+    public function team()
+    {
+        return $this->belongsTo(Team::class, 'team_id');
     }
 }
