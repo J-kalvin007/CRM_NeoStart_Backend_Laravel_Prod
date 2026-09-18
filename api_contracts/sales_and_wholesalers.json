@@ -1,0 +1,53 @@
+{
+  "module": "Sales & Wholesalers",
+  "version": "v1",
+  "base_url": "http://localhost:8000/api/v1",
+  "endpoints": {
+    "submit_sales": {
+      "method": "POST",
+      "path": "/sales",
+      "headers": {
+        "Authorization": "Bearer {token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      "request_payload": {
+        "periode": "2026-01",
+        "grossiste_id": "gross_socophar_togo",
+        "secteur_id": "sec_lome_est",
+        "delegate_id": "user_sena_kpodar",
+        "ventes": [
+          {
+            "product_id": "prod_amoxil_500",
+            "quantite_boites": 1500,
+            "pght_unitaire": 2500.0,
+            "chiffre_affaires": 3750000.0
+          },
+          {
+            "product_id": "prod_doliprane_1g",
+            "quantite_boites": 3200,
+            "pght_unitaire": 1200.0,
+            "chiffre_affaires": 3840000.0
+          }
+        ]
+      },
+      "validation_rules": {
+        "periode": "required|date_format:Y-m",
+        "grossiste_id": "required|string",
+        "secteur_id": "required|string|exists:sectors,id",
+        "ventes": "required|array|min:1",
+        "ventes.*.product_id": "required|string|exists:products,id",
+        "ventes.*.quantite_boites": "required|integer|min:1"
+      },
+      "response_201": {
+        "status": "success",
+        "message": "Ventes grossistes saisies avec succès.",
+        "data": {
+          "total_chiffre_affaires": 7590000.0,
+          "total_boites": 4700,
+          "statut_objectif": "32% réalisé"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,125 @@
+{
+  "module": "Authentication & Synchronization",
+  "version": "v1",
+  "base_url": "http://localhost:8000/api/v1",
+  "endpoints": {
+    "login": {
+      "method": "POST",
+      "path": "/login",
+      "headers": {
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      "request_payload": {
+        "email": "user@skynity.com",
+        "password": "password123"
+      },
+      "validation_rules": {
+        "email": "required|email",
+        "password": "required|string|min:6"
+      },
+      "response_200": {
+        "status": "otp_required",
+        "user_id": "01a06925-8505-704e-8cb4-ae2305233c09",
+        "email": "user@skynity.com",
+        "message": "Un code OTP a été envoyé."
+      },
+      "response_401": {
+        "message": "Identifiants invalides"
+      }
+    },
+    "verify_otp": {
+      "method": "POST",
+      "path": "/verify-otp",
+      "headers": {
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      "request_payload": {
+        "user_id": "01a06925-8505-704e-8cb4-ae2305233c09",
+        "otp_code": "384057"
+      },
+      "validation_rules": {
+        "user_id": "required|uuid",
+        "otp_code": "required|string|size:6"
+      },
+      "response_200": {
+        "status": "success",
+        "token": "1|eyJhbGciOiJIUzI1Ni...",
+        "user": {
+          "id": "01a06925-8505-704e-8cb4-ae2305233c09",
+          "name": "Sena KPODAR",
+          "email": "sena.kpodar@togo-pharma.com",
+          "role": "Medical Delegate",
+          "region_id": "reg_maritime_togo",
+          "sector_id": "sec_lome_est"
+        }
+      },
+      "response_422": {
+        "message": "Code OTP invalide ou expiré"
+      }
+    },
+    "sync_pull": {
+      "method": "GET",
+      "path": "/sync/pull?last_synced_at=2026-09-18T00:00:00Z",
+      "headers": {
+        "Authorization": "Bearer {token}",
+        "Accept": "application/json"
+      },
+      "response_200": {
+        "timestamp": "2026-09-18T02:15:00Z",
+        "products": [
+          {
+            "id": "prod_amoxil_500",
+            "dci": "Amoxicilline",
+            "nom_commercial": "Amoxil 500mg",
+            "forme_galenique": "Gélule",
+            "conditionnement": "Boîte de 12 gélules",
+            "classe_therapeutique": "Antibiotique",
+            "pght": 2500.0,
+            "laboratoire_id": "lab_sanofi"
+          }
+        ],
+        "contacts": [
+          {
+            "id": "hcp_dr_amegbor",
+            "nom": "AMEGBOR",
+            "prenom": "Kodjo",
+            "titre": "Dr",
+            "specialite": "Cardiologue",
+            "telephone": "+22890010203",
+            "account_id_principal": "acc_chu_sylvanus_olympio",
+            "statut_validation": "valide"
+          }
+        ]
+      }
+    },
+    "sync_push": {
+      "method": "POST",
+      "path": "/sync/push",
+      "headers": {
+        "Authorization": "Bearer {token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      "request_payload": {
+        "queue": [
+          {
+            "endpoint": "activities",
+            "method": "POST",
+            "payload": {
+              "contact_id": "hcp_dr_amegbor",
+              "motif": "Visite de suivi Amoxil",
+              "statut": "soumis_definitif"
+            }
+          }
+        ]
+      },
+      "response_200": {
+        "status": "success",
+        "processed_items": 1,
+        "errors": []
+      }
+    }
+  }
+}
