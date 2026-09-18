@@ -345,4 +345,66 @@ class AnalyticsController extends Controller
 
         return response()->json($stats);
     }
+
+    #[OA\Get(
+        path: '/api/v1/export/performance',
+        summary: 'Exporter la performance de l\'équipe au format CSV',
+        security: [['bearerAuth' => []]],
+        tags: ['Manager Analytics']
+    )]
+    public function exportPerformance(Request $request)
+    {
+        $perfResponse = $this->teamPerformance($request);
+        $data = json_decode($perfResponse->getContent(), true);
+
+        $csv = "Rang,Délégué,Visites Réalisées,Non Présent,Objectif Cible,Taux (%),Chiffre d'Affaires\n";
+        foreach ($data as $row) {
+            $csv .= sprintf(
+                "%d,\"%s\",%d,%d,%d,%.1f,%.2f\n",
+                $row['rank'] ?? 0,
+                str_replace('"', '""', $row['delegate']['name'] ?? 'Inconnu'),
+                $row['completed_visits'] ?? 0,
+                $row['no_show_count'] ?? 0,
+                $row['target_visits'] ?? 0,
+                $row['objective_rate'] ?? 0,
+                $row['revenue'] ?? 0
+            );
+        }
+
+        return response($csv, 200, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="team_performance_' . date('Y-m-d') . '.csv"',
+        ]);
+    }
+
+    #[OA\Get(
+        path: '/api/v1/export/expenses',
+        summary: 'Exporter les notes de frais au format CSV',
+        security: [['bearerAuth' => []]],
+        tags: ['Manager Analytics']
+    )]
+    public function exportExpenses(Request $request)
+    {
+        $expenses = \App\Models\Expense::with('user')->get();
+
+        $csv = "ID,Délégué,Catégorie,Montant,Devise,Statut,Date,Description\n";
+        foreach ($expenses as $e) {
+            $csv .= sprintf(
+                "%d,\"%s\",\"%s\",%.2f,\"%s\",\"%s\",\"%s\",\"%s\"\n",
+                $e->id,
+                str_replace('"', '""', $e->user->name ?? 'Inconnu'),
+                str_replace('"', '""', $e->category ?? $e->type ?? 'Général'),
+                $e->amount ?? 0,
+                $e->currency ?? 'EUR',
+                $e->status ?? 'soumis',
+                $e->expense_date ? $e->expense_date->format('Y-m-d') : $e->created_at->format('Y-m-d'),
+                str_replace('"', '""', $e->description ?? '')
+            );
+        }
+
+        return response($csv, 200, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="expenses_' . date('Y-m-d') . '.csv"',
+        ]);
+    }
 }
