@@ -184,6 +184,20 @@ class ExpenseController extends Controller
         }
 
         $expense->update(['status' => 'submitted']);
+
+        // Notification manager
+        $user = Auth::user();
+        $manager = $user?->manager ?? \App\Models\User::whereHas('roles', fn($q) => $q->whereIn('name', ['manager', 'supervisor', 'dir-commercial']))->first();
+        if ($manager && $user) {
+            app(\App\Services\NotificationService::class)->send(
+                $manager,
+                'Nouvelle note de frais soumise',
+                "Le délégué {$user->name} a soumis une note de frais de {$expense->amount} {$expense->currency}.",
+                'expense',
+                ['expense_id' => $expense->id]
+            );
+        }
+
         return response()->json(new ExpenseResource($expense->load(['user', 'approver'])));
     }
 
@@ -252,6 +266,22 @@ class ExpenseController extends Controller
             'rejection_reason' => $v['rejection_reason'] ?? null,
             'approved_at'      => $v['status'] === 'approved' ? now() : null,
         ]);
+
+        // Notification délégué
+        if ($expense->user) {
+            $statusLabel = $v['status'] === 'approved' ? 'approuvée' : ($v['status'] === 'rejected' ? 'refusée' : 'mise en attente');
+            $msg = "Votre note de frais '{$expense->title}' a été {$statusLabel}.";
+            if ($v['status'] === 'rejected' && !empty($v['rejection_reason'])) {
+                $msg .= " Motif : " . $v['rejection_reason'];
+            }
+            app(\App\Services\NotificationService::class)->send(
+                $expense->user,
+                'Note de frais ' . ucfirst($statusLabel),
+                $msg,
+                'expense',
+                ['expense_id' => $expense->id]
+            );
+        }
 
         return response()->json(new ExpenseResource($expense->load(['user', 'approver'])));
     }

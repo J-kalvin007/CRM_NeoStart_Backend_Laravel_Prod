@@ -76,6 +76,16 @@ class ValidationController extends Controller
         $model = $this->getModel($type, $id);
         $model->update(['statut_validation' => 'valide']);
 
+        if ($model->owner) {
+            app(\App\Services\NotificationService::class)->send(
+                $model->owner,
+                ucfirst($type) . ' approuvé(e)',
+                "Votre demande de création de {$type} '{$model->nom}' a été validée par votre manager.",
+                'contact',
+                ['id' => $model->id, 'type' => $type]
+            );
+        }
+
         return response()->json(['message' => ucfirst($type) . ' approuvé avec succès']);
     }
 
@@ -96,6 +106,16 @@ class ValidationController extends Controller
     {
         $model = $this->getModel($type, $id);
         $model->update(['statut_validation' => 'rejete']);
+
+        if ($model->owner) {
+            app(\App\Services\NotificationService::class)->send(
+                $model->owner,
+                ucfirst($type) . ' rejeté(e)',
+                "Votre demande de création de {$type} '{$model->nom}' a été rejetée par votre manager.",
+                'contact',
+                ['id' => $model->id, 'type' => $type]
+            );
+        }
 
         return response()->json(['message' => ucfirst($type) . ' rejeté avec succès']);
     }

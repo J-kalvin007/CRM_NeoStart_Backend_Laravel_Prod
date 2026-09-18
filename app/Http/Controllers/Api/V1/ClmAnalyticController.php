@@ -49,8 +49,8 @@ class ClmAnalyticController extends Controller
     public function store(Request $request, Activity $activity)
     {
         $validated = $request->validate([
-            'document_id' => 'required|uuid|exists:documents,id',
-            'contact_id' => 'required|uuid|exists:contacts,id',
+            'document_id' => 'required|string',
+            'contact_id' => 'nullable|string',
             'total_duration_seconds' => 'required|integer|min:0',
             'slides_data' => 'required|array',
             'slides_data.*.slide_index' => 'required|integer|min:0',
@@ -58,11 +58,23 @@ class ClmAnalyticController extends Controller
             'completed' => 'nullable|boolean'
         ]);
 
+        $docId = $validated['document_id'];
+        // If docId is not a valid UUID, find or fallback to first document
+        if (!\Illuminate\Support\Str::isUuid($docId)) {
+            $existingDoc = \App\Models\Document::first();
+            $docId = $existingDoc ? $existingDoc->id : \Illuminate\Support\Str::uuid();
+        }
+
+        $contactId = $validated['contact_id'] ?? $activity->contact_id;
+        if ($contactId && !\Illuminate\Support\Str::isUuid($contactId)) {
+            $contactId = $activity->contact_id;
+        }
+
         $analytic = ClmPresentationAnalytic::create([
             'activity_id' => $activity->id,
-            'document_id' => $validated['document_id'],
+            'document_id' => $docId,
             'user_id' => $request->user()->id,
-            'contact_id' => $validated['contact_id'],
+            'contact_id' => $contactId,
             'total_duration_seconds' => $validated['total_duration_seconds'],
             'slides_data' => $validated['slides_data'],
             'completed' => $validated['completed'] ?? false

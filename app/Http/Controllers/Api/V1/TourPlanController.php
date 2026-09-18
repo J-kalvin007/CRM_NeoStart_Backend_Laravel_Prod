@@ -47,6 +47,20 @@ class TourPlanController extends Controller
     public function store(StoreTourPlanRequest $request)
     {
         $plan = TourPlan::create(array_merge($request->validated(), ['user_id' => auth()->id()]));
+
+        // Notification manager
+        $user = auth()->user();
+        $manager = $user?->manager ?? \App\Models\User::whereHas('roles', fn($q) => $q->whereIn('name', ['manager', 'supervisor', 'dir-commercial']))->first();
+        if ($manager) {
+            app(\App\Services\NotificationService::class)->send(
+                $manager,
+                'Planning de tournée soumis',
+                "Le délégué {$user?->name} a créé le plan de tournée '{$plan->nom}'.",
+                'planning',
+                ['tour_plan_id' => $plan->id]
+            );
+        }
+
         return new TourPlanResource($plan->load('delegue'));
     }
 
@@ -75,6 +89,17 @@ class TourPlanController extends Controller
         if (isset($data['statut']) && in_array($data['statut'], ['valide', 'rejete'])) {
             $data['valide_par'] = auth()->id();
             $data['valide_le'] = now();
+
+            if ($plan->delegue) {
+                $statusLabel = $data['statut'] === 'valide' ? 'approuvé' : 'rejeté / à réviser';
+                app(\App\Services\NotificationService::class)->send(
+                    $plan->delegue,
+                    'Planning de tournée ' . ucfirst($statusLabel),
+                    "Votre plan de tournée '{$plan->nom}' a été {$statusLabel} par votre manager.",
+                    'planning',
+                    ['tour_plan_id' => $plan->id]
+                );
+            }
         }
         $plan->update($data);
         return new TourPlanResource($plan->load(['delegue', 'validePar']));

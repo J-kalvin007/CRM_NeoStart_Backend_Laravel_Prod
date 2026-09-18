@@ -122,6 +122,29 @@ class ActivityController extends Controller
             $activity->lock();
         }
 
+        // Notification au manager
+        $user = auth()->user();
+        $manager = $user?->manager ?? \App\Models\User::whereHas('roles', fn($q) => $q->whereIn('name', ['manager', 'supervisor', 'dir-commercial']))->first();
+        if ($manager && $user) {
+            if (in_array($activity->statut, ['realisee', 'soumis_definitif'])) {
+                app(\App\Services\NotificationService::class)->send(
+                    $manager,
+                    'Nouveau compte-rendu de visite',
+                    "Le délégué {$user->name} a finalisé son compte-rendu de visite.",
+                    'report',
+                    ['activity_id' => $activity->id]
+                );
+            } else {
+                app(\App\Services\NotificationService::class)->send(
+                    $manager,
+                    'Nouvelle visite planifiée',
+                    "Le délégué {$user->name} a planifié une nouvelle visite.",
+                    'planning',
+                    ['activity_id' => $activity->id]
+                );
+            }
+        }
+
         return new ActivityResource($activity->load(['delegue', 'contact', 'account', 'products', 'sampleMovements']));
     }
 

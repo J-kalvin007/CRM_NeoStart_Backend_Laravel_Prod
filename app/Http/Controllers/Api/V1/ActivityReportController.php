@@ -43,15 +43,17 @@ class ActivityReportController extends Controller
 
         $activity->update($validated);
 
-        if ($validated['report_status'] === 'submitted' && $activity->user && $activity->user->manager_id) {
-            $manager = $activity->user->manager;
-            app(NotificationService::class)->send(
-                $manager,
-                'Compte-rendu soumis',
-                "Le délégué {$activity->user->name} a soumis le compte-rendu de la visite {$activity->id} pour validation.",
-                'report_submitted',
-                ['activity_id' => $activity->id]
-            );
+        if ($validated['report_status'] === 'submitted' && $activity->user) {
+            $manager = $activity->user->manager ?? \App\Models\User::whereHas('roles', fn($q) => $q->whereIn('name', ['manager', 'supervisor', 'dir-commercial']))->first();
+            if ($manager) {
+                app(NotificationService::class)->send(
+                    $manager,
+                    'Compte-rendu de visite soumis',
+                    "Le délégué {$activity->user->name} a transmis son compte-rendu de visite.",
+                    'report',
+                    ['activity_id' => $activity->id]
+                );
+            }
         }
 
         return response()->json($activity);
@@ -80,6 +82,9 @@ class ActivityReportController extends Controller
     )]
     public function validateReport(Request $request, Activity $activity)
     {
+        $status = $request->input('status') ?? ($request->input('action') === 'validate' || $request->input('action') === 'validated' ? 'validated' : ($request->input('action') === 'reject' || $request->input('action') === 'rejected' ? 'rejected' : null));
+        $request->merge(['status' => $status]);
+
         $validated = $request->validate([
             'status' => 'required|in:validated,rejected',
             'rejection_reason' => 'required_if:status,rejected|nullable|string'
