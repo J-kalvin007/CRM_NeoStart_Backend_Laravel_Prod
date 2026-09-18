@@ -41,8 +41,8 @@ class CRMDataSeeder extends Seeder
             'team_id' => $team->id ?? null,
             'status' => true,
         ]);
-        if (!$delegue->hasRole('Délégué Médical')) {
-            $delegue->assignRole('Délégué Médical');
+        if (!$delegue->hasRole('delegue_medical')) {
+            $delegue->assignRole('delegue_medical');
         }
 
         // 2. Création des Types

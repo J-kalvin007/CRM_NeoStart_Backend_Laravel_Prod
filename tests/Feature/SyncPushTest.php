@@ -35,9 +35,12 @@ class SyncPushTest extends TestCase
         $response->assertStatus(200);
         $response->assertJsonStructure([
             'status',
-            'processed_items',
-            'errors',
-            'timestamp'
+            'message',
+            'processed',
+            'success_count',
+            'failed_count',
+            'successes',
+            'errors'
         ]);
     }
 }

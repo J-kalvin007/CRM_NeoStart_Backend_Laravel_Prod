@@ -32,8 +32,8 @@ class UserSeeder extends Seeder
             'force_password_change' => false,
             'status' => true,
         ]);
-        if (!$admin->hasRole('super-admin') && !$admin->hasRole('Administrateur Groupe')) {
-            $admin->assignRole('super-admin');
+        if (!$admin->hasRole('superadmin')) {
+            $admin->assignRole('superadmin');
         }
 
         $manager = User::firstOrCreate([
@@ -47,8 +47,8 @@ class UserSeeder extends Seeder
             'force_password_change' => false,
             'status' => true,
         ]);
-        if (!$manager->hasRole('manager')) {
-            $manager->assignRole('manager');
+        if (!$manager->hasRole('superviseur')) {
+            $manager->assignRole('superviseur');
         }
 
         $delegue = User::firstOrCreate([
@@ -62,8 +62,8 @@ class UserSeeder extends Seeder
             'force_password_change' => false,
             'status' => true,
         ]);
-        if (!$delegue->hasRole('delegue')) {
-            $delegue->assignRole('delegue');
+        if (!$delegue->hasRole('delegue_medical')) {
+            $delegue->assignRole('delegue_medical');
         }
     }
 }

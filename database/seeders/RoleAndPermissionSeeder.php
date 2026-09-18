@@ -228,26 +228,18 @@ class RoleAndPermissionSeeder extends Seeder
         }
 
         // ── Création des rôles de base ──────────────────────────────────────
-        $superAdmin = Role::firstOrCreate(['name' => 'super-admin',    'guard_name' => 'web']);
-        $adminPays  = Role::firstOrCreate(['name' => 'admin-pays',     'guard_name' => 'web']);
-        $dirGen     = Role::firstOrCreate(['name' => 'dir-general',    'guard_name' => 'web']);
-        $dirCom     = Role::firstOrCreate(['name' => 'dir-commercial', 'guard_name' => 'web']);
-        $dirMed     = Role::firstOrCreate(['name' => 'dir-medical',    'guard_name' => 'web']);
-        $manager    = Role::firstOrCreate(['name' => 'manager',        'guard_name' => 'web']);
-        $delegue    = Role::firstOrCreate(['name' => 'delegue',        'guard_name' => 'web']);
+        $superAdmin = Role::firstOrCreate(['name' => 'superadmin',           'guard_name' => 'web']);
+        $dirReg     = Role::firstOrCreate(['name' => 'directeur_regional',   'guard_name' => 'web']);
+        $dirCom     = Role::firstOrCreate(['name' => 'directeur_commercial', 'guard_name' => 'web']);
+        $dirMkt     = Role::firstOrCreate(['name' => 'directeur_marketing',  'guard_name' => 'web']);
+        $manager    = Role::firstOrCreate(['name' => 'superviseur',          'guard_name' => 'web']);
+        $delegue    = Role::firstOrCreate(['name' => 'delegue_medical',      'guard_name' => 'web']);
 
         // Super Admin → toutes les permissions
         $superAdmin->syncPermissions(Permission::all());
 
-        // Admin Pays → tout sauf config système avancée
-        $adminPays->syncPermissions(
-            Permission::whereNotIn('name', [
-                'config.manage-settings',
-            ])->get()
-        );
-
-        // Directeur Général → lecture globale + analytics + commercial
-        $dirGen->syncPermissions(Permission::whereIn('module', [
+        // Directeur Régional → lecture globale + analytics + commercial
+        $dirReg->syncPermissions(Permission::whereIn('module', [
             'Rapports & Analytics',
             'Cycle Commercial',
             'Équipes & Hiérarchie',
@@ -269,8 +261,8 @@ class RoleAndPermissionSeeder extends Seeder
             'Échantillons',
         ])->get());
 
-        // Directeur Médical → terrain médical + KOL + formations
-        $dirMed->syncPermissions(Permission::whereIn('module', [
+        // Directeur Marketing → terrain médical + KOL + formations
+        $dirMkt->syncPermissions(Permission::whereIn('module', [
             'Activités Terrain',
             'KOL (Leaders d\'opinion)',
             'Formations',

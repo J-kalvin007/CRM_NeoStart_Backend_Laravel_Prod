@@ -42,11 +42,12 @@ class DatabaseSeeder extends Seeder
 
         // 2. Create Roles and assign scope permissions
         $rolesConfig = [
-            'Administrateur Groupe' => ['scope:global'],
-            'Administrateur Pays' => ['scope:country'],
-            'Direction Générale' => ['scope:subsidiary'], // Ou country selon le besoin
-            'Manager' => ['scope:subsidiary'], // Ou team, peut varier dynamiquement
-            'Délégué Médical' => ['scope:team']
+            'superadmin' => ['scope:global'],
+            'directeur_regional' => ['scope:country'],
+            'directeur_commercial' => ['scope:subsidiary'],
+            'directeur_marketing' => ['scope:subsidiary'],
+            'superviseur' => ['scope:subsidiary'],
+            'delegue_medical' => ['scope:team']
         ];
 
         foreach ($rolesConfig as $roleName => $perms) {
@@ -101,8 +102,8 @@ class DatabaseSeeder extends Seeder
             'status' => true
         ]);
 
-        if (!$admin->hasRole('Administrateur Groupe')) {
-            $admin->assignRole('Administrateur Groupe');
+        if (!$admin->hasRole('superadmin')) {
+            $admin->assignRole('superadmin');
         }
 
         $this->call([
