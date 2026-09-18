@@ -203,6 +203,8 @@ Route::prefix('v1')->group(function () {
         Route::get('/marketing/objections-stats', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'objectionsStats']);
         Route::get('/users/locations', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'usersLocations']);
         Route::get('/supervisor/alerts', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'alerts']);
+        Route::get('/supervisor/dashboard', [\App\Http\Controllers\Api\V1\SupervisorDashboardController::class, 'dashboard']);
+        Route::get('/supervisor/team-planning', [\App\Http\Controllers\Api\V1\SupervisorDashboardController::class, 'teamPlanning']);
         Route::get('/trainings', [\App\Http\Controllers\Api\V1\TrainingController::class, 'index']);
         Route::get('/kols', [\App\Http\Controllers\Api\V1\KolController::class, 'index']);
 

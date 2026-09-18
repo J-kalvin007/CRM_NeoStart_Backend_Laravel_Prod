@@ -57,6 +57,11 @@ class OrderSeeder extends Seeder
             ]
         ];
 
-        \Illuminate\Support\Facades\DB::table('orders')->insert($orders);
+        foreach ($orders as $orderData) {
+            \Illuminate\Support\Facades\DB::table('orders')->updateOrInsert(
+                ['order_number' => $orderData['order_number']],
+                $orderData
+            );
+        }
     }
 }
