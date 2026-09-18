@@ -37,7 +37,7 @@ class UserSeeder extends Seeder
         }
 
         $manager = User::firstOrCreate([
-            'email' => 'manager@crm.local'
+            'email' => 'cmoucharif@gmail.com'
         ], [
             'name' => 'John Manager',
             'password' => Hash::make('password'),
@@ -52,7 +52,7 @@ class UserSeeder extends Seeder
         }
 
         $delegue = User::firstOrCreate([
-            'email' => 'delegue@crm.local'
+            'email' => 'adommoucha@gmail.com'
         ], [
             'name' => 'Alice Delegue',
             'password' => Hash::make('password'),

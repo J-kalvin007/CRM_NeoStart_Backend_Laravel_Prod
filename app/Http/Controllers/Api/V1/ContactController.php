@@ -35,18 +35,41 @@ class ContactController extends Controller
     )]
     public function index(Request $request)
     {
-        $query = Contact::with(['account', 'categories'])
-            ->when($request->specialite, fn($q, $v) => $q->where('specialite', 'like', "%$v%"))
+        $query = Contact::with(['account', 'categories', 'speciality', 'contactType', 'potential', 'influence', 'segmentation'])
+            ->when($request->specialite ?? $request->speciality, function($q, $v) {
+                if (!$v || $v === 'Tous') return;
+                $q->where(function($sub) use ($v) {
+                    $sub->whereHas('speciality', fn($sq) => $sq->where('nom', 'like', "%$v%"))
+                        ->orWhere('meta->specialite', 'like', "%$v%")
+                        ->orWhere('titre', 'like', "%$v%");
+                });
+            })
+            ->when($request->facility_type ?? $request->account_type ?? $request->etablissement, function($q, $v) {
+                if (!$v || $v === 'Tous') return;
+                $q->where(function($sub) use ($v) {
+                    $sub->whereHas('account', function($aq) use ($v) {
+                        $aq->where('type', 'like', "%$v%")
+                           ->orWhere('nom', 'like', "%$v%");
+                    })->orWhere('meta->etablissement', 'like', "%$v%");
+                });
+            })
+            ->when($request->statut ?? $request->status, function($q, $v) {
+                if (!$v || $v === 'Tous') return;
+                $q->where('statut', 'like', "%$v%");
+            })
             ->when($request->has('is_kol'), fn($q) => $q->where('is_kol', $request->boolean('is_kol')))
             ->when($request->account_id, fn($q, $v) => $q->where('account_id', $v))
-            ->when($request->statut, fn($q, $v) => $q->where('statut', $v))
             ->when($request->search, fn($q, $v) => $q->where(function ($q) use ($v) {
                 $q->where('nom', 'like', "%$v%")
                   ->orWhere('prenom', 'like', "%$v%")
-                  ->orWhere('specialite', 'like', "%$v%");
+                  ->orWhere('titre', 'like', "%$v%")
+                  ->orWhere('meta->specialite', 'like', "%$v%")
+                  ->orWhereHas('speciality', fn($sq) => $sq->where('nom', 'like', "%$v%"))
+                  ->orWhereHas('account', fn($aq) => $aq->where('nom', 'like', "%$v%"));
             }));
 
-        return ContactResource::collection($query->paginate(25));
+        $perPage = $request->get('per_page', 100);
+        return ContactResource::collection($query->paginate($perPage));
     }
 
     #[OA\Post(

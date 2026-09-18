@@ -11,29 +11,37 @@ class StockSeeder extends Seeder
 {
     public function run(): void
     {
-        $user = User::first();
-        $product = Product::first();
+        $users = User::all();
+        $products = Product::all();
 
-        if ($user && $product) {
-            // Attribution initiale pour le délégué
-            SampleMovement::create([
-                'user_id' => $user->id,
-                'product_id' => $product->id,
-                'movement_type' => 'attribution',
-                'quantity' => 50,
-                'lot_number' => 'LOT-2026-CARD01',
-                'remarques' => 'Dotation trimestrielle initiale confiée au délégué.'
-            ]);
+        if ($users->isNotEmpty() && $products->isNotEmpty()) {
+            foreach ($users as $u) {
+                foreach ($products as $index => $p) {
+                    $initialQty = 50 + ($index * 25);
+                    $distQty = 5 + ($index * 3);
+                    $lotNum = 'LOT-2026-' . ($p->code ?? ('PRD' . ($index + 1)));
 
-            // Distribution à un médecin
-            SampleMovement::create([
-                'user_id' => $user->id,
-                'product_id' => $product->id,
-                'movement_type' => 'distribution',
-                'quantity' => 5,
-                'lot_number' => 'LOT-2026-CARD01',
-                'remarques' => 'Remise de 5 boîtes d\'échantillons lors de la visite médicale.'
-            ]);
+                    // Attribution de dotation initiale au délégué
+                    SampleMovement::create([
+                        'user_id' => $u->id,
+                        'product_id' => $p->id,
+                        'movement_type' => 'attribution',
+                        'quantity' => $initialQty,
+                        'lot_number' => $lotNum,
+                        'remarques' => 'Dotation trimestrielle initiale confiée au délégué.'
+                    ]);
+
+                    // Distribution d'échantillons
+                    SampleMovement::create([
+                        'user_id' => $u->id,
+                        'product_id' => $p->id,
+                        'movement_type' => 'distribution',
+                        'quantity' => $distQty,
+                        'lot_number' => $lotNum,
+                        'remarques' => 'Remise d\'échantillons lors des visites médicales terrain.'
+                    ]);
+                }
+            }
         }
     }
 }

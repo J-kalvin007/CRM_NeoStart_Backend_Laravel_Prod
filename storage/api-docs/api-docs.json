@@ -1182,6 +1182,18 @@
                                             "visit_count": {
                                                 "type": "integer"
                                             },
+                                            "no_show_count": {
+                                                "type": "integer"
+                                            },
+                                            "completed_visits": {
+                                                "type": "integer"
+                                            },
+                                            "in_progress_visits": {
+                                                "type": "integer"
+                                            },
+                                            "target_visits": {
+                                                "type": "integer"
+                                            },
                                             "objective_rate": {
                                                 "type": "number",
                                                 "format": "float"
@@ -1263,13 +1275,127 @@
                 ]
             }
         },
+        "/api/v1/analytics/edetailing-summary": {
+            "get": {
+                "tags": [
+                    "Manager Analytics"
+                ],
+                "summary": "Résumé des analytiques de présentation CLM",
+                "operationId": "dde3157dc91254487234ef96a2352df1",
+                "responses": {
+                    "200": {
+                        "description": "Données analytiques",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "properties": {
+                                            "document_id": {
+                                                "type": "string"
+                                            },
+                                            "document_name": {
+                                                "type": "string"
+                                            },
+                                            "views_count": {
+                                                "type": "integer"
+                                            },
+                                            "average_duration_seconds": {
+                                                "type": "integer"
+                                            }
+                                        },
+                                        "type": "object"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/supervisor/alerts": {
+            "get": {
+                "tags": [
+                    "Manager Analytics"
+                ],
+                "summary": "Récupérer les alertes opérationnelles (Superviseur)",
+                "operationId": "50061f67e8b365116b258b334876eb95",
+                "responses": {
+                    "200": {
+                        "description": "Liste des alertes",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "late_delegates": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object"
+                                            }
+                                        },
+                                        "high_no_show_delegates": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object"
+                                            }
+                                        },
+                                        "urgent_pharmacovigilance": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object"
+                                            }
+                                        },
+                                        "pending_reports": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object"
+                                            }
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/marketing/objections-stats": {
+            "get": {
+                "tags": [
+                    "Manager Analytics"
+                ],
+                "summary": "Statistiques de fréquence et taux de conviction des objections",
+                "operationId": "a378659b09496b6209a64408a77813d8",
+                "responses": {
+                    "200": {
+                        "description": "Données analytiques"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/branding": {
             "get": {
                 "tags": [
                     "App Branding"
                 ],
                 "summary": "Récupérer la configuration de branding de l'application",
-                "description": "Retourne le nom, le logo et la favicon de l'application.\r\n- Si `subsidiary_id` est fourni, les paramètres spécifiques à la filiale surchargent les globaux.\r\n- Les URLs de logo et favicon sont des URLs absolues prêtes à l'emploi.\r\n- **Accessible sans authentification** pour permettre l'affichage avant la connexion.",
+                "description": "Retourne le nom, le logo et la favicon de l'application.\n- Si `subsidiary_id` est fourni, les paramètres spécifiques à la filiale surchargent les globaux.\n- Les URLs de logo et favicon sont des URLs absolues prêtes à l'emploi.\n- **Accessible sans authentification** pour permettre l'affichage avant la connexion.",
                 "operationId": "cef5151ee7a274bf28fbad2e2931d387",
                 "parameters": [
                     {
@@ -1396,7 +1522,7 @@
                     "App Branding"
                 ],
                 "summary": "Uploader / remplacer le logo de l'application",
-                "description": "Upload du logo affiché dans l'interface (header, page de connexion, etc.).\r\n\r\n**Contraintes fichier :**\r\n- Formats acceptés : `jpeg`, `jpg`, `png`, `webp`\r\n- Taille maximale : **2 Mo**\r\n- L'ancien fichier est automatiquement supprimé du stockage.\r\n\r\nL'URL du logo est retournée dans le champ `logo_url`.",
+                "description": "Upload du logo affiché dans l'interface (header, page de connexion, etc.).\n\n**Contraintes fichier :**\n- Formats acceptés : `jpeg`, `jpg`, `png`, `webp`\n- Taille maximale : **2 Mo**\n- L'ancien fichier est automatiquement supprimé du stockage.\n\nL'URL du logo est retournée dans le champ `logo_url`.",
                 "operationId": "4649f50ef75cfb805b73fa562425c4c5",
                 "requestBody": {
                     "required": true,
@@ -1498,7 +1624,7 @@
                     "App Branding"
                 ],
                 "summary": "Uploader / remplacer la favicon (icône de l'onglet)",
-                "description": "Upload de la favicon affichée dans les onglets du navigateur.\r\n\r\n**Contraintes fichier :**\r\n- Formats acceptés : `png`, `ico`\r\n- Taille maximale : **512 Ko**\r\n- L'ancien fichier est automatiquement supprimé.\r\n\r\n> **Recommandation** : utiliser une image carrée de **32×32 px** ou **64×64 px** en PNG pour une compatibilité maximale.",
+                "description": "Upload de la favicon affichée dans les onglets du navigateur.\n\n**Contraintes fichier :**\n- Formats acceptés : `png`, `ico`\n- Taille maximale : **512 Ko**\n- L'ancien fichier est automatiquement supprimé.\n\n> **Recommandation** : utiliser une image carrée de **32×32 px** ou **64×64 px** en PNG pour une compatibilité maximale.",
                 "operationId": "6043f9f572a3a7680f06edfaff8d57dd",
                 "requestBody": {
                     "required": true,
@@ -2416,6 +2542,230 @@
                 "responses": {
                     "204": {
                         "description": "Supprimée avec succès"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/activities/{activity}/clm-analytics": {
+            "post": {
+                "tags": [
+                    "CLM Analytics"
+                ],
+                "summary": "Enregistrer les statistiques de visionnage CLM pour une activité",
+                "operationId": "1d683dbdb6ed22290efb75463320a560",
+                "parameters": [
+                    {
+                        "name": "activity",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "document_id",
+                                    "contact_id",
+                                    "total_duration_seconds",
+                                    "slides_data"
+                                ],
+                                "properties": {
+                                    "document_id": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                    },
+                                    "contact_id": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                    },
+                                    "total_duration_seconds": {
+                                        "type": "integer"
+                                    },
+                                    "slides_data": {
+                                        "type": "array",
+                                        "items": {
+                                            "properties": {
+                                                "slide_index": {
+                                                    "type": "integer"
+                                                },
+                                                "duration_seconds": {
+                                                    "type": "integer"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "completed": {
+                                        "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Statistiques enregistrées avec succès"
+                    },
+                    "404": {
+                        "description": "Activité non trouvée"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/coaching/delegates/{id}": {
+            "get": {
+                "tags": [
+                    "Coaching"
+                ],
+                "summary": "Récupérer les sessions de coaching d'un délégué",
+                "operationId": "7e529351312304fd95e2c7e70f1f8db6",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Liste des sessions de coaching"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/coaching/sessions": {
+            "post": {
+                "tags": [
+                    "Coaching"
+                ],
+                "summary": "Créer une session de coaching",
+                "operationId": "982bdd3b7d60127c25c75c06fe6d3352",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "delegate_id",
+                                    "status"
+                                ],
+                                "properties": {
+                                    "delegate_id": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                    },
+                                    "strengths": {
+                                        "type": "string"
+                                    },
+                                    "weaknesses": {
+                                        "type": "string"
+                                    },
+                                    "action_plan": {
+                                        "type": "string"
+                                    },
+                                    "next_review_date": {
+                                        "type": "string",
+                                        "format": "date"
+                                    },
+                                    "status": {
+                                        "type": "string",
+                                        "enum": [
+                                            "draft",
+                                            "active",
+                                            "completed"
+                                        ]
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Session créée avec succès"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/activities/duo": {
+            "post": {
+                "tags": [
+                    "Coaching"
+                ],
+                "summary": "Planifier une visite conjointe (Duo)",
+                "operationId": "e93b3158288e6385a28f455e94480721",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "delegate_id",
+                                    "contact_id",
+                                    "date_activite"
+                                ],
+                                "properties": {
+                                    "delegate_id": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                    },
+                                    "contact_id": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                    },
+                                    "date_activite": {
+                                        "type": "string",
+                                        "format": "date"
+                                    },
+                                    "heure_debut": {
+                                        "type": "string",
+                                        "example": "14:00"
+                                    },
+                                    "notes": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Visite en duo créée"
                     }
                 },
                 "security": [
@@ -4776,13 +5126,9 @@
                                         "type": "string",
                                         "enum": [
                                             "nombre_visites",
-                                            "couverture_contacts",
+                                            "couverture_categorie_a",
+                                            "produit_prioritaire",
                                             "ca_ventes",
-                                            "nb_commandes",
-                                            "nb_echantillons",
-                                            "nb_nouveaux_contacts",
-                                            "nb_activites_kol",
-                                            "campagne",
                                             "autre"
                                         ]
                                     },
@@ -4951,6 +5297,117 @@
                 ]
             }
         },
+        "/api/v1/me/objectifs-summary": {
+            "get": {
+                "tags": [
+                    "Objectifs"
+                ],
+                "summary": "Résumé des objectifs du mois en cours avec calcul des primes",
+                "operationId": "045d6f376d92f943e64486fa095d2293",
+                "responses": {
+                    "200": {
+                        "description": "Résumé des objectifs"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/products/{product}/objections": {
+            "get": {
+                "tags": [
+                    "Objections"
+                ],
+                "summary": "Récupérer le référentiel des objections pour un produit",
+                "operationId": "36a1f4cf38a3ccb5eb3c6eaacacad37e",
+                "parameters": [
+                    {
+                        "name": "product",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Liste des objections associées au produit"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/activities/{activity}/objections": {
+            "post": {
+                "tags": [
+                    "Objections"
+                ],
+                "summary": "Enregistrer une objection soulevée lors d'une visite",
+                "operationId": "8b2e6ef6c21cf41305a3067a5a782963",
+                "parameters": [
+                    {
+                        "name": "activity",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "objection_id",
+                                    "physician_reaction"
+                                ],
+                                "properties": {
+                                    "objection_id": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                    },
+                                    "physician_reaction": {
+                                        "type": "string",
+                                        "enum": [
+                                            "convaincu",
+                                            "partiellement_convaincu",
+                                            "refus"
+                                        ]
+                                    },
+                                    "notes": {
+                                        "type": "string",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Objection enregistrée avec succès"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/permissions": {
             "get": {
                 "tags": [
@@ -5072,7 +5529,12 @@
                                     },
                                     "severity": {
                                         "type": "string",
-                                        "example": "moderee"
+                                        "enum": [
+                                            "non_grave",
+                                            "moderee",
+                                            "grave",
+                                            "deces"
+                                        ]
                                     },
                                     "report_date": {
                                         "type": "string",
@@ -5945,6 +6407,17 @@
                                         "description": "Activité associée en cas de distribution terrain",
                                         "type": "string",
                                         "format": "uuid",
+                                        "nullable": true
+                                    },
+                                    "contact_id": {
+                                        "description": "Médecin destinataire (requis si distribution)",
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    },
+                                    "signature_data": {
+                                        "description": "Image base64 de la signature",
+                                        "type": "string",
                                         "nullable": true
                                     },
                                     "signature_url": {
@@ -6959,14 +7432,9 @@
                         "application/json": {
                             "schema": {
                                 "required": [
-                                    "sector_id",
                                     "name"
                                 ],
                                 "properties": {
-                                    "sector_id": {
-                                        "type": "string",
-                                        "format": "uuid"
-                                    },
                                     "name": {
                                         "type": "string"
                                     },
@@ -7051,10 +7519,6 @@
                         "application/json": {
                             "schema": {
                                 "properties": {
-                                    "sector_id": {
-                                        "type": "string",
-                                        "format": "uuid"
-                                    },
                                     "name": {
                                         "type": "string"
                                     },
@@ -7711,45 +8175,18 @@
                                             "inactive"
                                         ]
                                     },
-                                    "team_id": {
-                                        "type": "string",
-                                        "format": "uuid",
-                                        "nullable": true
-                                    },
                                     "manager_id": {
                                         "type": "string",
                                         "format": "uuid",
                                         "nullable": true
                                     },
-                                    "country_id": {
-                                        "type": "string",
-                                        "format": "uuid",
-                                        "nullable": true
-                                    },
-                                    "subsidiary_id": {
-                                        "type": "string",
-                                        "format": "uuid",
-                                        "nullable": true
-                                    },
-                                    "region_id": {
-                                        "type": "string",
-                                        "format": "uuid",
-                                        "nullable": true
-                                    },
-                                    "territory_id": {
-                                        "type": "string",
-                                        "format": "uuid",
-                                        "nullable": true
-                                    },
-                                    "zone_id": {
-                                        "type": "string",
-                                        "format": "uuid",
-                                        "nullable": true
-                                    },
-                                    "sector_id": {
-                                        "type": "string",
-                                        "format": "uuid",
-                                        "nullable": true
+                                    "scopes": {
+                                        "description": "IDs des périmètres (organizational units)",
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string",
+                                            "format": "uuid"
+                                        }
                                     },
                                     "roles": {
                                         "type": "array",
@@ -7862,25 +8299,17 @@
                                             "inactive"
                                         ]
                                     },
-                                    "team_id": {
-                                        "type": "string",
-                                        "format": "uuid",
-                                        "nullable": true
-                                    },
                                     "manager_id": {
                                         "type": "string",
                                         "format": "uuid",
                                         "nullable": true
                                     },
-                                    "country_id": {
-                                        "type": "string",
-                                        "format": "uuid",
-                                        "nullable": true
-                                    },
-                                    "subsidiary_id": {
-                                        "type": "string",
-                                        "format": "uuid",
-                                        "nullable": true
+                                    "scopes": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string",
+                                            "format": "uuid"
+                                        }
                                     },
                                     "roles": {
                                         "type": "array",
@@ -8135,6 +8564,14 @@
             "description": "Personnalisation dynamique de l'identité visuelle de l'application (nom, logo, favicon)."
         },
         {
+            "name": "CLM Analytics",
+            "description": "Gestion des statistiques de présentation (e-Detailing)"
+        },
+        {
+            "name": "Coaching",
+            "description": "Gestion des sessions de coaching et visites en duo"
+        },
+        {
             "name": "Countries",
             "description": "Gestion des pays et réglementations nationales"
         },
@@ -8157,6 +8594,10 @@
         {
             "name": "Medias",
             "description": "Gestion des fichiers et médias (Upload/Download)"
+        },
+        {
+            "name": "Objections",
+            "description": "Référentiel des objections médicales"
         },
         {
             "name": "Permissions",

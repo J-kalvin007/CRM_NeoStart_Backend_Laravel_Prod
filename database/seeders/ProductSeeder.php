@@ -16,40 +16,76 @@ class ProductSeeder extends Seeder
 
         $products = [
             [
-                'code' => 'CARD-001',
-                'nom' => 'CardioProtect 50mg',
-                'gamme' => 'Cardiologie & Vasculaire',
-                'description' => 'Antihypertenseur de dernière génération pour la prévention des AVC.',
-                'prix_unitaire' => 12500.00,
+                'code' => 'CP-50MG',
+                'nom' => 'CardioPulse 50mg',
+                'gamme' => 'Cardiologie',
+                'description' => 'Valsartan / Amlodipine - Comprimé pelliculé',
+                'prix_unitaire' => 4850.00,
                 'devise' => 'XOF',
                 'stock_actuel' => 500,
                 'stock_alerte' => 50,
                 'statut' => 'actif',
-                'meta' => ['dosage' => '50mg Comprimé', 'posology' => '1 cp/jour']
+                'meta' => ['dosage' => '50mg', 'presentation' => 'Boîte de 30 comprimés', 'indication' => 'Hypertension artérielle & Prévention AVC']
+            ],
+            [
+                'code' => 'VPN-100',
+                'nom' => 'VasoProtect Neo',
+                'gamme' => 'Vasculaire',
+                'description' => 'Nifédipine LP - Gélule à libération prolongée',
+                'prix_unitaire' => 6200.00,
+                'devise' => 'XOF',
+                'stock_actuel' => 350,
+                'stock_alerte' => 30,
+                'statut' => 'actif',
+                'meta' => ['dosage' => '100mg', 'presentation' => 'Boîte de 28 gélules', 'indication' => 'Insuffisance veineuse & Hypertensions sévères']
+            ],
+            [
+                'code' => 'LS-20MG',
+                'nom' => 'LipidoStat 20mg',
+                'gamme' => 'Metabolisme',
+                'description' => 'Atorvastatine - Comprimé sécable',
+                'prix_unitaire' => 3900.00,
+                'devise' => 'XOF',
+                'stock_actuel' => 420,
+                'stock_alerte' => 40,
+                'statut' => 'actif',
+                'meta' => ['dosage' => '20mg', 'presentation' => 'Boîte de 30 comprimés', 'indication' => 'Hypercholestérolémie & Dyslipidémie']
+            ],
+            [
+                'code' => 'DBX-500',
+                'nom' => 'DiaBex 500mg',
+                'gamme' => 'Metabolisme',
+                'description' => 'Metformine chlorhydrate',
+                'prix_unitaire' => 2800.00,
+                'devise' => 'XOF',
+                'stock_actuel' => 600,
+                'stock_alerte' => 60,
+                'statut' => 'actif',
+                'meta' => ['dosage' => '500mg', 'presentation' => 'Boîte de 60 comprimés', 'indication' => 'Diabète de type 2']
             ],
             [
                 'code' => 'PEDI-002',
                 'nom' => 'PediaCure Sirop 100ml',
-                'gamme' => 'Pédiatrie & Infectiologie',
-                'description' => 'Antibiotique à large spectre adapté aux nourrissons et enfants.',
+                'gamme' => 'Pédiatrie',
+                'description' => 'Amoxicilline / Acide Clavulanique - Sirop 100ml',
                 'prix_unitaire' => 4500.00,
                 'devise' => 'XOF',
                 'stock_actuel' => 300,
                 'stock_alerte' => 30,
                 'statut' => 'actif',
-                'meta' => ['dosage' => 'Sirop 250mg/5ml', 'posology' => '1 cuillère x 3/jour']
+                'meta' => ['dosage' => 'Sirop 250mg/5ml', 'presentation' => 'Flacon 100ml', 'indication' => 'Infections ORL & pédiatriques']
             ],
             [
-                'code' => 'ANAL-003',
-                'nom' => 'Neoflam Fast 400mg',
-                'gamme' => 'Anti-inflammatoires',
-                'description' => 'Anti-inflammatoire non stéroïdien à action rapide.',
-                'prix_unitaire' => 3800.00,
+                'code' => 'NEURO-10',
+                'nom' => 'NeuroMed 10mg',
+                'gamme' => 'Neurologie',
+                'description' => 'Memantine HCl - Comprimé pelliculé',
+                'prix_unitaire' => 8500.00,
                 'devise' => 'XOF',
-                'stock_actuel' => 400,
-                'stock_alerte' => 40,
+                'stock_actuel' => 150,
+                'stock_alerte' => 20,
                 'statut' => 'actif',
-                'meta' => ['dosage' => '400mg Gélule', 'posology' => '1 gélule en cas de crise']
+                'meta' => ['dosage' => '10mg', 'presentation' => 'Boîte de 30 comprimés', 'indication' => 'Troubles cognitifs & mémoire']
             ]
         ];
 

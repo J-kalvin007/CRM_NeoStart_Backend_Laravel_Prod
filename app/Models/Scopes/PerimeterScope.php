@@ -21,6 +21,7 @@ class PerimeterScope implements Scope
 
         $user = Auth::user();
         $table = $model->getTable();
+        $operationalTables = ['contacts', 'activities', 'tour_plans', 'sample_movements', 'objectifs', 'accounts', 'kol_profiles'];
 
         // 1. Holding / Global admin bypasses all filters
         if ($user->can('scope:global') || $user->hasRole('admin')) {
@@ -33,17 +34,22 @@ class PerimeterScope implements Scope
             ->pluck('organizational_unit_id')
             ->toArray();
 
-        // Si l'utilisateur n'a aucun périmètre, on bloque tout (sauf si c'est lui-même)
+        // Si l'utilisateur n'a aucun périmètre spécifique configuré, il accède à ses propres enregistrements (user_id = user->id)
         if (empty($userScopeIds)) {
             if ($table === 'users') {
                 $builder->where('id', $user->id);
+            } elseif (in_array($table, $operationalTables)) {
+                $builder->where($table . '.user_id', $user->id);
+            } elseif (in_array($table, ['products', 'categories', 'product_types', 'specialities', 'galenic_forms'])) {
+                // Les catalogues référentiels sont accessibles à tous les utilisateurs authentifiés
+                return;
             } else {
                 $builder->whereRaw('1 = 0');
             }
             return;
         }
 
-        // 3. Récupérer l'arbre de tous les descendants (enfants, petits-enfants, etc.)
+        // 3. Récupérer l'arbre de tous les descendants
         $allAccessibleUnitIds = $this->getDescendantUnitIds($userScopeIds);
 
         // 4. Filtrer la table `organizational_units` elle-même
@@ -52,17 +58,21 @@ class PerimeterScope implements Scope
             return;
         }
 
-        // 5. Filtrer les tables opérationnelles (liées à des utilisateurs)
+        // 5. Filtrer les tables opérationnelles
         $operationalTables = ['contacts', 'activities', 'tour_plans', 'sample_movements', 'objectifs', 'accounts', 'kol_profiles'];
         
         if (in_array($table, $operationalTables) || $table === 'users') {
             $columnToFilter = $table === 'users' ? 'id' : 'user_id';
             
-            // On récupère tous les utilisateurs qui ont au moins un scope dans notre arbre accessible
-            $builder->whereIn($table . '.' . $columnToFilter, function ($query) use ($allAccessibleUnitIds) {
-                $query->select('user_id')
-                      ->from('user_scopes')
-                      ->whereIn('organizational_unit_id', $allAccessibleUnitIds);
+            $builder->where(function ($sub) use ($table, $columnToFilter, $allAccessibleUnitIds, $user) {
+                $sub->whereIn($table . '.' . $columnToFilter, function ($query) use ($allAccessibleUnitIds) {
+                    $query->select('user_id')
+                          ->from('user_scopes')
+                          ->whereIn('organizational_unit_id', $allAccessibleUnitIds);
+                });
+                if ($columnToFilter === 'user_id') {
+                    $sub->orWhere($table . '.user_id', $user->id);
+                }
             });
             return;
         }

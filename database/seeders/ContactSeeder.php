@@ -69,16 +69,20 @@ class ContactSeeder extends Seeder
             ]
         ];
 
-        if ($user) {
-            foreach ($contacts as $c) {
-                Contact::firstOrCreate(
-                    ['email' => $c['email']],
-                    array_merge($c, [
-                        'account_id' => $account?->id,
-                        'user_id' => $user->id,
-                        'contact_type_id' => $medecinType?->id
-                    ])
-                );
+        $users = User::all();
+        if ($users->isNotEmpty()) {
+            foreach ($users as $u) {
+                foreach ($contacts as $c) {
+                    Contact::firstOrCreate(
+                        ['email' => $u->id . '_' . $c['email']],
+                        array_merge($c, [
+                            'email' => $c['email'],
+                            'account_id' => $account?->id,
+                            'user_id' => $u->id,
+                            'contact_type_id' => $medecinType?->id
+                        ])
+                    );
+                }
             }
         }
     }

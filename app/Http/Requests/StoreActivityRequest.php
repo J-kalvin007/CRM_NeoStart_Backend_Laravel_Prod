@@ -8,6 +8,28 @@ class StoreActivityRequest extends FormRequest
 {
     public function authorize(): bool { return true; }
 
+    protected function prepareForValidation(): void
+    {
+        $rawType = strtolower($this->activity_type ?? 'visite');
+        if (str_contains($rawType, 'visite')) {
+            $type = 'visite';
+        } elseif (str_contains($rawType, 'appel')) {
+            $type = 'appel';
+        } elseif (str_contains($rawType, 'email')) {
+            $type = 'email';
+        } elseif (str_contains($rawType, 'reunion') || str_contains($rawType, 'formation')) {
+            $type = 'reunion';
+        } elseif (str_contains($rawType, 'conference') || str_contains($rawType, 'staff') || str_contains($rawType, 'présentation')) {
+            $type = 'conference';
+        } else {
+            $type = 'visite';
+        }
+
+        $this->merge([
+            'activity_type' => $type,
+        ]);
+    }
+
     public function rules(): array
     {
         return [
@@ -16,9 +38,9 @@ class StoreActivityRequest extends FormRequest
             'account_id'     => 'nullable|uuid|exists:accounts,id',
             'activity_type'  => 'required|string',
             'activity_type_id'=> 'nullable|uuid|exists:activity_types,id',
-            'date_activite'  => 'required|date|after_or_equal:today',
-            'heure_debut'    => 'nullable|date_format:H:i',
-            'heure_fin'      => 'nullable|date_format:H:i|after:heure_debut',
+            'date_activite'  => 'required|date',
+            'heure_debut'    => 'nullable|string',
+            'heure_fin'      => 'nullable|string',
             'duration'       => 'nullable|integer|min:0',
             'gps_debut_lat'  => 'nullable|numeric|between:-90,90',
             'gps_debut_lng'  => 'nullable|numeric|between:-180,180',
