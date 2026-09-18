@@ -350,7 +350,10 @@ class AnalyticsController extends Controller
         path: '/api/v1/export/performance',
         summary: 'Exporter la performance de l\'équipe au format CSV',
         security: [['bearerAuth' => []]],
-        tags: ['Manager Analytics']
+        tags: ['Manager Analytics'],
+        responses: [
+            new OA\Response(response: 200, description: 'Fichier CSV généré')
+        ]
     )]
     public function exportPerformance(Request $request)
     {
@@ -379,9 +382,12 @@ class AnalyticsController extends Controller
 
     #[OA\Get(
         path: '/api/v1/export/expenses',
-        summary: 'Exporter les notes de frais au format CSV',
+        summary: 'Exporter le bilan des dépenses au format CSV',
         security: [['bearerAuth' => []]],
-        tags: ['Manager Analytics']
+        tags: ['Manager Analytics'],
+        responses: [
+            new OA\Response(response: 200, description: 'Fichier CSV généré')
+        ]
     )]
     public function exportExpenses(Request $request)
     {

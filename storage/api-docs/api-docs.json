@@ -1389,6 +1389,44 @@
                 ]
             }
         },
+        "/api/v1/export/performance": {
+            "get": {
+                "tags": [
+                    "Manager Analytics"
+                ],
+                "summary": "Exporter la performance de l'équipe au format CSV",
+                "operationId": "fc70d6d4b0bcbc7ba94d0e22a40b668a",
+                "responses": {
+                    "200": {
+                        "description": "Fichier CSV généré"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/export/expenses": {
+            "get": {
+                "tags": [
+                    "Manager Analytics"
+                ],
+                "summary": "Exporter le bilan des dépenses au format CSV",
+                "operationId": "a3d3659d1e171bbfba829f4193cc3499",
+                "responses": {
+                    "200": {
+                        "description": "Fichier CSV généré"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/branding": {
             "get": {
                 "tags": [
@@ -8530,6 +8568,109 @@
                 ]
             }
         },
+        "/api/v1/validations/pending": {
+            "get": {
+                "tags": [
+                    "Validations"
+                ],
+                "summary": "Lister les créations en attente de validation",
+                "operationId": "b1bbe795b3fb8cc1935b50ab0f41a1c7",
+                "responses": {
+                    "200": {
+                        "description": "Liste des éléments en attente"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/validations/{type}/{id}/approve": {
+            "post": {
+                "tags": [
+                    "Validations"
+                ],
+                "summary": "Approuver une création en attente",
+                "operationId": "edda4b1832a70ddaf416e69e877238e9",
+                "parameters": [
+                    {
+                        "name": "type",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "contact",
+                                "account"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Création approuvée"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/validations/{type}/{id}/reject": {
+            "post": {
+                "tags": [
+                    "Validations"
+                ],
+                "summary": "Rejeter une création en attente",
+                "operationId": "ef0c6713f944bf7f235b897669cbc54c",
+                "parameters": [
+                    {
+                        "name": "type",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "contact",
+                                "account"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Création rejetée"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/zones": {
             "get": {
                 "tags": [
@@ -8870,6 +9011,10 @@
         {
             "name": "Trainings",
             "description": "Trainings"
+        },
+        {
+            "name": "Validations",
+            "description": "Validations"
         }
     ]
 }

@@ -148,6 +148,10 @@ Route::prefix('v1')->group(function () {
         Route::post('/notifications/{id}/mark-as-read', [NotificationController::class, 'markAsRead']);
 
         // ── Répertoire (Comptes & Contacts) ────────────────────
+        Route::get('validations/pending', [App\Http\Controllers\Api\V1\ValidationController::class, 'index']);
+        Route::post('validations/{type}/{id}/approve', [App\Http\Controllers\Api\V1\ValidationController::class, 'approve']);
+        Route::post('validations/{type}/{id}/reject', [App\Http\Controllers\Api\V1\ValidationController::class, 'reject']);
+
         Route::post('accounts/check-duplicates', [AccountController::class, 'checkDuplicates']);
         Route::apiResource('accounts', AccountController::class);
         Route::apiResource('specialities', App\Http\Controllers\Api\V1\SpecialityController::class);

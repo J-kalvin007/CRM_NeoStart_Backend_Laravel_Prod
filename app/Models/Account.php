@@ -19,7 +19,7 @@ class Account extends Model
         'subsidiary_id', 'user_id', 'account_type_id',
         'nom', 'adresse', 'ville', 'quartier',
         'gps_lat', 'gps_lng', 'telephone', 'email', 'responsable',
-        'potentiel', 'score', 'statut', 'meta', 'local_uuid',
+        'potentiel', 'score', 'statut', 'statut_validation', 'meta', 'local_uuid',
     ];
 
     protected $casts = [

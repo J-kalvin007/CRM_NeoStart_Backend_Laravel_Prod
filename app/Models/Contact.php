@@ -20,7 +20,7 @@ class Contact extends Model
         'nom', 'prenom', 'titre',
         'telephone', 'email', 'gps_lat', 'gps_lng',
         'potentiel', 'influence', 'score',
-        'statut', 'meta', 'local_uuid',
+        'statut', 'statut_validation', 'meta', 'local_uuid',
     ];
 
     protected $casts = [

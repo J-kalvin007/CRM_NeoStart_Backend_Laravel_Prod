@@ -170,10 +170,23 @@ class ContactController extends Controller
         }
         $duplicateService->abortIfDuplicateContact($countryId, $validated);
 
+        $user = auth()->user();
+        $isDelegue = $user && $user->hasRole('delegue_medical');
+        $statutValidation = $isDelegue ? 'en_attente' : 'valide';
+
         $contact = Contact::create(array_merge(
             $validated,
-            ['user_id' => auth()->id()]
+            [
+                'user_id' => $user->id ?? null,
+                'statut_validation' => $statutValidation,
+            ]
         ));
+
+        if ($isDelegue) {
+            $supervisors = \App\Models\User::role('superviseur')->where('team_id', $user->team_id)->get();
+            \Illuminate\Support\Facades\Notification::send($supervisors, new \App\Notifications\PendingValidationNotification($contact, $user));
+        }
+
         return new ContactResource($contact->load(['account', 'categories']));
     }
 
