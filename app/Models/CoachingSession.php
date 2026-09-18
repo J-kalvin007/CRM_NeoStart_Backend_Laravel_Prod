@@ -19,10 +19,23 @@ class CoachingSession extends Model
         'action_plan',
         'next_review_date',
         'status',
+        'date_duo',
+        'zone',
+        'motif',
+        'objectifs_prevus_json',
+        'resultats_constates_json',
+        'taux_atteinte_pct',
+        'commentaires_superviseur',
+        'plan_action_recommande',
+        'local_uuid',
     ];
 
     protected $casts = [
         'next_review_date' => 'date',
+        'date_duo' => 'date',
+        'objectifs_prevus_json' => 'array',
+        'resultats_constates_json' => 'array',
+        'taux_atteinte_pct' => 'float',
     ];
 
     public function supervisor()

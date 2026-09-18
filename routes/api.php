@@ -161,6 +161,7 @@ Route::prefix('v1')->group(function () {
 
 
         Route::post('contacts/check-duplicates', [ContactController::class, 'checkDuplicates']);
+        Route::post('contacts/arbitrage', [ContactController::class, 'arbitrage']);
         Route::apiResource('contacts', ContactController::class);
 
         Route::apiResource('categories', CategoryController::class);
@@ -207,7 +208,8 @@ Route::prefix('v1')->group(function () {
 
         // -- Coaching & Visites en Duo --
         Route::get('/coaching/delegates/{id}', [CoachingController::class, 'getSessions']);
-        Route::post('/coaching/sessions', [CoachingController::class, 'storeSession']);
+        Route::post('/coaching-sessions', [CoachingController::class, 'storeSession']);
+        Route::put('/coaching-sessions/{id}/complete', [CoachingController::class, 'completeSession']);
 
         // ── Notes de Frais (Expenses) ──────────────────────────
         Route::apiResource('expenses', ExpenseController::class);
@@ -232,6 +234,9 @@ Route::prefix('v1')->group(function () {
         Route::get('leaves', [LeaveController::class, 'index']);
         Route::post('leaves', [LeaveController::class, 'store']);
         Route::patch('leaves/{id}/status', [LeaveController::class, 'updateStatus']);
+
+        // ── Demandes & Escalade ────────────────────────────────
+        Route::post('requests', [\App\Http\Controllers\Api\V1\RequestController::class, 'store']);
 
         // ── Formations (Trainings) ─────────────────────────────
         // Route::get('trainings', [TrainingController::class, 'index']);

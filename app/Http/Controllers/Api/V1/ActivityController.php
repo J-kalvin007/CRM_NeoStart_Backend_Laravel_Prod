@@ -90,29 +90,38 @@ class ActivityController extends Controller
     public function store(StoreActivityRequest $request)
     {
         $data = $request->validated();
-        $products = $data['products'] ?? [];
-        unset($data['products']);
+        $samples = $data['samples'] ?? [];
+        unset($data['samples']);
+
+        // Convertir 'soumis_definitif' en 'realisee' pour la logique interne (optionnel, mais utile)
+        if (isset($data['statut']) && $data['statut'] === 'soumis_definitif') {
+            $data['statut'] = 'realisee';
+        }
 
         $activity = Activity::create(array_merge($data, ['user_id' => auth()->id()]));
 
-        // Attacher les produits présentés/distribués
-        if (!empty($products)) {
-            $pivotData = collect($products)->mapWithKeys(fn($p) => [
-                $p['product_id'] => [
-                    'quantity'          => $p['quantity'] ?? 0,
-                    'customer_interest' => $p['customer_interest'] ?? null,
-                    'remarques'         => $p['remarques'] ?? null,
-                ]
-            ])->all();
-            $activity->products()->sync($pivotData);
+        // Attacher les échantillons (SampleMovement)
+        if (!empty($samples)) {
+            foreach ($samples as $sample) {
+                \App\Models\SampleMovement::create([
+                    'product_id' => $sample['product_id'],
+                    'user_id' => auth()->id(),
+                    'contact_id' => $data['contact_id'] ?? null,
+                    'activity_id' => $activity->id,
+                    'movement_type' => 'out',
+                    'quantity' => reset($sample['quantite']) ?? $sample['quantite'], // in case it's parsed as array somehow
+                    'lot_number' => $sample['num_lot'] ?? null,
+                    'expiry_date' => $sample['date_peremption'] ?? null,
+                ]);
+            }
         }
 
-        // Verrouiller automatiquement si statut = realisee
-        if ($activity->statut === 'realisee') {
+        // Verrouiller automatiquement si statut = realisee ou soumis_definitif
+        if (in_array($activity->statut, ['realisee', 'soumis_definitif'])) {
             $activity->lock();
         }
 
-        return new ActivityResource($activity->load(['delegue', 'contact', 'account', 'products']));
+        return new ActivityResource($activity->load(['delegue', 'contact', 'account', 'products', 'sampleMovements']));
     }
 
     #[OA\Get(

@@ -271,4 +271,66 @@ class ContactController extends Controller
         Contact::findOrFail($id)->delete();
         return response()->json(null, 204);
     }
+
+    #[OA\Post(
+        path: '/api/v1/contacts/arbitrage',
+        summary: 'Arbitrage du portefeuille (Jauge 100 max)',
+        security: [['bearerAuth' => []]],
+        tags: ['Contacts'],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['delegate_id', 'new_contact_id', 'removed_contact_id'],
+                properties: [
+                    new OA\Property(property: 'delegate_id', type: 'string', format: 'uuid'),
+                    new OA\Property(property: 'new_contact_id', type: 'string', format: 'uuid'),
+                    new OA\Property(property: 'removed_contact_id', type: 'string', format: 'uuid'),
+                    new OA\Property(property: 'reason', type: 'string'),
+                    new OA\Property(property: 'action', type: 'string'),
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Arbitrage effectué avec succès'),
+        ]
+    )]
+    public function arbitrage(Request $request)
+    {
+        $validated = $request->validate([
+            'delegate_id' => 'required|uuid|exists:users,id',
+            'new_contact_id' => 'required|uuid|exists:contacts,id',
+            'removed_contact_id' => 'required|uuid|exists:contacts,id',
+            'reason' => 'nullable|string',
+            'action' => 'nullable|string',
+        ]);
+
+        $removedContact = Contact::findOrFail($validated['removed_contact_id']);
+        $newContact = Contact::findOrFail($validated['new_contact_id']);
+
+        // Réaffecter l'ancien prescripteur au bassin régional (on lui enlève son délégué)
+        $removedContact->update([
+            'user_id' => null, 
+            // On pourrait ajouter un champ history ou reason si le modèle le permet
+        ]);
+
+        // Assigner le nouveau prescripteur au délégué
+        $newContact->update([
+            'user_id' => $validated['delegate_id'],
+            'statut_validation' => 'valide', // ou on garde 'en_attente'
+        ]);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Arbitrage effectué. Prescripteur réaffecté au bassin régional sans perte d\'historique.',
+            'data' => [
+                'delegate_id' => $validated['delegate_id'],
+                'active_portfolio_count' => Contact::where('user_id', $validated['delegate_id'])->count(),
+                'reallocated_contact' => [
+                    'id' => $removedContact->id,
+                    'previous_delegate' => $validated['delegate_id'],
+                    'unassigned_at' => now()->toIso8601String(),
+                ]
+            ]
+        ], 200);
+    }
 }

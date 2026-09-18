@@ -45,6 +45,9 @@ class Activity extends Model
         'locked_at',
         'gps_flagged',
         'local_uuid',
+        'signature_base64',
+        'niveau_interet',
+        'motif',
     ];
 
     protected $casts = [

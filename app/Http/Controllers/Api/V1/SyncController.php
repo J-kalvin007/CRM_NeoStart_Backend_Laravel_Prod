@@ -105,12 +105,23 @@ class SyncController extends Controller
 
     #[OA\Post(
         path: '/api/v1/sync/push',
-        summary: 'Push des modifications offline',
+        summary: 'Push massif de la file d\'attente hors-ligne',
         security: [['bearerAuth' => []]],
         tags: ['Synchronisation Offline'],
         requestBody: new OA\RequestBody(
             required: true,
-            content: new OA\JsonContent(type: 'object')
+            content: new OA\JsonContent(
+                required: ['queue'],
+                properties: [
+                    new OA\Property(property: 'queue', type: 'array', items: new OA\Items(
+                        properties: [
+                            new OA\Property(property: 'endpoint', type: 'string'),
+                            new OA\Property(property: 'method', type: 'string'),
+                            new OA\Property(property: 'payload', type: 'object')
+                        ]
+                    ))
+                ]
+            )
         ),
         responses: [
             new OA\Response(response: 200, description: 'Statut de synchronisation')
@@ -118,71 +129,43 @@ class SyncController extends Controller
     )]
     public function push(Request $request)
     {
-        $payload = $request->all();
-        $user = Auth::user();
+        $queue = $request->input('queue', []);
         
-        $processed = [];
+        $processed = 0;
         $failed = [];
-        $mapping = [];
 
         DB::beginTransaction();
         try {
-            // Mapping générique pour traiter les entités
-            $entitiesToProcess = [
-                'contacts' => Contact::class,
-                'accounts' => Account::class,
-                'activities' => Activity::class,
-                'tasks' => Task::class,
-                'tour_plans' => TourPlan::class,
-                'expenses' => Expense::class,
-                'leaves' => Leave::class,
-                'sample_movements' => SampleMovement::class,
-                'objectifs' => Objectif::class,
-            ];
+            foreach ($queue as $index => $item) {
+                $endpoint = $item['endpoint'] ?? null;
+                $method = strtoupper($item['method'] ?? 'POST');
+                $payload = $item['payload'] ?? [];
 
-            foreach ($entitiesToProcess as $key => $modelClass) {
-                $processed[$key] = 0;
-                if (!empty($payload[$key])) {
-                    foreach ($payload[$key] as $itemData) {
-                        try {
-                            $localUuid = $itemData['local_uuid'] ?? null;
-                            $id = $itemData['id'] ?? null;
+                if (!$endpoint) {
+                    $failed[] = ['index' => $index, 'error' => 'Endpoint manquant'];
+                    continue;
+                }
 
-                            // Rechercher par id ou local_uuid
-                            $model = null;
-                            if ($id) {
-                                $model = $modelClass::find($id);
-                            }
-                            if (!$model && $localUuid) {
-                                // Important: on utilise where car firstWhere peut planter si la colonne n'existe pas
-                                $model = $modelClass::where('local_uuid', $localUuid)->first();
-                            }
+                try {
+                    // Création d'une requête interne pour simuler l'appel API
+                    $internalRequest = Request::create("/api/v1/{$endpoint}", $method, $payload);
+                    $internalRequest->headers->set('Accept', 'application/json');
+                    $internalRequest->setUserResolver(fn() => Auth::user());
 
-                            // Nettoyage des données
-                            unset($itemData['id']); // On ne force pas l'ID serveur
-                            $itemData['user_id'] = $user->id;
-                            if (in_array('subsidiary_id', (new $modelClass)->getFillable())) {
-                                $itemData['subsidiary_id'] = $user->subsidiary_id;
-                            }
+                    // Dispatch via le routeur de l'application
+                    $response = app()->handle($internalRequest);
 
-                            if ($model) {
-                                $model->update($itemData);
-                                $mapping[$localUuid] = $model->id;
-                            } else {
-                                $newModel = $modelClass::create($itemData);
-                                if ($localUuid) {
-                                    $mapping[$localUuid] = $newModel->id;
-                                }
-                            }
-                            $processed[$key]++;
-                        } catch (\Exception $ex) {
-                            $failed[] = [
-                                'entity' => $key,
-                                'local_uuid' => $itemData['local_uuid'] ?? null,
-                                'errors' => $ex->getMessage()
-                            ];
-                        }
+                    if ($response->getStatusCode() >= 400) {
+                        throw new \Exception($response->getContent());
                     }
+
+                    $processed++;
+                } catch (\Exception $ex) {
+                    $failed[] = [
+                        'index' => $index,
+                        'endpoint' => $endpoint,
+                        'error' => $ex->getMessage()
+                    ];
                 }
             }
 
@@ -190,9 +173,8 @@ class SyncController extends Controller
 
             return response()->json([
                 'status' => count($failed) > 0 ? 'partial_success' : 'success',
-                'processed' => $processed,
-                'failed' => $failed,
-                'mapping' => $mapping,
+                'processed_items' => $processed,
+                'errors' => $failed,
                 'timestamp' => Carbon::now()->toDateTimeString()
             ]);
 

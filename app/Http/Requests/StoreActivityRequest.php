@@ -34,37 +34,25 @@ class StoreActivityRequest extends FormRequest
     {
         return [
             'tour_plan_id'   => 'nullable|uuid|exists:tour_plans,id',
-            'contact_id'     => 'nullable|uuid|exists:contacts,id',
-            'account_id'     => 'nullable|uuid|exists:accounts,id',
+            'contact_id'     => 'nullable|string|exists:contacts,id',
+            'account_id'     => 'nullable|string|exists:accounts,id',
             'activity_type'  => 'required|string',
-            'activity_type_id'=> 'nullable|uuid|exists:activity_types,id',
             'date_activite'  => 'required|date',
             'heure_debut'    => 'nullable|string',
             'heure_fin'      => 'nullable|string',
-            'duration'       => 'nullable|integer|min:0',
-            'gps_debut_lat'  => 'nullable|numeric|between:-90,90',
-            'gps_debut_lng'  => 'nullable|numeric|between:-180,180',
-            'gps_fin_lat'    => 'nullable|numeric|between:-90,90',
-            'gps_fin_lng'    => 'nullable|numeric|between:-180,180',
             'motif'          => 'nullable|string',
             'notes'          => 'nullable|string',
-            'prochain_rdv'   => 'nullable|date',
-            'statut'         => 'in:planifiee,en_cours,realisee,manquee,annulee',
-            'local_uuid'     => 'nullable|uuid|unique:activities,local_uuid',
+            'niveau_interet' => 'nullable|integer',
+            'statut'         => 'in:planifiee,en_cours,realisee,manquee,annulee,brouillon,soumis_definitif',
+            'local_uuid'     => 'nullable|string',
+            'signature_base64'=> 'nullable|string',
             
-            // Produits présentés/distribués
-            'products'              => 'nullable|array',
-            'products.*.product_id' => 'required_with:products|uuid|exists:products,id',
-            'products.*.quantity'   => 'integer|min:0',
-            'products.*.customer_interest' => 'nullable|string',
-            'products.*.reaction'   => 'nullable|string',
-            'products.*.remarques'  => 'nullable|string',
-
-            // Documents / e-detailing
-            'documents'              => 'nullable|array',
-            'documents.*.document_id'=> 'required_with:documents|uuid|exists:documents,id',
-            'documents.*.duration_seconds' => 'nullable|integer',
-            'documents.*.display_order' => 'nullable|integer',
+            // Samples
+            'samples'              => 'nullable|array',
+            'samples.*.product_id' => 'required_with:samples|string|exists:products,id',
+            'samples.*.quantite'   => 'required_with:samples|integer|min:1',
+            'samples.*.num_lot'    => 'nullable|string',
+            'samples.*.date_peremption' => 'nullable|date',
         ];
     }
 }
