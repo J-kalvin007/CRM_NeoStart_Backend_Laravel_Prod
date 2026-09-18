@@ -36,6 +36,7 @@ class ActivityController extends Controller
         $query = Activity::with(['delegue', 'contact', 'account', 'products'])
             ->when($request->activity_type, fn($q, $v) => $q->where('activity_type', $v))
             ->when($request->statut, fn($q, $v) => $q->where('statut', $v))
+            ->when($request->report_status, fn($q, $v) => $q->where('report_status', $v))
             ->when($request->date_debut, fn($q, $v) => $q->whereDate('date_activite', '>=', $v))
             ->when($request->date_fin, fn($q, $v) => $q->whereDate('date_activite', '<=', $v))
             ->when($request->contact_id, fn($q, $v) => $q->where('contact_id', $v))

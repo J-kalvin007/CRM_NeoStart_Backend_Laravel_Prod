@@ -51,25 +51,30 @@ class AnalyticsController extends Controller
     public function teamPerformance(Request $request)
     {
         $user = auth()->user();
-        $teamUsers = $user->team_id 
+        $teamUsers = ($user && $user->team_id) 
             ? User::where('team_id', $user->team_id)->get() 
             : User::all();
 
+        if ($teamUsers->isEmpty()) {
+            $teamUsers = User::take(10)->get();
+        }
+
         $data = $teamUsers->map(function ($delegue) use ($request) {
             $baseActivities = Activity::where('user_id', $delegue->id)
-                ->where('activity_type', 'visite')
-                ->whereMonth('date_activite', now()->month);
+                ->where('activity_type', 'visite');
 
-            $completedVisits = (clone $baseActivities)->where('statut', 'realisee')->count();
+            $completedVisits = (clone $baseActivities)->whereIn('statut', ['realisee', 'effectuee', 'validee'])->count();
             $inProgressVisits = (clone $baseActivities)->where('statut', 'en_cours')->count();
             $noShowCount = (clone $baseActivities)->whereIn('statut', ['manquee', 'annulee'])->count();
-            $visitCount = $completedVisits; // Rétrocompatibilité
+            $visitCount = $completedVisits;
 
-            $objectif = Objectif::where('user_id', $delegue->id)
-                ->where('type_objectif', 'nombre_visites')
-                ->first();
+            $objectifQuery = Objectif::where('user_id', $delegue->id);
+            if (\Illuminate\Support\Facades\Schema::hasColumn('objectifs', 'type_objectif')) {
+                $objectifQuery->where('type_objectif', 'nombre_visites');
+            }
+            $objectif = $objectifQuery->first();
 
-            $target = $objectif->valeur_cible ?? 1;
+            $target = (int) ($objectif->valeur_cible ?? 20);
             $rate = min(100, round(($visitCount / max(1, $target)) * 100, 1));
 
             $revenue = Order::where('user_id', $delegue->id)
@@ -78,7 +83,7 @@ class AnalyticsController extends Controller
 
             return [
                 'delegate' => [
-                    'id'   => $delegue->id,
+                    'id'   => (string) $delegue->id,
                     'name' => $delegue->name,
                 ],
                 'visit_count'        => $visitCount,
