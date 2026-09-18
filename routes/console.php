@@ -10,3 +10,7 @@ Artisan::command('inspire', function () {
 
 Schedule::command('app:send-reminders')->dailyAt('07:00');
 Schedule::command('app:calculate-scores')->dailyAt('02:00');
+
+// Récupération de l'heure configurable avec une valeur par défaut de 20:00
+$reminderTime = \App\Models\Setting::where('key', 'report_reminder_time')->value('value') ?? '20:00';
+Schedule::command('visits:remind-missing-reports')->dailyAt($reminderTime);

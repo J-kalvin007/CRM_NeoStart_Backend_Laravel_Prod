@@ -7507,6 +7507,67 @@
                 ]
             }
         },
+        "/api/v1/supervisor/missing-reports": {
+            "get": {
+                "tags": [
+                    "Supervisor Reports"
+                ],
+                "summary": "Lister les visites sans compte rendu",
+                "operationId": "6e825e05648841711bbfc98ec3e0a056",
+                "responses": {
+                    "200": {
+                        "description": "Liste des activités passées sans compte rendu"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/supervisor/remind-missing-reports": {
+            "post": {
+                "tags": [
+                    "Supervisor Reports"
+                ],
+                "summary": "Relancer manuellement les comptes rendus manquants",
+                "operationId": "944e70c040849c3512ab6b1bded9d448",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "activity_ids"
+                                ],
+                                "properties": {
+                                    "activity_ids": {
+                                        "description": "Liste des identifiants (UUID) des activités à relancer",
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string",
+                                            "format": "uuid"
+                                        }
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Relances envoyées avec succès"
+                    }
+                },
+                "security": [
+                    {
+                        "sanctum": []
+                    }
+                ]
+            }
+        },
         "/api/v1/sync/pull": {
             "get": {
                 "tags": [
@@ -8991,6 +9052,10 @@
         {
             "name": "Subsidiaries",
             "description": "Subsidiaries"
+        },
+        {
+            "name": "Supervisor Reports",
+            "description": "Supervisor Reports"
         },
         {
             "name": "Teams",
