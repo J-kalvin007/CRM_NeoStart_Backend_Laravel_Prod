@@ -144,6 +144,7 @@ Route::prefix('v1')->group(function () {
 
         // ── Notifications ──────────────────────────────────────────
         Route::get('/notifications', [NotificationController::class, 'index']);
+        Route::post('/notifications', [NotificationController::class, 'store']);
         Route::post('/notifications/mark-all-as-read', [NotificationController::class, 'markAllAsRead']);
         Route::post('/notifications/{id}/mark-as-read', [NotificationController::class, 'markAsRead']);
 

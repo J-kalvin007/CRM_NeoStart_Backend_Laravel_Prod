@@ -54,7 +54,9 @@ class DocumentController extends Controller
             ];
         });
         
-        return response()->json($documents);
+        return response()->json([
+            'data' => $documents
+        ]);
     }
 
     public function store(Request $request)
