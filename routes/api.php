@@ -239,6 +239,7 @@ Route::prefix('v1')->group(function () {
         Route::get('permissions', [PermissionController::class, 'index']);
 
         // ── Objectifs & Performance ────────────────────────────
+        Route::get('me/objectifs-summary', [ObjectifController::class, 'summary']);
         Route::apiResource('objectifs', ObjectifController::class);
 
         // ── Congés (Leaves) ────────────────────────────────────
