@@ -51,7 +51,16 @@ class AnalyticsController extends Controller
     public function teamPerformance(Request $request)
     {
         $user = auth()->user();
-        $teamUsers = User::where('id', '!=', $user->id)->get();
+        $teamUsers = User::where('id', '!=', $user->id)
+            ->whereDoesntHave('roles', function($q) {
+                $q->whereIn('name', ['superadmin', 'admin']);
+            })
+            ->where(function($q) {
+                $q->whereHas('roles', function($r) {
+                    $r->whereIn('name', ['delegue_medical', 'delegue']);
+                })->orWhereDoesntHave('roles');
+            })
+            ->get();
 
         $data = $teamUsers->map(function ($delegue, $index) use ($request) {
             $baseActivities = Activity::where('user_id', $delegue->id)

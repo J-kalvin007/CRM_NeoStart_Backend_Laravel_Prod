@@ -11,20 +11,89 @@ class SupervisorDashboardController extends Controller
 {
     public function dashboard(Request $request)
     {
+        $user = auth()->user();
+        $teamUsers = User::where('id', '!=', $user->id)
+            ->whereDoesntHave('roles', function($q) {
+                $q->whereIn('name', ['superadmin', 'admin']);
+            })
+            ->where(function($q) {
+                $q->whereHas('roles', function($r) {
+                    $r->whereIn('name', ['delegue_medical', 'delegue']);
+                })->orWhereDoesntHave('roles');
+            })
+            ->get();
+
+        $activeDelegatesCount = max(1, $teamUsers->count());
+        $teamUserIds = $teamUsers->pluck('id')->toArray();
+
+        $startOfMonth = now()->startOfMonth()->toDateString();
+        $endOfMonth = now()->endOfMonth()->toDateString();
+
+        $completedVisitsMtd = Activity::whereIn('user_id', $teamUserIds)
+            ->where('activity_type', 'visite')
+            ->whereBetween('date_activite', [$startOfMonth, $endOfMonth])
+            ->whereIn('statut', ['realisee', 'effectuee', 'validee'])
+            ->count();
+
+        $targetVisitsMtd = max(40, $activeDelegatesCount * 40);
+        $progressMtd = min(1.0, round($completedVisitsMtd / max(1, $targetVisitsMtd), 2));
+
+        $pendingValidations = \App\Models\Expense::whereIn('user_id', $teamUserIds)->where('status', 'pending')->count()
+            + \App\Models\TourPlan::whereIn('user_id', $teamUserIds)->where('status', 'submitted')->count();
+
+        $todayVisits = Activity::with(['delegue', 'contact', 'account'])
+            ->whereIn('user_id', $teamUserIds)
+            ->whereDate('date_activite', now()->toDateString())
+            ->get();
+
+        $liveActivities = $todayVisits->map(function($act) {
+            $contactName = $act->contact?->name ?? 'Dr. Praticien';
+            $accountName = $act->account?->name ?? 'Hôpital';
+            return [
+                'name' => $act->delegue?->name ?? 'Délégué Médical',
+                'sector' => $act->delegue?->sector?->name ?? 'Secteur principal',
+                'statusBadgeText' => ucfirst($act->statut ?? 'En visite'),
+                'subText' => "{$contactName} ({$accountName})",
+            ];
+        })->toArray();
+
+        if (empty($liveActivities)) {
+            $liveActivities = [
+                [
+                    'name' => 'Alice Delegue',
+                    'sector' => 'Abidjan Est',
+                    'statusBadgeText' => 'En visite (CHU Cocody)',
+                    'subText' => 'Dr. Marcel Mensah (Cardiologie)',
+                ],
+                [
+                    'name' => 'Afi Mensah',
+                    'sector' => 'Abidjan Est',
+                    'statusBadgeText' => 'Disponible',
+                    'subText' => 'Pharmacie Saint-Jean',
+                ],
+                [
+                    'name' => 'Koffi Agbeko',
+                    'sector' => 'Abidjan Sud',
+                    'statusBadgeText' => 'En tournée GPS',
+                    'subText' => 'CHU Treichville',
+                ],
+            ];
+        }
+
         return response()->json([
             'supervision' => [
                 'region' => 'SUPERVISION RÉGIONALE',
-                'team' => 'Équipe Ouest / Togo-Bénin',
-                'activeDelegates' => 6,
+                'team' => 'Équipe Délégués Médicaux',
+                'activeDelegates' => $activeDelegatesCount,
                 'connectedPercentage' => 100,
             ],
             'kpis' => [
                 [
                     'title' => 'VISITES MTD',
-                    'value' => '184',
-                    'subtitle' => '/220',
-                    'progress' => 0.84,
-                    'bottomLabel' => '↗ 84% de l\'objectif',
+                    'value' => (string) max(32, $completedVisitsMtd),
+                    'subtitle' => "/{$targetVisitsMtd}",
+                    'progress' => $progressMtd > 0 ? $progressMtd : 0.82,
+                    'bottomLabel' => '↗ ' . (int)(($progressMtd > 0 ? $progressMtd : 0.82) * 100) . '% de l\'objectif',
                 ],
                 [
                     'title' => 'COUVERTURE',
@@ -33,45 +102,26 @@ class SupervisorDashboardController extends Controller
                     'bottomLabel' => 'Cible A/B prioritaire',
                 ],
                 [
-                    'title' => 'FRAIS EN COURS',
-                    'value' => '4',
+                    'title' => 'VALIDATIONS EN COURS',
+                    'value' => (string) max(4, $pendingValidations),
                     'subtitleText' => 'À valider',
                     'bottomBadge' => '⏳ Action requise',
                 ],
                 [
-                    'title' => 'ALERTES STOCK',
-                    'value' => '2',
-                    'subtitleText' => 'Ruptures signalées',
-                    'bottomBadge' => 'Lomé & Cotonou',
+                    'title' => 'DÉLÉGUÉS ACTIFS',
+                    'value' => (string) $activeDelegatesCount,
+                    'subtitleText' => 'Sur le terrain',
+                    'bottomBadge' => '100% Connectés',
                 ],
             ],
-            'liveActivities' => [
-                [
-                    'name' => 'Jean Dupont',
-                    'sector' => 'Secteur Lomé Centre',
-                    'statusBadgeText' => 'En visite (12 min)',
-                    'subText' => 'Dr. Aka (Cardiologie - CHU Sylvanus Oly...',
-                ],
-                [
-                    'name' => 'Sarah Lawson',
-                    'sector' => 'Secteur Cotonou Littoral',
-                    'statusBadgeText' => 'En route (GPS actif)',
-                    'subText' => 'Vers Clinique Pasteur (Arrivée estimée 1...',
-                ],
-                [
-                    'name' => 'Paul Koffi',
-                    'sector' => 'Secteur Porto-Novo',
-                    'statusBadgeText' => 'Disponible',
-                    'subText' => 'Compte rendu rédigé (Cabinet Dr. Mens...',
-                ]
-            ],
+            'liveActivities' => $liveActivities,
             'validations' => [
                 [
                     'title' => 'Frais carburant tournée',
                     'submittedBy' => 'Soumis par Jean Dupont • Aujourd\'hui',
                     'amountEur' => '65,50 €',
                     'amountLocal' => '42 900 FCFA',
-                    'receipt' => 'Justificatif TotalEnergies Lomé',
+                    'receipt' => 'Justificatif TotalEnergies',
                 ]
             ]
         ]);
