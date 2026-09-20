@@ -23,8 +23,35 @@ class PerimeterScope implements Scope
         $table = $model->getTable();
         $operationalTables = ['contacts', 'activities', 'tour_plans', 'sample_movements', 'objectifs', 'accounts', 'kol_profiles'];
 
-        // 1. Holding / Global admin bypasses all filters
-        if ($user->can('scope:global') || $user->hasRole('admin')) {
+        // 1. Holding / Global admin & superadmin bypass isolation
+        if ($user->can('scope:global') || $user->hasAnyRole(['superadmin', 'admin'])) {
+            return;
+        }
+
+        // 2. Superviseurs & Managers: Récupèrent uniquement les délégués faisant partie de leur équipe (ou sous leur responsabilité)
+        if ($user->hasAnyRole(['superviseur', 'directeur_regional', 'directeur_commercial', 'directeur_marketing'])) {
+            if ($table === 'users') {
+                $builder->where(function($q) use ($user) {
+                    if ($user->team_id) {
+                        $q->where('team_id', $user->team_id)
+                          ->orWhere('manager_id', $user->id)
+                          ->orWhere('id', $user->id);
+                    } else {
+                        $q->where('manager_id', $user->id)->orWhere('id', $user->id);
+                    }
+                });
+            } elseif (in_array($table, $operationalTables)) {
+                $builder->whereIn($table . '.user_id', function($sub) use ($user) {
+                    $sub->select('id')->from('users');
+                    if ($user->team_id) {
+                        $sub->where('team_id', $user->team_id)
+                            ->orWhere('manager_id', $user->id)
+                            ->orWhere('id', $user->id);
+                    } else {
+                        $sub->where('manager_id', $user->id)->orWhere('id', $user->id);
+                    }
+                });
+            }
             return;
         }
 

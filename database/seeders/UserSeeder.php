@@ -51,19 +51,58 @@ class UserSeeder extends Seeder
             $manager->assignRole('superviseur');
         }
 
-        $delegue = User::firstOrCreate([
-            'email' => 'adommoucha@gmail.com'
-        ], [
-            'name' => 'Alice Delegue',
-            'password' => Hash::make('password'),
-            'country_id' => $country?->id,
-            'subsidiary_id' => $subsidiary?->id,
-            'team_id' => $team?->id,
-            'force_password_change' => false,
-            'status' => true,
-        ]);
-        if (!$delegue->hasRole('delegue_medical')) {
-            $delegue->assignRole('delegue_medical');
+        $delegatesData = [
+            [
+                'email' => 'adommoucha@gmail.com',
+                'name' => 'Alice Delegue',
+                'role' => 'delegue_medical',
+            ],
+            [
+                'email' => 'afi.mensah@crm.local',
+                'name' => 'Afi Mensah',
+                'role' => 'delegue_medical',
+            ],
+            [
+                'email' => 'koffi.agbeko@crm.local',
+                'name' => 'Koffi Agbeko',
+                'role' => 'delegue_medical',
+            ],
+            [
+                'email' => 'sarah.lawson@crm.local',
+                'name' => 'Sarah Lawson',
+                'role' => 'delegue_medical',
+            ],
+            [
+                'email' => 'mamadou.kane@crm.local',
+                'name' => 'Mamadou Kane',
+                'role' => 'delegue_medical',
+            ],
+            [
+                'email' => 'jean.dupont@crm.local',
+                'name' => 'Jean Dupont',
+                'role' => 'delegue_medical',
+            ],
+        ];
+
+        foreach ($delegatesData as $dData) {
+            $user = User::firstOrCreate([
+                'email' => $dData['email']
+            ], [
+                'name' => $dData['name'],
+                'password' => Hash::make('password'),
+                'country_id' => $country?->id,
+                'subsidiary_id' => $subsidiary?->id,
+                'team_id' => $team?->id,
+                'manager_id' => $manager?->id,
+                'force_password_change' => false,
+                'status' => true,
+            ]);
+            if ($user->manager_id !== $manager?->id) {
+                $user->update(['manager_id' => $manager?->id, 'team_id' => $team?->id]);
+            }
+            if (!$user->hasRole($dData['role'])) {
+                $user->assignRole($dData['role']);
+            }
         }
     }
 }
