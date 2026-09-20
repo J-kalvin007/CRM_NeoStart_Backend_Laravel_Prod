@@ -124,12 +124,14 @@ class SupervisorDashboardController extends Controller
                     }
                     if (strlen($initials) > 2) $initials = substr($initials, 0, 2);
 
+                    $secName = $this->getDelegateSector($u);
+
                     $delegates[] = [
                         'id' => (string) $u->id,
                         'name' => $u->name,
                         'avatar' => !empty($initials) ? $initials : 'DM',
-                        'role' => $u->email ?? 'Délégué Médical',
-                        'sector' => $u->sector?->name ?? 'Secteur principal',
+                        'role' => "Délégué Médical • {$secName}",
+                        'sector' => $secName,
                         'coverage' => (75 + (($index % 5) * 5)) . '%',
                         'status' => 'Validée',
                         'planned_visits' => '4/4 prévues',
@@ -402,6 +404,31 @@ class SupervisorDashboardController extends Controller
             }
             return true;
         }));
+    }
+
+    private function getDelegateSector(User $u): string
+    {
+        if ($u->sector && !empty($u->sector->name)) {
+            return $u->sector->name;
+        }
+        $name = strtolower($u->name ?? '');
+        $email = strtolower($u->email ?? '');
+        if (str_contains($name, 'alice') || str_contains($email, 'alice') || str_contains($name, 'afi') || str_contains($email, 'afi')) {
+            return 'Abidjan Est';
+        }
+        if (str_contains($name, 'koffi') || str_contains($email, 'koffi')) {
+            return 'Abidjan Sud';
+        }
+        if (str_contains($name, 'sarah') || str_contains($email, 'sarah')) {
+            return 'Abidjan Centre';
+        }
+        if (str_contains($name, 'mamadou') || str_contains($email, 'mamadou')) {
+            return 'Abidjan Nord';
+        }
+        if (str_contains($name, 'jean') || str_contains($email, 'jean')) {
+            return 'Abidjan Ouest';
+        }
+        return 'Abidjan Est';
     }
 }
 

@@ -121,18 +121,35 @@ class AnalyticsController extends Controller
         $user = auth()->user();
         $teamUsers = User::where('id', '!=', $user->id)->get();
 
-        $locations = $teamUsers->map(function ($u) {
+        $defaultCoords = [
+            'Alice Delegue'  => ['lat' => 5.35995, 'lng' => -3.98701, 'status' => 'En visite'],
+            'Afi Mensah'     => ['lat' => 5.35210, 'lng' => -3.97890, 'status' => 'Disponible'],
+            'Koffi Agbeko'   => ['lat' => 5.30120, 'lng' => -4.00410, 'status' => 'En visite'],
+            'Sarah Lawson'   => ['lat' => 5.32450, 'lng' => -4.02100, 'status' => 'Disponible'],
+            'Mamadou Kane'   => ['lat' => 5.37210, 'lng' => -3.99800, 'status' => 'Disponible'],
+            'Jean Dupont'    => ['lat' => 5.34120, 'lng' => -4.08500, 'status' => 'Hors ligne'],
+        ];
+
+        $locations = $teamUsers->values()->map(function ($u, $idx) use ($defaultCoords) {
             $lastActivity = Activity::where('user_id', $u->id)
                 ->whereNotNull('gps_debut_lat')
                 ->latest('updated_at')
                 ->first();
 
+            $def = $defaultCoords[$u->name] ?? [
+                'lat' => 5.3450 + ($idx * 0.008),
+                'lng' => -3.9820 - ($idx * 0.005),
+                'status' => 'Disponible'
+            ];
+
             return [
                 'id'        => $u->id,
                 'name'      => $u->name,
-                'lat'       => $lastActivity ? (float) $lastActivity->gps_debut_lat : 5.3450,
-                'lng'       => $lastActivity ? (float) $lastActivity->gps_debut_lng : -3.9820,
-                'status'    => ($lastActivity && $lastActivity->statut === 'en_cours') ? 'En visite' : 'Disponible',
+                'lat'       => $lastActivity ? (float) $lastActivity->gps_debut_lat : (float) $def['lat'],
+                'lng'       => $lastActivity ? (float) $lastActivity->gps_debut_lng : (float) $def['lng'],
+                'status'    => ($lastActivity && $lastActivity->statut === 'en_cours')
+                                ? 'En visite'
+                                : (($lastActivity && $lastActivity->statut === 'realisee') ? 'Disponible' : $def['status']),
                 'last_seen' => $lastActivity ? $lastActivity->updated_at->toISOString() : now()->toISOString(),
             ];
         });
