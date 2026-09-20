@@ -234,238 +234,174 @@ class SupervisorDashboardController extends Controller
 
     private function getDelegateTailoredSchedules(string $delegate, string $sector, string $dateStr, string $temporality = 'Jour'): array
     {
-        $sec = ($sector === 'Tous les secteurs') ? 'Abidjan Est' : $sector;
-        $del = ($delegate === 'Tous') ? 'Alice Delegue' : $delegate;
-        $dayNum = (int) date('d', strtotime($dateStr));
-
-        if (stripos($del, 'Alice') !== false) {
-            return [
-                [
-                    'id' => 'plan-alice-1',
-                    'delegate' => 'Alice Delegue',
-                    'dateActivite' => $dateStr,
-                    'time' => '09:00',
-                    'title' => 'Visite médicale — Dr. Marcel Mensah',
-                    'specialty' => 'CHU Cocody • Présentation DiaBex 500mg',
-                    'type' => 'Visite médicale',
-                    'status' => 'Effectuée',
-                    'isDuo' => false,
-                    'sector' => 'Abidjan Est',
-                    'color' => '#00816E',
-                ],
-                [
-                    'id' => 'plan-alice-2',
-                    'delegate' => 'Alice Delegue',
-                    'dateActivite' => $dateStr,
-                    'time' => '11:30',
-                    'title' => 'Visite médicale — Dr. Ablavi Lawson',
-                    'specialty' => 'Polyclinique Sainte Anne • Gamme Neurologie',
-                    'type' => 'Visite médicale',
-                    'status' => 'Effectuée',
-                    'isDuo' => true,
-                    'sector' => 'Abidjan Est',
-                    'color' => '#00816E',
-                ],
-                [
-                    'id' => 'plan-alice-3',
-                    'delegate' => 'Alice Delegue',
-                    'dateActivite' => $dateStr,
-                    'time' => '15:00',
-                    'title' => 'Visite Officine — Pharmacie Principale Plateau',
-                    'specialty' => 'Quartier Plateau • Réassort & Dotation',
-                    'type' => 'Visite Officine',
-                    'status' => 'En cours',
-                    'isDuo' => false,
-                    'sector' => 'Abidjan Est',
-                    'color' => '#0050CB',
-                ],
-                [
-                    'id' => 'plan-alice-4',
-                    'delegate' => 'Alice Delegue',
-                    'dateActivite' => $dateStr,
-                    'time' => '16:45',
-                    'title' => 'Visite médicale — Dr. Sow Ousmane',
-                    'specialty' => 'CHU Treichville • Suivi CardioPulse',
-                    'type' => 'Visite médicale',
-                    'status' => 'Planifiée',
-                    'isDuo' => false,
-                    'sector' => 'Abidjan Est',
-                    'color' => '#0050CB',
-                ],
-            ];
-        }
-
-        if (stripos($del, 'Afi') !== false) {
-            return [
-                [
-                    'id' => 'plan-afi-1',
-                    'delegate' => 'Afi Mensah',
-                    'dateActivite' => $dateStr,
-                    'time' => '08:30',
-                    'title' => 'Visite médicale — Dr. Marcel Mensah',
-                    'specialty' => 'CHU Cocody • Présentation DiaBex 500mg',
-                    'type' => 'Visite médicale',
-                    'status' => 'Effectuée',
-                    'isDuo' => false,
-                    'sector' => 'Abidjan Est',
-                    'color' => '#00816E',
-                ],
-                [
-                    'id' => 'plan-afi-2',
-                    'delegate' => 'Afi Mensah',
-                    'dateActivite' => $dateStr,
-                    'time' => '10:15',
-                    'title' => 'Visite médicale — Dr. Ablavi Lawson',
-                    'specialty' => 'Polyclinique Sainte Anne • Gamme Neurologie',
-                    'type' => 'Visite médicale',
-                    'status' => 'Effectuée',
-                    'isDuo' => true,
-                    'sector' => 'Abidjan Est',
-                    'color' => '#00816E',
-                ],
-                [
-                    'id' => 'plan-afi-3',
-                    'delegate' => 'Afi Mensah',
-                    'dateActivite' => $dateStr,
-                    'time' => '14:00',
-                    'title' => 'Visite Officine — Pharmacie Saint-Jean',
-                    'specialty' => 'Cocody Mermoz • Réassort DiaBex',
-                    'type' => 'Visite Officine',
-                    'status' => 'En cours',
-                    'isDuo' => false,
-                    'sector' => 'Abidjan Est',
-                    'color' => '#0050CB',
-                ],
-            ];
-        }
-
-        if (stripos($del, 'Koffi') !== false) {
-            return [
-                [
-                    'id' => 'plan-koffi-1',
-                    'delegate' => 'Koffi Agbeko',
-                    'dateActivite' => $dateStr,
-                    'time' => '09:00',
-                    'title' => 'Visite médicale — Dr. Sow Ousmane',
-                    'specialty' => 'CHU Treichville • Endocrinologie',
-                    'type' => 'Visite médicale',
-                    'status' => 'Effectuée',
-                    'isDuo' => false,
-                    'sector' => 'Abidjan Sud',
-                    'color' => '#00816E',
-                ],
-                [
-                    'id' => 'plan-koffi-2',
-                    'delegate' => 'Koffi Agbeko',
-                    'dateActivite' => $dateStr,
-                    'time' => '11:00',
-                    'title' => 'Visite Officine — Pharmacie de Treichville',
-                    'specialty' => 'Avenue 16 • Contrôle de stock',
-                    'type' => 'Visite Officine',
-                    'status' => 'Effectuée',
-                    'isDuo' => false,
-                    'sector' => 'Abidjan Sud',
-                    'color' => '#00816E',
-                ],
-            ];
-        }
-
-        if (stripos($del, 'Sarah') !== false) {
-            return [
-                [
-                    'id' => 'plan-sarah-1',
-                    'delegate' => 'Sarah Lawson',
-                    'dateActivite' => $dateStr,
-                    'time' => '09:15',
-                    'title' => 'Visite médicale — Dr. Marie Aka',
-                    'specialty' => 'Clinique de la Madeleine • Pédiatrie',
-                    'type' => 'Visite médicale',
-                    'status' => 'Effectuée',
-                    'isDuo' => false,
-                    'sector' => 'Abidjan Centre',
-                    'color' => '#00816E',
-                ],
-                [
-                    'id' => 'plan-sarah-2',
-                    'delegate' => 'Sarah Lawson',
-                    'dateActivite' => $dateStr,
-                    'time' => '11:45',
-                    'title' => 'Visite Officine — Pharmacie Principale Plateau',
-                    'specialty' => 'Rue du Commerce • Commande directe',
-                    'type' => 'Visite Officine',
-                    'status' => 'Effectuée',
-                    'isDuo' => false,
-                    'sector' => 'Abidjan Centre',
-                    'color' => '#00816E',
-                ],
-            ];
-        }
-
-        if (stripos($del, 'Mamadou') !== false) {
-            return [
-                [
-                    'id' => 'plan-mk-1',
-                    'delegate' => 'Mamadou Kane',
-                    'dateActivite' => $dateStr,
-                    'time' => '09:30',
-                    'title' => 'Visite médicale — Dr. Issiaka Bamba',
-                    'specialty' => 'CHU Treichville • Neurologie',
-                    'type' => 'Visite médicale',
-                    'status' => 'Effectuée',
-                    'isDuo' => false,
-                    'sector' => 'Abidjan Nord',
-                    'color' => '#00816E',
-                ],
-            ];
-        }
-
-        if (stripos($del, 'Jean') !== false) {
-            return [
-                [
-                    'id' => 'plan-jd-1',
-                    'delegate' => 'Jean Dupont',
-                    'dateActivite' => $dateStr,
-                    'time' => '10:00',
-                    'title' => 'Visite médicale — Dr. Bernard Kotto',
-                    'specialty' => 'Clinique de l\'Espérance Yopougon • Pédiatrie',
-                    'type' => 'Visite médicale',
-                    'status' => 'Effectuée',
-                    'isDuo' => false,
-                    'sector' => 'Abidjan Ouest',
-                    'color' => '#00816E',
-                ],
-            ];
-        }
-
-        // Generic fallback for any other delegate name
-        return [
+        $all = [
             [
-                'id' => 'plan-gen-1',
-                'delegate' => $del,
+                'id' => 'plan-alice-1',
+                'delegate' => 'Alice Delegue',
                 'dateActivite' => $dateStr,
                 'time' => '09:00',
-                'title' => "Visite médicale — Dr. Praticien ({$del})",
-                'specialty' => "Établissement Régional • {$sec}",
+                'title' => 'Visite médicale — Dr. Marcel Mensah',
+                'specialty' => 'CHU Cocody • Présentation DiaBex 500mg',
                 'type' => 'Visite médicale',
                 'status' => 'Effectuée',
                 'isDuo' => false,
-                'sector' => $sec,
+                'sector' => 'Abidjan Est',
                 'color' => '#00816E',
             ],
             [
-                'id' => 'plan-gen-2',
-                'delegate' => $del,
+                'id' => 'plan-alice-2',
+                'delegate' => 'Alice Delegue',
                 'dateActivite' => $dateStr,
                 'time' => '11:30',
-                'title' => "Visite Officine — Pharmacie Principale",
-                'specialty' => "Centre Ville • Suivi Produit ({$sec})",
+                'title' => 'Visite médicale — Dr. Ablavi Lawson',
+                'specialty' => 'Polyclinique Sainte Anne • Gamme Neurologie',
+                'type' => 'Visite médicale',
+                'status' => 'Effectuée',
+                'isDuo' => true,
+                'sector' => 'Abidjan Est',
+                'color' => '#00816E',
+            ],
+            [
+                'id' => 'plan-alice-3',
+                'delegate' => 'Alice Delegue',
+                'dateActivite' => $dateStr,
+                'time' => '15:00',
+                'title' => 'Visite Officine — Pharmacie Principale Plateau',
+                'specialty' => 'Quartier Plateau • Réassort & Dotation',
                 'type' => 'Visite Officine',
                 'status' => 'En cours',
                 'isDuo' => false,
-                'sector' => $sec,
+                'sector' => 'Abidjan Est',
                 'color' => '#0050CB',
             ],
+            [
+                'id' => 'plan-afi-1',
+                'delegate' => 'Afi Mensah',
+                'dateActivite' => $dateStr,
+                'time' => '08:30',
+                'title' => 'Visite médicale — Dr. Marcel Mensah',
+                'specialty' => 'CHU Cocody • Présentation DiaBex 500mg',
+                'type' => 'Visite médicale',
+                'status' => 'Effectuée',
+                'isDuo' => false,
+                'sector' => 'Abidjan Est',
+                'color' => '#00816E',
+            ],
+            [
+                'id' => 'plan-afi-2',
+                'delegate' => 'Afi Mensah',
+                'dateActivite' => $dateStr,
+                'time' => '10:15',
+                'title' => 'Visite médicale — Dr. Ablavi Lawson',
+                'specialty' => 'Polyclinique Sainte Anne • Gamme Neurologie',
+                'type' => 'Visite médicale',
+                'status' => 'Effectuée',
+                'isDuo' => true,
+                'sector' => 'Abidjan Est',
+                'color' => '#00816E',
+            ],
+            [
+                'id' => 'plan-afi-3',
+                'delegate' => 'Afi Mensah',
+                'dateActivite' => $dateStr,
+                'time' => '14:00',
+                'title' => 'Visite Officine — Pharmacie Saint-Jean',
+                'specialty' => 'Cocody Mermoz • Réassort DiaBex',
+                'type' => 'Visite Officine',
+                'status' => 'En cours',
+                'isDuo' => false,
+                'sector' => 'Abidjan Est',
+                'color' => '#0050CB',
+            ],
+            [
+                'id' => 'plan-koffi-1',
+                'delegate' => 'Koffi Agbeko',
+                'dateActivite' => $dateStr,
+                'time' => '09:00',
+                'title' => 'Visite médicale — Dr. Sow Ousmane',
+                'specialty' => 'CHU Treichville • Endocrinologie',
+                'type' => 'Visite médicale',
+                'status' => 'Effectuée',
+                'isDuo' => false,
+                'sector' => 'Abidjan Sud',
+                'color' => '#00816E',
+            ],
+            [
+                'id' => 'plan-koffi-2',
+                'delegate' => 'Koffi Agbeko',
+                'dateActivite' => $dateStr,
+                'time' => '11:00',
+                'title' => 'Visite Officine — Pharmacie de Treichville',
+                'specialty' => 'Avenue 16 • Contrôle de stock',
+                'type' => 'Visite Officine',
+                'status' => 'Effectuée',
+                'isDuo' => false,
+                'sector' => 'Abidjan Sud',
+                'color' => '#00816E',
+            ],
+            [
+                'id' => 'plan-sarah-1',
+                'delegate' => 'Sarah Lawson',
+                'dateActivite' => $dateStr,
+                'time' => '09:15',
+                'title' => 'Visite médicale — Dr. Marie Aka',
+                'specialty' => 'Clinique de la Madeleine • Pédiatrie',
+                'type' => 'Visite médicale',
+                'status' => 'Effectuée',
+                'isDuo' => false,
+                'sector' => 'Abidjan Centre',
+                'color' => '#00816E',
+            ],
+            [
+                'id' => 'plan-sarah-2',
+                'delegate' => 'Sarah Lawson',
+                'dateActivite' => $dateStr,
+                'time' => '11:45',
+                'title' => 'Visite Officine — Pharmacie Principale Plateau',
+                'specialty' => 'Rue du Commerce • Commande directe',
+                'type' => 'Visite Officine',
+                'status' => 'Effectuée',
+                'isDuo' => false,
+                'sector' => 'Abidjan Centre',
+                'color' => '#00816E',
+            ],
+            [
+                'id' => 'plan-mk-1',
+                'delegate' => 'Mamadou Kane',
+                'dateActivite' => $dateStr,
+                'time' => '09:30',
+                'title' => 'Visite médicale — Dr. Issiaka Bamba',
+                'specialty' => 'CHU Treichville • Neurologie',
+                'type' => 'Visite médicale',
+                'status' => 'Effectuée',
+                'isDuo' => false,
+                'sector' => 'Abidjan Nord',
+                'color' => '#00816E',
+            ],
+            [
+                'id' => 'plan-jd-1',
+                'delegate' => 'Jean Dupont',
+                'dateActivite' => $dateStr,
+                'time' => '10:00',
+                'title' => 'Visite médicale — Dr. Bernard Kotto',
+                'specialty' => 'Clinique de l\'Espérance Yopougon • Pédiatrie',
+                'type' => 'Visite médicale',
+                'status' => 'Effectuée',
+                'isDuo' => false,
+                'sector' => 'Abidjan Ouest',
+                'color' => '#00816E',
+            ],
         ];
+
+        return array_values(array_filter($all, function($item) use ($delegate, $sector) {
+            if ($delegate !== 'Tous' && stripos($item['delegate'], $delegate) === false) {
+                return false;
+            }
+            if ($sector !== 'Tous les secteurs' && stripos($item['sector'], $sector) === false) {
+                return false;
+            }
+            return true;
+        }));
     }
 }
 
