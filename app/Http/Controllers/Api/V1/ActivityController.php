@@ -34,6 +34,7 @@ class ActivityController extends Controller
     public function index(Request $request)
     {
         $query = Activity::with(['delegue', 'contact', 'account', 'products'])
+            ->when($request->user_id, fn($q, $v) => $q->where('user_id', $v))
             ->when($request->activity_type, fn($q, $v) => $q->where('activity_type', $v))
             ->when($request->statut, fn($q, $v) => $q->where('statut', $v))
             ->when($request->report_status, fn($q, $v) => $q->where('report_status', $v))
@@ -44,7 +45,8 @@ class ActivityController extends Controller
             ->when($request->tour_plan_id, fn($q, $v) => $q->where('tour_plan_id', $v))
             ->orderByDesc('date_activite');
 
-        return ActivityResource::collection($query->paginate(25));
+        $perPage = (int) $request->query('per_page', 200);
+        return ActivityResource::collection($query->paginate($perPage));
     }
 
     #[OA\Post(

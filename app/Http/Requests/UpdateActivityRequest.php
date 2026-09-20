@@ -25,7 +25,7 @@ class UpdateActivityRequest extends FormRequest
         return [
             'date_activite' => 'nullable|date|after_or_equal:today',
             'notes' => 'nullable|string',
-            'statut' => 'nullable|string|in:planifiee,en_cours,realisee,manquee,annulee',
+            'statut' => 'nullable|string|in:planifiee,en_cours,realisee,manquee,annulee,brouillon,soumis_definitif,en_attente,en attente de validation,soumis',
             'heure_debut' => 'nullable|string',
             'heure_fin' => 'nullable|string',
             'gps_debut_lat'  => 'nullable|numeric|between:-90,90',
