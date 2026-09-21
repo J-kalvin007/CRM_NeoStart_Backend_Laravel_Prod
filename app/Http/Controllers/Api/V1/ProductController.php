@@ -70,13 +70,6 @@ class ProductController extends Controller
                     new OA\Property(property: 'stock_actuel', type: 'integer', default: 0),
                     new OA\Property(property: 'stock_alerte', type: 'integer', default: 0),
                     new OA\Property(property: 'statut', type: 'string', enum: ['brouillon', 'actif', 'archive']),
-                    new OA\Property(
-                        property: 'meta',
-                        type: 'object',
-                        nullable: true,
-                        description: 'Attributs sectoriels libres non couverts par les champs standards.',
-                        example: ['numero_amm' => 'AMM-001']
-                    ),
                 ]
             )
         ),
@@ -132,7 +125,6 @@ class ProductController extends Controller
                     new OA\Property(property: 'effets_secondaires', type: 'string', nullable: true),
                     new OA\Property(property: 'stock_alerte', type: 'integer'),
                     new OA\Property(property: 'statut', type: 'string', enum: ['brouillon', 'actif', 'archive']),
-                    new OA\Property(property: 'meta', type: 'object', nullable: true),
                 ]
             )
         ),

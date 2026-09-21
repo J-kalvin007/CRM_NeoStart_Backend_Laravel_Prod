@@ -7,7 +7,7 @@
     },
     "servers": [
         {
-            "url": "http://localhost:8000",
+            "url": "http://my-default-host.com",
             "description": "Main API Server"
         }
     ],
@@ -735,6 +735,25 @@
                     },
                     "403": {
                         "description": "Activité verrouillée — suppression interdite"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/analytics/executive": {
+            "get": {
+                "tags": [
+                    "Analytics"
+                ],
+                "summary": "Tableau de bord BI exécutif",
+                "operationId": "57c6459ad78304d668c330380140c00e",
+                "responses": {
+                    "200": {
+                        "description": "Données consolidées"
                     }
                 },
                 "security": [
@@ -2382,6 +2401,25 @@
                 ]
             }
         },
+        "/api/v1/indicators": {
+            "get": {
+                "tags": [
+                    "Indicators"
+                ],
+                "summary": "Lister les indicateurs de performance",
+                "operationId": "3b760f7a9b81e6cf41a73a2204e4485e",
+                "responses": {
+                    "200": {
+                        "description": "Liste des indicateurs"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/kols": {
             "get": {
                 "tags": [
@@ -2431,16 +2469,16 @@
                 ]
             }
         },
-        "/api/v1/kol-profiles": {
+        "/api/v1/laboratories": {
             "get": {
                 "tags": [
-                    "KOL Profiles"
+                    "Laboratories"
                 ],
-                "summary": "Lister les profils KOL",
-                "operationId": "29450f1dd4c1e200bce6d805206a5675",
+                "summary": "Lister les laboratoires",
+                "operationId": "a566229267622a268a9fef553e417eca",
                 "responses": {
                     "200": {
-                        "description": "Liste des profils KOL"
+                        "description": "Liste des laboratoires"
                     }
                 },
                 "security": [
@@ -2451,28 +2489,31 @@
             },
             "post": {
                 "tags": [
-                    "KOL Profiles"
+                    "Laboratories"
                 ],
-                "summary": "Créer un profil KOL (Extension d'un contact)",
-                "operationId": "534a47785054977d238fb53bf4cdad3b",
+                "summary": "Créer un laboratoire",
+                "operationId": "cabe95ea6dee57dbf8a74829aec9d6ca",
                 "requestBody": {
                     "required": true,
                     "content": {
                         "application/json": {
                             "schema": {
                                 "required": [
-                                    "contact_id"
+                                    "nom"
                                 ],
                                 "properties": {
-                                    "contact_id": {
+                                    "nom": {
                                         "type": "string",
-                                        "format": "uuid"
+                                        "example": "Pfizer"
                                     },
-                                    "expertise": {
-                                        "type": "string"
+                                    "contact_email": {
+                                        "type": "string",
+                                        "format": "email",
+                                        "nullable": true
                                     },
-                                    "influence_institution": {
-                                        "type": "string"
+                                    "is_active": {
+                                        "type": "boolean",
+                                        "default": true
                                     }
                                 },
                                 "type": "object"
@@ -2482,120 +2523,7 @@
                 },
                 "responses": {
                     "201": {
-                        "description": "Profil KOL créé"
-                    },
-                    "422": {
-                        "description": "Validation failed"
-                    }
-                },
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ]
-            }
-        },
-        "/api/v1/kol-profiles/{id}": {
-            "get": {
-                "tags": [
-                    "KOL Profiles"
-                ],
-                "summary": "Détails d'un profil KOL",
-                "operationId": "94d55ef92de97baf14912dd58b52dfee",
-                "parameters": [
-                    {
-                        "name": "id",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Détails du profil KOL"
-                    },
-                    "404": {
-                        "description": "Non trouvé"
-                    }
-                },
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ]
-            },
-            "put": {
-                "tags": [
-                    "KOL Profiles"
-                ],
-                "summary": "Mettre à jour un profil KOL",
-                "operationId": "1cec526bb3702ced0351da2f62ce6308",
-                "parameters": [
-                    {
-                        "name": "id",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid"
-                        }
-                    }
-                ],
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "properties": {
-                                    "expertise": {
-                                        "type": "string"
-                                    },
-                                    "influence_institution": {
-                                        "type": "string"
-                                    }
-                                },
-                                "type": "object"
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "200": {
-                        "description": "Profil KOL mis à jour"
-                    },
-                    "404": {
-                        "description": "Non trouvé"
-                    }
-                },
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ]
-            },
-            "delete": {
-                "tags": [
-                    "KOL Profiles"
-                ],
-                "summary": "Supprimer un profil KOL (le contact reste intact)",
-                "operationId": "5288af180c546456cd341d9743cc1fc7",
-                "parameters": [
-                    {
-                        "name": "id",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid"
-                        }
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "Supprimé"
+                        "description": "Laboratoire créé"
                     }
                 },
                 "security": [
@@ -2699,11 +2627,12 @@
                         }
                     },
                     {
-                        "name": "type_objectif",
+                        "name": "indicator_id",
                         "in": "query",
                         "required": false,
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "uuid"
                         }
                     },
                     {
@@ -2754,7 +2683,7 @@
                         "application/json": {
                             "schema": {
                                 "required": [
-                                    "type_objectif",
+                                    "indicator_id",
                                     "valeur_cible",
                                     "date_debut",
                                     "date_fin"
@@ -2769,29 +2698,14 @@
                                         "format": "uuid",
                                         "nullable": true
                                     },
-                                    "type_objectif": {
+                                    "indicator_id": {
                                         "type": "string",
-                                        "enum": [
-                                            "nombre_visites",
-                                            "couverture_contacts",
-                                            "ca_ventes",
-                                            "nb_commandes",
-                                            "nb_echantillons",
-                                            "nb_nouveaux_contacts",
-                                            "nb_activites_kol",
-                                            "campagne",
-                                            "autre"
-                                        ]
+                                        "format": "uuid"
                                     },
                                     "valeur_cible": {
                                         "type": "number",
                                         "format": "float",
                                         "example": 100
-                                    },
-                                    "unite": {
-                                        "type": "string",
-                                        "example": "visites",
-                                        "nullable": true
                                     },
                                     "date_debut": {
                                         "type": "string",
@@ -2814,6 +2728,10 @@
                                     "description": {
                                         "type": "string",
                                         "nullable": true
+                                    },
+                                    "subsidiary_id": {
+                                        "type": "string",
+                                        "format": "uuid"
                                     }
                                 },
                                 "type": "object"
@@ -3053,9 +2971,39 @@
                                         "type": "string",
                                         "nullable": true
                                     },
-                                    "prix_unitaire": {
-                                        "type": "number",
-                                        "format": "float",
+                                    "laboratory_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    },
+                                    "therapeutic_class_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    },
+                                    "galenic_form_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    },
+                                    "dci": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "conditionnement": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "indications": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "posologie": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "effets_secondaires": {
+                                        "type": "string",
                                         "nullable": true
                                     },
                                     "stock_actuel": {
@@ -3073,16 +3021,6 @@
                                             "actif",
                                             "archive"
                                         ]
-                                    },
-                                    "meta": {
-                                        "description": "Attributs sectoriels libres. Pharma ex: {\"molecule\":\"Amoxicilline\",\"dosage\":\"500mg\",\"forme\":\"Comprimé\",\"numero_amm\":\"AMM-001\"}",
-                                        "type": "object",
-                                        "example": {
-                                            "molecule": "Amoxicilline",
-                                            "dosage": "500mg",
-                                            "forme": "Comprimé"
-                                        },
-                                        "nullable": true
                                     }
                                 },
                                 "type": "object"
@@ -3163,9 +3101,40 @@
                                     "nom": {
                                         "type": "string"
                                     },
-                                    "prix_unitaire": {
-                                        "type": "number",
-                                        "format": "float"
+                                    "laboratory_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    },
+                                    "therapeutic_class_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    },
+                                    "galenic_form_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    },
+                                    "dci": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "conditionnement": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "indications": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "posologie": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "effets_secondaires": {
+                                        "type": "string",
+                                        "nullable": true
                                     },
                                     "stock_alerte": {
                                         "type": "integer"
@@ -3177,10 +3146,6 @@
                                             "actif",
                                             "archive"
                                         ]
-                                    },
-                                    "meta": {
-                                        "type": "object",
-                                        "nullable": true
                                     }
                                 },
                                 "type": "object"
@@ -4281,6 +4246,69 @@
                 ]
             }
         },
+        "/api/v1/therapeutic-classes": {
+            "get": {
+                "tags": [
+                    "Therapeutic Classes"
+                ],
+                "summary": "Lister les classes thérapeutiques",
+                "operationId": "519f65066c436fc8c0b623d1eacf7917",
+                "responses": {
+                    "200": {
+                        "description": "Liste des classes thérapeutiques"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Therapeutic Classes"
+                ],
+                "summary": "Créer une classe thérapeutique",
+                "operationId": "5aa525232b89bf71c0ec0adf3d8830a9",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "nom"
+                                ],
+                                "properties": {
+                                    "nom": {
+                                        "type": "string",
+                                        "example": "Antibiotique"
+                                    },
+                                    "description": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "is_active": {
+                                        "type": "boolean",
+                                        "default": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Classe créée"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/tour-plans": {
             "get": {
                 "tags": [
@@ -4562,6 +4590,125 @@
                 ]
             }
         },
+        "/api/v1/validations/pending": {
+            "get": {
+                "tags": [
+                    "Validations"
+                ],
+                "summary": "Lister les contacts et établissements en attente de validation",
+                "operationId": "5c784c59c2dfa19f0d6890ea301a48cc",
+                "responses": {
+                    "200": {
+                        "description": "Liste des entités en attente"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/validations/{type}/{id}/approve": {
+            "post": {
+                "tags": [
+                    "Validations"
+                ],
+                "summary": "Valider une entité en attente",
+                "operationId": "edda4b1832a70ddaf416e69e877238e9",
+                "parameters": [
+                    {
+                        "name": "type",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "contact",
+                                "account"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Entité validée"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/validations/{type}/{id}/reject": {
+            "post": {
+                "tags": [
+                    "Validations"
+                ],
+                "summary": "Rejeter une entité en attente",
+                "operationId": "ef0c6713f944bf7f235b897669cbc54c",
+                "parameters": [
+                    {
+                        "name": "type",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "contact",
+                                "account"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "reason": {
+                                        "type": "string",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Entité rejetée"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/zones": {
             "get": {
                 "tags": [
@@ -4728,12 +4875,20 @@
     },
     "tags": [
         {
+            "name": "Validations",
+            "description": "API de modération des fiches en attente"
+        },
+        {
             "name": "Accounts",
             "description": "Accounts"
         },
         {
             "name": "Activities",
             "description": "Activities"
+        },
+        {
+            "name": "Analytics",
+            "description": "Analytics"
         },
         {
             "name": "Manager Analytics",
@@ -4764,12 +4919,16 @@
             "description": "Countries"
         },
         {
+            "name": "Indicators",
+            "description": "Indicators"
+        },
+        {
             "name": "KOLs",
             "description": "KOLs"
         },
         {
-            "name": "KOL Profiles",
-            "description": "KOL Profiles"
+            "name": "Laboratories",
+            "description": "Laboratories"
         },
         {
             "name": "Notifications",
@@ -4810,6 +4969,10 @@
         {
             "name": "Territories",
             "description": "Territories"
+        },
+        {
+            "name": "Therapeutic Classes",
+            "description": "Therapeutic Classes"
         },
         {
             "name": "TourPlans",
