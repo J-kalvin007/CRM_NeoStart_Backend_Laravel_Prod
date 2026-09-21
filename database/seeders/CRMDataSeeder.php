@@ -87,29 +87,6 @@ class CRMDataSeeder extends Seeder
             }
         }
 
-        // 5. Création de visites clôturées pour tester le Scoring
-        $contacts = Contact::take(5)->get();
-        foreach ($contacts as $index => $contact) {
-            // Le contact 0 aura 3 visites (Fort)
-            // Le contact 1 aura 1 visite (Moyen)
-            // Les autres 0 visites (Faible)
-            
-            $visitesCount = 0;
-            if ($index == 0) $visitesCount = 3;
-            if ($index == 1) $visitesCount = 1;
-
-            for ($v = 0; $v < $visitesCount; $v++) {
-                Activity::create([
-                    'user_id' => $delegue->id,
-                    'contact_id' => $contact->id,
-                    'account_id' => $contact->account_id,
-                    'activity_type' => 'visite',
-                    'date_activite' => Carbon::now()->subDays(rand(1, 25))->toDateString(),
-                    'heure_debut' => '09:00',
-                    'heure_fin' => '09:30',
-                    'statut' => 'realisee',
-                ]);
-            }
-        }
+        // 5. Aucune activité/visite pré-créée (le délégué créera tout lui-même)
     }
 }

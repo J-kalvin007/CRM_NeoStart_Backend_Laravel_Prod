@@ -138,7 +138,21 @@ class ExpenseController extends Controller
         }
 
         $expense->update(['status' => 'submitted']);
-        return response()->json(new ExpenseResource($expense));
+
+        // Notification manager
+        $user = Auth::user();
+        $manager = $user?->manager ?? \App\Models\User::whereHas('roles', fn($q) => $q->whereIn('name', ['superviseur', 'supervisor', 'manager', 'Manager', 'Superviseur', 'dir-commercial']))->first();
+        if ($manager && $user) {
+            app(\App\Services\NotificationService::class)->send(
+                $manager,
+                'Nouvelle note de frais soumise',
+                "Le délégué {$user->name} a soumis une note de frais de {$expense->amount} {$expense->currency}.",
+                'expense',
+                ['expense_id' => $expense->id]
+            );
+        }
+
+        return response()->json(new ExpenseResource($expense->load(['user', 'approver'])));
     }
 
     /**

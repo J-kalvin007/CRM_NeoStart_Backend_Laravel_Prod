@@ -33,6 +33,8 @@ class ActivityController extends Controller
     )]
     public function index(Request $request)
     {
+        Activity::markMissedPastActivities();
+
         $query = Activity::with(['delegue', 'contact', 'account', 'products'])
             ->when($request->activity_type, fn($q, $v) => $q->where('activity_type', $v))
             ->when($request->statut, fn($q, $v) => $q->where('statut', $v))
@@ -112,7 +114,30 @@ class ActivityController extends Controller
             $activity->lock();
         }
 
-        return new ActivityResource($activity->load(['delegue', 'contact', 'account', 'products']));
+        // Notification au manager
+        $user = auth()->user();
+        $manager = $user?->manager ?? \App\Models\User::whereHas('roles', fn($q) => $q->whereIn('name', ['superviseur', 'supervisor', 'manager', 'Manager', 'Superviseur', 'dir-commercial']))->first();
+        if ($manager && $user) {
+            if (in_array($activity->statut, ['realisee', 'soumis_definitif'])) {
+                app(\App\Services\NotificationService::class)->send(
+                    $manager,
+                    'Nouveau compte-rendu de visite',
+                    "Le délégué {$user->name} a finalisé son compte-rendu de visite.",
+                    'report',
+                    ['activity_id' => $activity->id, 'recipient_role' => 'manager', 'sender_id' => $user->id]
+                );
+            } else {
+                app(\App\Services\NotificationService::class)->send(
+                    $manager,
+                    'Nouvelle visite planifiée',
+                    "Le délégué {$user->name} a planifié une nouvelle visite.",
+                    'planning',
+                    ['activity_id' => $activity->id, 'recipient_role' => 'manager', 'sender_id' => $user->id]
+                );
+            }
+        }
+
+        return new ActivityResource($activity->load(['delegue', 'contact', 'account', 'products', 'sampleMovements']));
     }
 
     #[OA\Get(

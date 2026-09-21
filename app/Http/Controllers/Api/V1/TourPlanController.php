@@ -47,6 +47,20 @@ class TourPlanController extends Controller
     public function store(StoreTourPlanRequest $request)
     {
         $plan = TourPlan::create(array_merge($request->validated(), ['user_id' => auth()->id()]));
+
+        // Notification manager
+        $user = auth()->user();
+        $manager = $user?->manager ?? \App\Models\User::whereHas('roles', fn($q) => $q->whereIn('name', ['superviseur', 'supervisor', 'manager', 'Manager', 'Superviseur', 'dir-commercial']))->first();
+        if ($manager) {
+            app(\App\Services\NotificationService::class)->send(
+                $manager,
+                'Planning de tournée soumis',
+                "Le délégué {$user?->name} a créé le plan de tournée '{$plan->nom}'.",
+                'planning',
+                ['tour_plan_id' => $plan->id]
+            );
+        }
+
         return new TourPlanResource($plan->load('delegue'));
     }
 
