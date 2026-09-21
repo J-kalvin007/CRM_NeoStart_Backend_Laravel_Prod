@@ -17,6 +17,7 @@ class SampleMovement extends Model
         'product_id',
         'user_id',
         'activity_id',
+        'contact_id',
         'movement_type',
         'quantity',
         'lot_number',
@@ -49,6 +50,11 @@ class SampleMovement extends Model
     public function activity()
     {
         return $this->belongsTo(Activity::class);
+    }
+
+    public function contact()
+    {
+        return $this->belongsTo(Contact::class);
     }
 }
 

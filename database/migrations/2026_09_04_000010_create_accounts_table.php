@@ -42,7 +42,7 @@ return new class extends Migration
             // Méta-business
             $table->enum('potentiel', ['faible', 'moyen', 'fort'])->nullable();
             $table->unsignedSmallInteger('score')->nullable()->comment('Score 0-100 calculé par le moteur IA');
-            $table->enum('statut', ['actif', 'inactif', 'suspendu'])->default('actif');
+            $table->enum('statut', ['en_attente', 'actif', 'inactif', 'suspendu', 'rejete'])->default('en_attente');
 
             // Attributs sectoriels libres (ex Pharma: autorisation_officine, nb_lits_hopital)
             $table->json('meta')->nullable()->comment('Attributs configurables par secteur d\'activité');

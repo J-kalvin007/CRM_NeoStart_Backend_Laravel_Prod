@@ -35,31 +35,101 @@ class SampleMovementController extends Controller
     )]
     public function index(Request $request)
     {
-        // For simplicity, we'll mock the response based on products or fetch actual movements
-        // In a real scenario, this would aggregate `sample_movements` table data
-        
         $user = $request->user();
         
-        $movements = SampleMovement::with('product')
+        $movements = SampleMovement::with(['product', 'contact'])
+            ->where('user_id', $user->id)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json($movements);
+    }
+
+    public function myStock(Request $request)
+    {
+        $user = $request->user();
+        
+        $stocks = \App\Models\SampleStock::with('product')
             ->where('user_id', $user->id)
             ->get();
             
-        // Group by product
-        $stock = $movements->groupBy('product_id')->map(function ($items, $productId) {
-            $in = $items->where('type', 'in')->sum('quantity');
-            $out = $items->where('type', 'out')->sum('quantity');
-            
+        $formatted = $stocks->map(function ($stock) {
             return [
+                'id' => $stock->id,
+                'product_id' => $stock->product_id,
                 'product' => [
-                    'id' => $productId,
-                    'name' => $items->first()->product->name ?? 'Produit inconnu',
+                    'id' => $stock->product_id,
+                    'name' => $stock->product->nom ?? 'Produit inconnu',
+                    'stock_alerte' => $stock->product->stock_alerte ?? 10,
                 ],
-                'quantity_available' => max(0, $in - $out),
-                'quantity_distributed' => $out,
-                'alert_threshold' => 10,
+                'lot_number' => $stock->lot_number,
+                'expiry_date' => $stock->expiry_date ? $stock->expiry_date->format('m/Y') : null,
+                'quantity_available' => $stock->quantity,
+                'alert_threshold' => $stock->product->stock_alerte ?? 10,
             ];
-        })->values();
+        });
 
-        return response()->json($stock);
+        return response()->json($formatted);
+    }
+
+    public function store(Request $request)
+    {
+        $user = $request->user();
+        $validated = $request->validate([
+            'product_id' => 'required|uuid',
+            'movement_type' => 'required|string',
+            'quantity' => 'required|integer|min:1',
+            'contact_id' => 'nullable|uuid',
+            'remarques' => 'nullable|string'
+        ]);
+
+        $movementType = $validated['movement_type'];
+        $lotNumber = null;
+        $expiryDate = null;
+
+        if (in_array($movementType, ['distribution', 'sortie_visite', 'out'])) {
+            // Find a stock line with enough quantity
+            $stock = \App\Models\SampleStock::where('user_id', $user->id)
+                ->where('product_id', $validated['product_id'])
+                ->where('quantity', '>=', $validated['quantity'])
+                ->first();
+
+            if (!$stock) {
+                return response()->json(['message' => 'Stock insuffisant pour ce produit.'], 400);
+            }
+
+            $stock->decrement('quantity', $validated['quantity']);
+            $lotNumber = $stock->lot_number;
+            $expiryDate = $stock->expiry_date;
+        } else {
+            // Reception - Create a new lot if needed
+            $lotNumber = 'LOT-' . date('Y-m') . '-' . strtoupper(substr(uniqid(), -4));
+            $expiryDate = date('Y-m-d', strtotime('+1 year'));
+
+            $stock = \App\Models\SampleStock::firstOrCreate([
+                'user_id' => $user->id,
+                'product_id' => $validated['product_id'],
+                'lot_number' => $lotNumber
+            ], [
+                'expiry_date' => $expiryDate,
+                'quantity' => 0
+            ]);
+
+            $stock->increment('quantity', $validated['quantity']);
+        }
+
+        $movement = SampleMovement::create([
+            'user_id' => $user->id,
+            'product_id' => $validated['product_id'],
+            'movement_type' => $validated['movement_type'],
+            'quantity' => $validated['quantity'],
+            'contact_id' => $validated['contact_id'] ?? null,
+            'remarques' => $validated['remarques'] ?? null,
+            'lot_number' => $lotNumber,
+            'expiry_date' => $expiryDate,
+            'date_mouvement' => $request->input('date_mouvement', date('Y-m-d'))
+        ]);
+
+        return response()->json($movement->load('product'), 201);
     }
 }

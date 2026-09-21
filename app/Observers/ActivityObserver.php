@@ -42,7 +42,7 @@ class ActivityObserver
             if ($activity->heure_debut && $activity->heure_fin && !$activity->duree_minutes) {
                 $debut = Carbon::parse($activity->heure_debut);
                 $fin = Carbon::parse($activity->heure_fin);
-                $activity->duree_minutes = $debut->diffInMinutes($fin);
+                $activity->duree_minutes = abs($debut->diffInMinutes($fin, false));
             }
 
             // Vérification GPS (Alerte / Drapeau)
@@ -89,10 +89,9 @@ class ActivityObserver
                     'user_id' => $activity->user_id,
                     'product_id' => $product->id,
                     'activity_id' => $activity->id,
-                    'type_mouvement' => 'sortie',
-                    'quantite' => $quantity,
-                    'reference' => 'Visite Clôturée',
-                    'date_mouvement' => now()->toDateString(),
+                    'movement_type' => 'distribution',
+                    'quantity' => $quantity,
+                    'remarques' => 'Visite Clôturée',
                 ]);
             }
         }

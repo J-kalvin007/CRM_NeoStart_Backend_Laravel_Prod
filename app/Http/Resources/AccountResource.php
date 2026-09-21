@@ -10,8 +10,9 @@ class AccountResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id'            => $this->id,
-            'nom'           => $this->nom,
+            'id'              => $this->id,
+            'account_type_id' => $this->account_type_id,
+            'nom'             => $this->nom,
             'adresse'       => $this->adresse,
             'ville'         => $this->ville,
             'quartier'      => $this->quartier,
@@ -26,7 +27,7 @@ class AccountResource extends JsonResource
             'meta'          => $this->meta,
             'local_uuid'    => $this->local_uuid,
             'subsidiary_id' => $this->subsidiary_id,
-            'account_type'  => $this->whenLoaded('accountType', fn() => [
+            'type'          => $this->whenLoaded('accountType', fn() => [
                 'id'      => $this->accountType->id,
                 'code'    => $this->accountType->code,
                 'libelle' => $this->accountType->libelle,

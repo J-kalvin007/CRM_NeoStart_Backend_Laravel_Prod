@@ -3,7 +3,7 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use Spatie\Permission\Models\Role;
+use App\Models\Role;
 use Spatie\Permission\Models\Permission;
 
 class RoleAndPermissionSeeder extends Seeder
@@ -14,9 +14,11 @@ class RoleAndPermissionSeeder extends Seeder
         app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
 
         // 1. Création des rôles
-        $superAdmin = Role::firstOrCreate(['name' => 'super-admin']);
-        $manager = Role::firstOrCreate(['name' => 'manager']);
-        $delegue = Role::firstOrCreate(['name' => 'delegue']);
+        Role::firstOrCreate(['name' => 'super-admin']);
+        Role::firstOrCreate(['name' => 'delegue-medical']);
+        Role::firstOrCreate(['name' => 'superviseur']);
+        Role::firstOrCreate(['name' => 'directeur-commercial']);
+        Role::firstOrCreate(['name' => 'directeur-marketing']);
         
         // (Optionnel) Création de permissions globales
         // Permission::firstOrCreate(['name' => 'create campaigns']);

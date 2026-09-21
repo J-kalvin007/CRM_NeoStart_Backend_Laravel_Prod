@@ -37,6 +37,8 @@ use App\Http\Controllers\Api\V1\SettingController;
 use App\Http\Controllers\Api\V1\LeaveController;
 use App\Http\Controllers\Api\V1\TrainingController;
 use App\Http\Controllers\Api\V1\ConversationController;
+use App\Http\Controllers\Api\V1\ValidationController;
+use App\Http\Controllers\Api\V1\SupervisorDashboardController;
 
 Route::get('/login', fn() => response()->json(['message' => 'Non authentifié'], 401))->name('login');
 
@@ -105,7 +107,14 @@ Route::prefix('v1')->group(function () {
         Route::post('/notifications/mark-all-as-read', [NotificationController::class, 'markAllAsRead']);
         Route::post('/notifications/{id}/mark-as-read', [NotificationController::class, 'markAsRead']);
 
+        // ── Superviseur ──────────────────────────────────────────
+        Route::get('/supervisor/dashboard', [SupervisorDashboardController::class, 'dashboard']);
+
         // ── Répertoire (Comptes & Contacts) ────────────────────
+        Route::get('validations/pending', [ValidationController::class, 'indexPending']);
+        Route::post('validations/{type}/{id}/approve', [ValidationController::class, 'approve']);
+        Route::post('validations/{type}/{id}/reject', [ValidationController::class, 'reject']);
+
         Route::post('accounts/check-duplicates', [AccountController::class, 'checkDuplicates']);
         Route::apiResource('accounts', AccountController::class);
 
@@ -119,6 +128,7 @@ Route::prefix('v1')->group(function () {
 
         // ── Opérationnel Terrain (Visites, Tâches, Agenda) ──────
         Route::apiResource('tour-plans', TourPlanController::class);
+        Route::post('activities/{activity}/validate', [ActivityController::class, 'validateActivity']);
         Route::apiResource('activities', ActivityController::class);
         Route::apiResource('tasks', TaskController::class);
 
@@ -136,7 +146,14 @@ Route::prefix('v1')->group(function () {
         Route::post('sample-movements', [SampleMovementController::class, 'store']);
         Route::get('sample-movements/{id}', [SampleMovementController::class, 'show']);
 
+        // Demandes de réassort d'échantillons
+        Route::get('sample-requests', [\App\Http\Controllers\Api\V1\SampleRequestController::class, 'index']);
+        Route::post('sample-requests', [\App\Http\Controllers\Api\V1\SampleRequestController::class, 'store']);
+        Route::post('sample-requests/{id}/approve', [\App\Http\Controllers\Api\V1\SampleRequestController::class, 'approve']);
+        Route::post('sample-requests/{id}/reject', [\App\Http\Controllers\Api\V1\SampleRequestController::class, 'reject']);
+
         // -- Statistiques & Dashboards --
+        Route::get('/analytics/executive', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'executiveSummary']);
         Route::get('/analytics/dashboard', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'dashboard']);
         Route::get('/analytics/team-performance', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'teamPerformance']);
         Route::get('/users/locations', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'usersLocations']);
@@ -158,6 +175,7 @@ Route::prefix('v1')->group(function () {
 
         // ── Objectifs & Performance ────────────────────────────
         Route::apiResource('objectifs', ObjectifController::class);
+        Route::get('indicators', [\App\Http\Controllers\Api\V1\IndicatorController::class, 'index']);
 
         // ── Congés (Leaves) ────────────────────────────────────
         Route::get('leaves', [LeaveController::class, 'index']);

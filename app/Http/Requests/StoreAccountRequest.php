@@ -23,7 +23,7 @@ class StoreAccountRequest extends FormRequest
             'email'           => 'nullable|email|max:255',
             'responsable'     => 'nullable|string|max:255',
             'potentiel'       => 'nullable|in:faible,moyen,fort',
-            'statut'          => 'in:actif,inactif,suspendu',
+            'statut'          => 'in:en_attente,actif,inactif,suspendu,rejete',
             'meta'            => 'nullable|array',
             'local_uuid'      => 'nullable|uuid|unique:accounts,local_uuid',
         ];

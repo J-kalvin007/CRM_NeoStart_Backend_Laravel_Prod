@@ -26,6 +26,7 @@ class ContactResource extends JsonResource
             'meta'            => $this->meta,
             'local_uuid'      => $this->local_uuid,
             'account_id'      => $this->account_id,
+            'contact_type_id' => $this->contact_type_id,
             'contact_type'    => $this->whenLoaded('contactType', fn() => [
                 'id'      => $this->contactType->id,
                 'code'    => $this->contactType->code,

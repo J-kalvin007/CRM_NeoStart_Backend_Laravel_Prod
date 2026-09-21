@@ -94,4 +94,21 @@ class User extends Authenticatable
     {
         return $this->hasMany(User::class, 'manager_id');
     }
+
+    public function isAdminOrSupervisor(): bool
+    {
+        return $this->hasRole([
+            'super-admin', 
+            'superadmin', 
+            'Administrateur Groupe', 
+            'Administrateur Pays', 
+            'Direction Générale', 
+            'Manager', 
+            'directeur-commercial', 
+            'directeur_commercial', 
+            'directeur-marketing', 
+            'directeur_marketing', 
+            'superviseur'
+        ]);
+    }
 }

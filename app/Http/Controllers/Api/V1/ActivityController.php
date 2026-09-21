@@ -196,6 +196,32 @@ class ActivityController extends Controller
             return response()->json(['message' => 'Activité verrouillée.'], 403);
         }
         $activity->delete();
-        return response()->json(null, 204);
+    }
+
+    public function validateActivity(Request $request, string $id)
+    {
+        $activity = Activity::findOrFail($id);
+
+        $request->validate([
+            'statut' => 'required|in:validee,rejetee',
+            'rejection_reason' => 'required_if:statut,rejetee|string|nullable'
+        ]);
+
+        $newStatut = $request->statut === 'validee' ? 'realisee' : 'annulee';
+
+        $notes = $activity->notes;
+        if ($request->statut === 'rejetee') {
+            $notes = $notes ? $notes . "\n[Rejeté]: " . $request->rejection_reason : "[Rejeté]: " . $request->rejection_reason;
+        }
+
+        $activity->update([
+            'statut' => $newStatut,
+            'notes' => $notes
+        ]);
+
+        return response()->json([
+            'message' => 'Activity validated successfully', 
+            'data' => new ActivityResource($activity->load(['delegue', 'contact', 'account', 'products']))
+        ]);
     }
 }

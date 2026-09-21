@@ -31,6 +31,12 @@ class ActivityResource extends JsonResource
             'contact'        => $this->whenLoaded('contact', fn() => [
                 'id'         => $this->contact->id,
                 'nom_complet'=> trim("{$this->contact->titre} {$this->contact->prenom} {$this->contact->nom}"),
+                'titre'      => $this->contact->titre,
+                'nom'        => $this->contact->nom,
+                'prenom'     => $this->contact->prenom,
+                'potentiel'  => $this->contact->potentiel,
+                'meta'       => $this->contact->meta,
+                'specialite' => $this->contact->specialite,
             ]),
             'account'        => $this->whenLoaded('account', fn() => [
                 'id'  => $this->account->id,

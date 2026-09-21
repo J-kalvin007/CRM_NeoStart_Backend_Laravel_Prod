@@ -22,7 +22,8 @@ class UpdateProductRequest extends FormRequest
      */
     public function rules(): array
     {
-        $productId = $this->route('product') ? $this->route('product')->id : $this->route('id');
+        $product = $this->route('product');
+        $productId = is_object($product) ? $product->id : ($product ?: $this->route('id'));
 
         return [
             'subsidiary_id'   => 'sometimes|required|uuid|exists:subsidiaries,id',

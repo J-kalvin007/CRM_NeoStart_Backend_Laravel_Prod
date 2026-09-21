@@ -71,7 +71,23 @@ class Objectif extends Model
     {
         if ($this->valeur_cible > 0) {
             $taux = ($this->valeur_realisee / $this->valeur_cible) * 100;
-            $this->update(['taux_realisation' => round($taux, 2)]);
+            $taux = round($taux, 2);
+            $statut = $this->statut;
+            
+            if ($statut !== 'annule') {
+                if ($taux >= 100) {
+                    $statut = $taux == 100 ? 'atteint' : 'depasse';
+                } else {
+                    // if end date is in the past, it's not achieved. Otherwise active.
+                    if ($this->date_fin && now()->startOfDay()->greaterThan(\Carbon\Carbon::parse($this->date_fin)->startOfDay())) {
+                        $statut = 'non_atteint';
+                    } else {
+                        $statut = 'actif';
+                    }
+                }
+            }
+            
+            $this->update(['taux_realisation' => $taux, 'statut' => $statut]);
         }
     }
 }

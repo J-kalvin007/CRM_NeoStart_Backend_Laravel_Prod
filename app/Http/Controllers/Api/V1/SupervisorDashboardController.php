@@ -4,74 +4,126 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use App\Models\User;
+use App\Models\Activity;
+use App\Models\Expense;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class SupervisorDashboardController extends Controller
 {
     public function dashboard(Request $request)
     {
+        $user = auth()->user();
+        
+        $startDate = $request->query('start_date') ? Carbon::parse($request->query('start_date'))->startOfDay() : Carbon::now()->startOfMonth();
+        $endDate = $request->query('end_date') ? Carbon::parse($request->query('end_date'))->endOfDay() : Carbon::now()->endOfMonth();
+        
+        $subordinates = User::where('manager_id', $user->id)->get();
+        if ($subordinates->isEmpty()) {
+            // Fallback for testing: if user has no subordinates, just show their own data
+            $subordinateIds = [$user->id];
+            $subordinates = collect([$user]);
+        } else {
+            $subordinateIds = $subordinates->pluck('id')->toArray();
+        }
+        
+        $activeDelegates = $subordinates->where('status', 'actif')->count();
+        $team = $user->team ? $user->team->name : 'Mon Équipe';
+        $region = $user->region ? $user->region->name : 'SUPERVISION';
+
+        $visitsMTD = Activity::whereIn('user_id', $subordinateIds)
+            ->whereBetween('date_activite', [$startDate, $endDate])
+            ->where('activity_type', 'visit')
+            ->count();
+            
+        $visitTarget = $subordinates->count() * 40; 
+        $visitProgress = $visitTarget > 0 ? min($visitsMTD / $visitTarget, 1) : 0;
+
+        $coverage = 88; 
+
+        $pendingExpenses = Expense::whereIn('user_id', $subordinateIds)
+            ->where('status', 'en_attente')
+            ->count();
+
+        $stockAlerts = 0;
+
+        $liveActivities = Activity::with(['delegue', 'contact', 'account'])
+            ->whereIn('user_id', $subordinateIds)
+            ->orderBy('date_activite', 'desc')
+            ->take(5)
+            ->get()
+            ->map(function ($act) {
+                return [
+                    'name' => $act->delegue ? $act->delegue->name : 'Inconnu',
+                    'sector' => 'Délégué',
+                    'statusBadgeText' => $act->is_locked ? 'Terminée' : 'En cours',
+                    'subText' => $act->contact ? ($act->contact->prenom . ' ' . $act->contact->nom) : ($act->account ? $act->account->nom : 'Activité ' . $act->activity_type),
+                    'date' => $act->date_activite,
+                ];
+            });
+
+        $visitsPerDay = Activity::whereIn('user_id', $subordinateIds)
+            ->whereBetween('date_activite', [$startDate, $endDate])
+            ->where('activity_type', 'visit')
+            ->select(DB::raw('DATE(date_activite) as date'), DB::raw('count(*) as count'))
+            ->groupBy('date')
+            ->orderBy('date')
+            ->get();
+
+        $visitsPerDelegate = Activity::whereIn('user_id', $subordinateIds)
+            ->whereBetween('date_activite', [$startDate, $endDate])
+            ->where('activity_type', 'visit')
+            ->select('user_id', DB::raw('count(*) as count'))
+            ->groupBy('user_id')
+            ->with('delegue')
+            ->get()
+            ->map(function ($row) {
+                return [
+                    'name' => $row->delegue ? $row->delegue->name : 'Inconnu',
+                    'count' => $row->count
+                ];
+            });
+
         return response()->json([
             'supervision' => [
-                'region' => 'SUPERVISION RÉGIONALE',
-                'team' => 'Équipe Ouest / Togo-Bénin',
-                'activeDelegates' => 6,
+                'region' => $region,
+                'team' => $team,
+                'activeDelegates' => $activeDelegates,
                 'connectedPercentage' => 100,
             ],
             'kpis' => [
                 [
-                    'title' => 'VISITES MTD',
-                    'value' => '184',
-                    'subtitle' => '/220',
-                    'progress' => 0.84,
-                    'bottomLabel' => '↗ 84% de l\'objectif',
+                    'title' => 'VISITES',
+                    'value' => $visitsMTD,
+                    'subtitle' => "/$visitTarget",
+                    'progress' => $visitProgress,
+                    'bottomLabel' => 'Objectif: ' . round($visitProgress * 100) . '%',
                 ],
                 [
                     'title' => 'COUVERTURE',
-                    'value' => '88%',
-                    'progress' => 0.88,
+                    'value' => $coverage . '%',
+                    'progress' => $coverage / 100,
                     'bottomLabel' => 'Cible A/B prioritaire',
                 ],
                 [
                     'title' => 'FRAIS EN COURS',
-                    'value' => '4',
+                    'value' => $pendingExpenses,
                     'subtitleText' => 'À valider',
-                    'bottomBadge' => '⏳ Action requise',
+                    'bottomBadge' => $pendingExpenses > 0 ? '⏳ Action requise' : '✅ À jour',
                 ],
                 [
                     'title' => 'ALERTES STOCK',
-                    'value' => '2',
+                    'value' => $stockAlerts,
                     'subtitleText' => 'Ruptures signalées',
-                    'bottomBadge' => 'Lomé & Cotonou',
+                    'bottomBadge' => 'Aucune alerte',
                 ],
             ],
-            'liveActivities' => [
-                [
-                    'name' => 'Jean Dupont',
-                    'sector' => 'Secteur Lomé Centre',
-                    'statusBadgeText' => 'En visite (12 min)',
-                    'subText' => 'Dr. Aka (Cardiologie - CHU Sylvanus Oly...',
-                ],
-                [
-                    'name' => 'Sarah Lawson',
-                    'sector' => 'Secteur Cotonou Littoral',
-                    'statusBadgeText' => 'En route (GPS actif)',
-                    'subText' => 'Vers Clinique Pasteur (Arrivée estimée 1...',
-                ],
-                [
-                    'name' => 'Paul Koffi',
-                    'sector' => 'Secteur Porto-Novo',
-                    'statusBadgeText' => 'Disponible',
-                    'subText' => 'Compte rendu rédigé (Cabinet Dr. Mens...',
-                ]
+            'liveActivities' => $liveActivities,
+            'charts' => [
+                'visitsPerDay' => $visitsPerDay,
+                'visitsPerDelegate' => $visitsPerDelegate,
             ],
-            'validations' => [
-                [
-                    'title' => 'Frais carburant tournée',
-                    'submittedBy' => 'Soumis par Jean Dupont • Aujourd\'hui',
-                    'amountEur' => '65,50 €',
-                    'amountLocal' => '42 900 FCFA',
-                    'receipt' => 'Justificatif TotalEnergies Lomé',
-                ]
-            ]
         ]);
     }
 }
