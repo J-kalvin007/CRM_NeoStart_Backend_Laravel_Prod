@@ -17,6 +17,7 @@ class Region extends Model
 
     protected $fillable = [
         'subsidiary_id',
+        'organizational_unit_id',
         'name',
         'manager_id',
     ];
@@ -29,6 +30,11 @@ class Region extends Model
     public function territories()
     {
         return $this->hasMany(Territory::class);
+    }
+
+    public function organizationalUnit()
+    {
+        return $this->belongsTo(OrganizationalUnit::class, 'organizational_unit_id');
     }
 
     public function manager()

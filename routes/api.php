@@ -40,6 +40,9 @@ use App\Http\Controllers\Api\V1\ConversationController;
 use App\Http\Controllers\Api\V1\ValidationController;
 use App\Http\Controllers\Api\V1\SupervisorDashboardController;
 
+use App\Http\Controllers\Api\V1\LaboratoryController;
+use App\Http\Controllers\Api\V1\TherapeuticClassController;
+
 Route::get('/login', fn() => response()->json(['message' => 'Non authentifié'], 401))->name('login');
 
 Route::prefix('v1')->group(function () {
@@ -124,6 +127,8 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('categories', CategoryController::class);
 
         // ── Catalogue Produits ─────────────────────────────────
+        Route::apiResource('laboratories', LaboratoryController::class);
+        Route::apiResource('therapeutic-classes', TherapeuticClassController::class);
         Route::apiResource('products', ProductController::class);
 
         // ── Opérationnel Terrain (Visites, Tâches, Agenda) ──────

@@ -30,7 +30,7 @@ class ProductController extends Controller
     )]
     public function index(Request $request)
     {
-        $query = Product::with('productType')
+        $query = Product::with(['productType', 'laboratory', 'therapeuticClass', 'galenicForm'])
             ->when($request->product_type_id, fn($q, $v) => $q->where('product_type_id', $v))
             ->when($request->statut, fn($q, $v) => $q->where('statut', $v))
             ->when($request->boolean('stock_alerte'), fn($q) => $q->scopeStockAlerte())
@@ -59,7 +59,14 @@ class ProductController extends Controller
                     new OA\Property(property: 'code', type: 'string', example: 'AMX-500', nullable: true),
                     new OA\Property(property: 'marque', type: 'string', nullable: true),
                     new OA\Property(property: 'gamme', type: 'string', nullable: true),
-                    new OA\Property(property: 'prix_unitaire', type: 'number', format: 'float', nullable: true),
+                    new OA\Property(property: 'laboratory_id', type: 'string', format: 'uuid', nullable: true),
+                    new OA\Property(property: 'therapeutic_class_id', type: 'string', format: 'uuid', nullable: true),
+                    new OA\Property(property: 'galenic_form_id', type: 'string', format: 'uuid', nullable: true),
+                    new OA\Property(property: 'dci', type: 'string', nullable: true),
+                    new OA\Property(property: 'conditionnement', type: 'string', nullable: true),
+                    new OA\Property(property: 'indications', type: 'string', nullable: true),
+                    new OA\Property(property: 'posologie', type: 'string', nullable: true),
+                    new OA\Property(property: 'effets_secondaires', type: 'string', nullable: true),
                     new OA\Property(property: 'stock_actuel', type: 'integer', default: 0),
                     new OA\Property(property: 'stock_alerte', type: 'integer', default: 0),
                     new OA\Property(property: 'statut', type: 'string', enum: ['brouillon', 'actif', 'archive']),
@@ -67,8 +74,8 @@ class ProductController extends Controller
                         property: 'meta',
                         type: 'object',
                         nullable: true,
-                        description: 'Attributs sectoriels libres. Pharma ex: {"molecule":"Amoxicilline","dosage":"500mg","forme":"Comprimé","numero_amm":"AMM-001"}',
-                        example: ['molecule' => 'Amoxicilline', 'dosage' => '500mg', 'forme' => 'Comprimé']
+                        description: 'Attributs sectoriels libres non couverts par les champs standards.',
+                        example: ['numero_amm' => 'AMM-001']
                     ),
                 ]
             )
@@ -81,7 +88,7 @@ class ProductController extends Controller
     public function store(StoreProductRequest $request)
     {
         $product = Product::create($request->validated());
-        return new ProductResource($product->load('productType'));
+        return new ProductResource($product->load(['productType', 'laboratory', 'therapeuticClass', 'galenicForm']));
     }
 
     #[OA\Get(
@@ -99,7 +106,7 @@ class ProductController extends Controller
     )]
     public function show(string $id)
     {
-        return new ProductResource(Product::with(['productType', 'subsidiary'])->findOrFail($id));
+        return new ProductResource(Product::with(['productType', 'subsidiary', 'laboratory', 'therapeuticClass', 'galenicForm'])->findOrFail($id));
     }
 
     #[OA\Put(
@@ -115,7 +122,14 @@ class ProductController extends Controller
             content: new OA\JsonContent(
                 properties: [
                     new OA\Property(property: 'nom', type: 'string'),
-                    new OA\Property(property: 'prix_unitaire', type: 'number', format: 'float'),
+                    new OA\Property(property: 'laboratory_id', type: 'string', format: 'uuid', nullable: true),
+                    new OA\Property(property: 'therapeutic_class_id', type: 'string', format: 'uuid', nullable: true),
+                    new OA\Property(property: 'galenic_form_id', type: 'string', format: 'uuid', nullable: true),
+                    new OA\Property(property: 'dci', type: 'string', nullable: true),
+                    new OA\Property(property: 'conditionnement', type: 'string', nullable: true),
+                    new OA\Property(property: 'indications', type: 'string', nullable: true),
+                    new OA\Property(property: 'posologie', type: 'string', nullable: true),
+                    new OA\Property(property: 'effets_secondaires', type: 'string', nullable: true),
                     new OA\Property(property: 'stock_alerte', type: 'integer'),
                     new OA\Property(property: 'statut', type: 'string', enum: ['brouillon', 'actif', 'archive']),
                     new OA\Property(property: 'meta', type: 'object', nullable: true),
@@ -131,7 +145,7 @@ class ProductController extends Controller
     {
         $product = Product::findOrFail($id);
         $product->update($request->validated());
-        return new ProductResource($product->load('productType'));
+        return new ProductResource($product->load(['productType', 'laboratory', 'therapeuticClass', 'galenicForm']));
     }
 
     #[OA\Delete(
