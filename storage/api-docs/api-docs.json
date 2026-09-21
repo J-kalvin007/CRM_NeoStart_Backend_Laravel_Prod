@@ -2533,6 +2533,124 @@
                 ]
             }
         },
+        "/api/v1/laboratories/{id}": {
+            "get": {
+                "tags": [
+                    "Laboratories"
+                ],
+                "summary": "Afficher un laboratoire",
+                "operationId": "08ea16ed38d5a2686072aa7a12f8cfa4",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Détails du laboratoire"
+                    },
+                    "404": {
+                        "description": "Laboratoire non trouvé"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Laboratories"
+                ],
+                "summary": "Mettre à jour un laboratoire",
+                "operationId": "33f455885f1c322ad5951ad8f679ac3d",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "nom": {
+                                        "type": "string"
+                                    },
+                                    "contact_email": {
+                                        "type": "string",
+                                        "format": "email",
+                                        "nullable": true
+                                    },
+                                    "is_active": {
+                                        "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Laboratoire mis à jour"
+                    },
+                    "404": {
+                        "description": "Laboratoire non trouvé"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Laboratories"
+                ],
+                "summary": "Supprimer un laboratoire",
+                "operationId": "241e1d06faee5218816e8c6061214864",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Laboratoire supprimé"
+                    },
+                    "404": {
+                        "description": "Laboratoire non trouvé"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/notifications": {
             "get": {
                 "tags": [
@@ -4300,6 +4418,123 @@
                 "responses": {
                     "201": {
                         "description": "Classe créée"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/therapeutic-classes/{id}": {
+            "get": {
+                "tags": [
+                    "Therapeutic Classes"
+                ],
+                "summary": "Afficher une classe thérapeutique",
+                "operationId": "4c80daa13d2bda229e48c03fcf5b7b1c",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Détails de la classe"
+                    },
+                    "404": {
+                        "description": "Classe non trouvée"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Therapeutic Classes"
+                ],
+                "summary": "Mettre à jour une classe thérapeutique",
+                "operationId": "cf9aa326e18e43e7613cf8971a0ddbf1",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "nom": {
+                                        "type": "string"
+                                    },
+                                    "description": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "is_active": {
+                                        "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Classe mise à jour"
+                    },
+                    "404": {
+                        "description": "Classe non trouvée"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Therapeutic Classes"
+                ],
+                "summary": "Supprimer une classe thérapeutique",
+                "operationId": "a4562bbb433f5379cffb657615d7a743",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Classe supprimée"
+                    },
+                    "404": {
+                        "description": "Classe non trouvée"
                     }
                 },
                 "security": [
