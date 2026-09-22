@@ -147,6 +147,13 @@ class ContactController extends Controller
             $validated['statut'] = 'valide';
         }
 
+        if (!empty($validated['specialite'])) {
+            $meta = $validated['meta'] ?? [];
+            $meta['specialite'] = $validated['specialite'];
+            $validated['meta'] = $meta;
+            unset($validated['specialite']);
+        }
+
         // Validation dynamique
         if (!empty($validated['contact_type_id'])) {
             $type = ContactType::find($validated['contact_type_id']);
@@ -165,6 +172,20 @@ class ContactController extends Controller
             $validated,
             ['user_id' => auth()->id()]
         ));
+
+        // Notification in-app et email au manager
+        $manager = $user?->manager ?? \App\Models\User::where('email', 'cmoucharif@gmail.com')->first() ?? \App\Models\User::whereHas('roles', fn($q) => $q->whereIn('name', ['superviseur', 'supervisor', 'manager', 'Manager']))->first();
+        if ($manager && $validated['statut'] === 'en_attente') {
+            NotificationController::sendNotification(
+                $manager,
+                'Nouvelle demande de validation prescripteur',
+                "Le délégué {$user->name} a créé le prescripteur {$contact->titre} {$contact->prenom} {$contact->nom} en attente de validation.",
+                'validation',
+                'manager',
+                ['contact_id' => (string) $contact->id]
+            );
+        }
+
         return new ContactResource($contact->load(['account', 'categories']));
     }
 

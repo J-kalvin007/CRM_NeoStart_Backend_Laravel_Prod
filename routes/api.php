@@ -78,6 +78,7 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('kol-profiles', KolProfileController::class);
 
         // Utilisateurs, Rôles & Permissions
+        Route::get('users/locations', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'usersLocations']);
         Route::apiResource('users', UserController::class);
         Route::apiResource('roles', RoleController::class);
         Route::get('permissions', [PermissionController::class, 'index']);
@@ -112,11 +113,14 @@ Route::prefix('v1')->group(function () {
 
         // ── Notifications ──────────────────────────────────────────
         Route::get('/notifications', [NotificationController::class, 'index']);
+        Route::post('/notifications', [NotificationController::class, 'store']);
         Route::post('/notifications/mark-all-as-read', [NotificationController::class, 'markAllAsRead']);
         Route::post('/notifications/{id}/mark-as-read', [NotificationController::class, 'markAsRead']);
 
         // ── Superviseur ──────────────────────────────────────────
         Route::get('/supervisor/dashboard', [SupervisorDashboardController::class, 'dashboard']);
+        Route::get('/supervisor/team-planning', [SupervisorDashboardController::class, 'teamPlanning']);
+        Route::get('/supervisor/alerts', [SupervisorDashboardController::class, 'alerts']);
 
         // ── Répertoire (Comptes & Contacts) ────────────────────
         Route::get('validations/pending', [ValidationController::class, 'indexPending']);
@@ -138,6 +142,7 @@ Route::prefix('v1')->group(function () {
 
         // ── Opérationnel Terrain (Visites, Tâches, Agenda) ──────
         Route::apiResource('tour-plans', TourPlanController::class);
+        Route::post('activities/duo', [ActivityController::class, 'storeDuo']);
         Route::post('activities/{activity}/validate', [ActivityController::class, 'validateActivity']);
         Route::apiResource('activities', ActivityController::class);
         Route::apiResource('tasks', TaskController::class);

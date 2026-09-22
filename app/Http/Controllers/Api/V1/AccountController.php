@@ -147,6 +147,19 @@ class AccountController extends Controller
             ['user_id' => auth()->id()]
         ));
 
+        // Notification in-app et email au manager
+        $manager = $user?->manager ?? \App\Models\User::where('email', 'cmoucharif@gmail.com')->first() ?? \App\Models\User::whereHas('roles', fn($q) => $q->whereIn('name', ['superviseur', 'supervisor', 'manager', 'Manager']))->first();
+        if ($manager && $validated['statut'] === 'en_attente') {
+            NotificationController::sendNotification(
+                $manager,
+                'Nouvelle demande de validation établissement',
+                "Le délégué {$user->name} a créé l'établissement {$account->nom} en attente de validation.",
+                'validation',
+                'manager',
+                ['account_id' => (string) $account->id]
+            );
+        }
+
         return new AccountResource($account->load(['subsidiary', 'categories']));
     }
 

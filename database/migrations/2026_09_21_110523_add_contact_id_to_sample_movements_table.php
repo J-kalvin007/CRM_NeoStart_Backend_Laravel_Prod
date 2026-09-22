@@ -11,9 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('sample_movements', function (Blueprint $table) {
-            $table->foreignUuid('contact_id')->nullable()->constrained('contacts')->nullOnDelete()->after('activity_id');
-        });
+        if (!Schema::hasColumn('sample_movements', 'contact_id')) {
+            Schema::table('sample_movements', function (Blueprint $table) {
+                $table->foreignUuid('contact_id')->nullable()->constrained('contacts')->nullOnDelete()->after('activity_id');
+            });
+        }
     }
 
     /**

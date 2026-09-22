@@ -7,95 +7,148 @@ use App\Http\Resources\TourPlanResource;
 use App\Http\Requests\StoreTourPlanRequest;
 use App\Http\Requests\UpdateTourPlanRequest;
 use App\Models\TourPlan;
+use App\Models\Activity;
+use App\Models\Subsidiary;
+use App\Models\User;
 use Illuminate\Http\Request;
 use OpenApi\Attributes as OA;
 
 class TourPlanController extends Controller
 {
     #[OA\Get(path: '/api/v1/tour-plans', summary: 'Lister les plans de tournée', security: [['bearerAuth' => []]], tags: ['TourPlans'],
-        parameters: [
-            new OA\Parameter(name: 'statut', in: 'query', required: false, schema: new OA\Schema(type: 'string', enum: ['brouillon','soumis','valide','en_cours','termine','rejete'])),
-            new OA\Parameter(name: 'date_debut', in: 'query', required: false, schema: new OA\Schema(type: 'string', format: 'date')),
-            new OA\Parameter(name: 'date_fin', in: 'query', required: false, schema: new OA\Schema(type: 'string', format: 'date')),
-        ],
         responses: [new OA\Response(response: 200, description: 'Liste des plans de tournée')]
     )]
     public function index(Request $request)
     {
-        $query = TourPlan::with(['delegue', 'validePar'])
+        $user = auth()->user();
+        $query = TourPlan::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)
+            ->with(['delegue', 'validePar', 'activities.contact', 'activities.account'])
             ->when($request->statut, fn($q, $v) => $q->where('statut', $v))
             ->when($request->date_debut, fn($q, $v) => $q->where('date_debut', '>=', $v))
             ->when($request->date_fin, fn($q, $v) => $q->where('date_fin', '<=', $v))
             ->withCount('activities')
-            ->orderByDesc('date_debut');
-        return TourPlanResource::collection($query->paginate(20));
+            ->orderByDesc('created_at');
+
+        return TourPlanResource::collection($query->paginate(30));
     }
 
     #[OA\Post(path: '/api/v1/tour-plans', summary: 'Créer un plan de tournée', security: [['bearerAuth' => []]], tags: ['TourPlans'],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(
-            required: ['nom', 'date_debut', 'date_fin'],
-            properties: [
-                new OA\Property(property: 'nom', type: 'string', example: 'Semaine 42 - Secteur Nord'),
-                new OA\Property(property: 'description', type: 'string', nullable: true),
-                new OA\Property(property: 'date_debut', type: 'string', format: 'date'),
-                new OA\Property(property: 'date_fin', type: 'string', format: 'date'),
-                new OA\Property(property: 'local_uuid', type: 'string', format: 'uuid', nullable: true),
-            ]
-        )),
         responses: [new OA\Response(response: 201, description: 'Plan créé avec succès')]
     )]
     public function store(StoreTourPlanRequest $request)
     {
-        $plan = TourPlan::create(array_merge($request->validated(), ['user_id' => auth()->id()]));
-
-        // Notification manager
         $user = auth()->user();
-        $manager = $user?->manager ?? \App\Models\User::whereHas('roles', fn($q) => $q->whereIn('name', ['superviseur', 'supervisor', 'manager', 'Manager', 'Superviseur', 'dir-commercial']))->first();
-        if ($manager) {
-            app(\App\Services\NotificationService::class)->send(
-                $manager,
-                'Planning de tournée soumis',
-                "Le délégué {$user?->name} a créé le plan de tournée '{$plan->nom}'.",
-                'planning',
-                ['tour_plan_id' => $plan->id]
-            );
+        $validated = $request->validated();
+        unset($validated['activity_ids']);
+
+        $plan = TourPlan::create(array_merge($validated, [
+            'user_id'       => $user->id,
+            'statut'        => $request->input('statut', 'soumis'),
+        ]));
+
+        $activityIds = $request->input('activity_ids', []);
+        if (!empty($activityIds) && is_array($activityIds)) {
+            Activity::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)
+                ->whereIn('id', $activityIds)
+                ->update([
+                    'tour_plan_id' => $plan->id,
+                ]);
+            $plan->update(['nb_activites_planifiees' => count($activityIds)]);
+        } else {
+            $linkedCount = Activity::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)
+                ->where('user_id', $user->id)
+                ->whereBetween('date_activite', [$plan->date_debut, $plan->date_fin])
+                ->update(['tour_plan_id' => $plan->id]);
+            $plan->update(['nb_activites_planifiees' => $linkedCount]);
         }
 
-        return new TourPlanResource($plan->load('delegue'));
+        // Notification in-app et email aux managers
+        $managers = collect();
+        if ($user?->manager) {
+            $managers->push($user->manager);
+        }
+        $otherManagers = User::whereHas('roles', fn($q) => $q->whereIn('name', ['superviseur', 'supervisor', 'manager', 'Manager', 'super_admin']))->get();
+        $managers = $managers->concat($otherManagers)->unique('id');
+        if ($managers->isEmpty()) {
+            $fallback = User::where('email', 'cmoucharif@gmail.com')->first();
+            if ($fallback) $managers->push($fallback);
+        }
+
+        NotificationController::sendNotification(
+            $managers,
+            'Planning de tournée soumis',
+            "Le délégué {$user->name} a soumis le plan de tournée '{$plan->nom}' pour validation.",
+            'planning',
+            'manager',
+            ['tour_plan_id' => (string) $plan->id]
+        );
+
+        return new TourPlanResource($plan->load(['delegue', 'activities.contact', 'activities.account']));
     }
 
     #[OA\Get(path: '/api/v1/tour-plans/{id}', summary: 'Détails d\'un plan de tournée', security: [['bearerAuth' => []]], tags: ['TourPlans'],
-        parameters: [new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
-        responses: [new OA\Response(response: 200, description: 'Détails du plan'), new OA\Response(response: 404, description: 'Non trouvé')]
+        responses: [new OA\Response(response: 200, description: 'Détails du plan')]
     )]
     public function show(string $id)
     {
-        return new TourPlanResource(TourPlan::with(['delegue', 'validePar', 'activities'])->findOrFail($id));
+        return new TourPlanResource(TourPlan::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)->with(['delegue', 'validePar', 'activities.contact', 'activities.account'])->findOrFail($id));
     }
 
     #[OA\Put(path: '/api/v1/tour-plans/{id}', summary: 'Mettre à jour un plan de tournée', security: [['bearerAuth' => []]], tags: ['TourPlans'],
-        parameters: [new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
-        requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(properties: [
-            new OA\Property(property: 'nom', type: 'string'),
-            new OA\Property(property: 'statut', type: 'string', enum: ['brouillon','soumis','valide','en_cours','termine','rejete']),
-            new OA\Property(property: 'commentaire_validation', type: 'string', nullable: true),
-        ])),
         responses: [new OA\Response(response: 200, description: 'Plan mis à jour')]
     )]
     public function update(UpdateTourPlanRequest $request, string $id)
     {
         $plan = TourPlan::findOrFail($id);
         $data = $request->validated();
+        if (empty($data) && $request->has('statut')) {
+            $data['statut'] = $request->input('statut');
+        }
+
         if (isset($data['statut']) && in_array($data['statut'], ['valide', 'rejete'])) {
             $data['valide_par'] = auth()->id();
             $data['valide_le'] = now();
         }
+
         $plan->update($data);
-        return new TourPlanResource($plan->load(['delegue', 'validePar']));
+
+        // Si validé, passer les activités rattachées en statut 'validee'
+        if (isset($data['statut']) && $data['statut'] === 'valide') {
+            Activity::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)
+                ->where(function ($q) use ($plan) {
+                    $q->where('tour_plan_id', $plan->id)
+                      ->orWhere(function ($q2) use ($plan) {
+                          $q2->where('user_id', $plan->user_id)
+                             ->whereBetween('date_activite', [$plan->date_debut, $plan->date_fin]);
+                      });
+                })
+                ->where('statut', '!=', 'realisee')
+                ->update([
+                    'statut' => 'validee',
+                    'tour_plan_id' => $plan->id,
+                ]);
+        }
+
+        // Notification au délégué
+        if ($plan->user_id && isset($data['statut'])) {
+            $delegate = User::find($plan->user_id);
+            if ($delegate) {
+                $statusLabel = $data['statut'] === 'valide' ? 'validé' : 'rejeté';
+                NotificationController::sendNotification(
+                    $delegate,
+                    "Planning {$statusLabel}",
+                    "Votre plan de tournée '{$plan->nom}' a été {$statusLabel} par votre superviseur.",
+                    'planning',
+                    'delegate',
+                    ['tour_plan_id' => (string) $plan->id]
+                );
+            }
+        }
+
+        return new TourPlanResource($plan->load(['delegue', 'validePar', 'activities.contact', 'activities.account']));
     }
 
     #[OA\Delete(path: '/api/v1/tour-plans/{id}', summary: 'Supprimer un plan de tournée', security: [['bearerAuth' => []]], tags: ['TourPlans'],
-        parameters: [new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
         responses: [new OA\Response(response: 204, description: 'Supprimé avec succès')]
     )]
     public function destroy(string $id)

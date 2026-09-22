@@ -33,6 +33,8 @@ class Contact extends Model
 
     public function account()      { return $this->belongsTo(Account::class); }
     public function owner()        { return $this->belongsTo(User::class, 'user_id'); }
+    public function user()         { return $this->belongsTo(User::class, 'user_id'); }
+    public function delegue()      { return $this->belongsTo(User::class, 'user_id'); }
     public function contactType()  { return $this->belongsTo(ContactType::class); }
     public function categories()   { return $this->belongsToMany(Category::class, 'contact_category'); }
     public function activities()   { return $this->hasMany(Activity::class); }

@@ -37,18 +37,25 @@ class Activity extends Model
         'locked_at',
         'gps_flagged',
         'local_uuid',
+        'report_status',
+        'report_content',
+        'validated_by_id',
+        'validation_date',
+        'rejection_reason',
+        'signature',
     ];
 
     protected $casts = [
-        'date_activite'  => 'date',
-        'gps_debut_lat'  => 'float',
-        'gps_debut_lng'  => 'float',
-        'gps_fin_lat'    => 'float',
-        'gps_fin_lng'    => 'float',
-        'duree_minutes'  => 'integer',
-        'is_locked'      => 'boolean',
-        'locked_at'      => 'datetime',
-        'gps_flagged'    => 'boolean',
+        'date_activite'   => 'date',
+        'gps_debut_lat'   => 'float',
+        'gps_debut_lng'   => 'float',
+        'gps_fin_lat'     => 'float',
+        'gps_fin_lng'     => 'float',
+        'duree_minutes'   => 'integer',
+        'is_locked'       => 'boolean',
+        'locked_at'       => 'datetime',
+        'gps_flagged'     => 'boolean',
+        'validation_date' => 'datetime',
     ];
 
     /* ─── Relations ──────────────────────────────────────────── */
@@ -76,6 +83,11 @@ class Activity extends Model
     public function accompanyingUser()
     {
         return $this->belongsTo(User::class, 'accompanying_user_id');
+    }
+
+    public function validatedBy()
+    {
+        return $this->belongsTo(User::class, 'validated_by_id');
     }
     public function contact()
     {
@@ -112,26 +124,18 @@ class Activity extends Model
         // 1. Visites sur des dates antérieures non réalisées
         static::whereDate('date_activite', '<', $today)
             ->whereNotIn('statut', ['realisee', 'effectuee', 'manquee', 'annulee'])
-            ->where(function ($q) {
-                $q->whereNull('report_status')
-                  ->orWhereNotIn('report_status', ['submitted', 'validated', 'approved']);
-            })
             ->update(['statut' => 'manquee']);
 
-        // 2. Visites d'aujourd'hui dont l'heure prévue (+ 30 minutes) est dépassée
+        // 2. Visites d'aujourd'hui dont l'heure prévue (+ 60 minutes) est dépassée
         $todayActivities = static::whereDate('date_activite', $today)
             ->whereNotIn('statut', ['realisee', 'effectuee', 'manquee', 'annulee'])
-            ->where(function ($q) {
-                $q->whereNull('report_status')
-                  ->orWhereNotIn('report_status', ['submitted', 'validated', 'approved']);
-            })
             ->get();
 
         foreach ($todayActivities as $act) {
             $timeStr = $act->heure_fin ?: $act->heure_debut;
             if ($timeStr) {
                 try {
-                    $scheduledTime = \Carbon\Carbon::parse($today . ' ' . $timeStr)->addMinutes(30)->format('H:i:s');
+                    $scheduledTime = \Carbon\Carbon::parse($today . ' ' . $timeStr)->addMinutes(60)->format('H:i:s');
                     if ($currentTime > $scheduledTime) {
                         $act->update(['statut' => 'manquee']);
                     }

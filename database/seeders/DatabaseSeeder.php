@@ -108,9 +108,10 @@ class DatabaseSeeder extends Seeder
         }
 
         $this->call([
+            UserSeeder::class,
+            PharmaSeeder::class,
             CRMDataSeeder::class,
             SettingSeeder::class,
-            PharmaSeeder::class,
         ]);
     }
 }

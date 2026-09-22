@@ -35,7 +35,9 @@ class ActivityController extends Controller
     {
         Activity::markMissedPastActivities();
 
-        $query = Activity::with(['delegue', 'contact', 'account', 'products'])
+        $query = Activity::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)
+            ->with(['delegue', 'contact', 'account', 'products'])
+            ->when($request->user_id, fn($q, $v) => $q->where('user_id', $v))
             ->when($request->activity_type, fn($q, $v) => $q->where('activity_type', $v))
             ->when($request->statut, fn($q, $v) => $q->where('statut', $v))
             ->when($request->date_debut, fn($q, $v) => $q->whereDate('date_activite', '>=', $v))
@@ -45,7 +47,7 @@ class ActivityController extends Controller
             ->when($request->tour_plan_id, fn($q, $v) => $q->where('tour_plan_id', $v))
             ->orderByDesc('date_activite');
 
-        return ActivityResource::collection($query->paginate(25));
+        return ActivityResource::collection($query->paginate(100));
     }
 
     #[OA\Post(
@@ -248,5 +250,53 @@ class ActivityController extends Controller
             'message' => 'Activity validated successfully', 
             'data' => new ActivityResource($activity->load(['delegue', 'contact', 'account', 'products']))
         ]);
+    }
+
+    public function storeDuo(Request $request)
+    {
+        $validated = $request->validate([
+            'user_id'       => 'nullable|string',
+            'delegate_id'   => 'nullable|string',
+            'contact_id'    => 'nullable|string',
+            'account_id'    => 'nullable|string',
+            'date_activite' => 'nullable|string',
+            'date_duo'      => 'nullable|string',
+            'notes'         => 'nullable|string',
+            'objective'     => 'nullable|string',
+            'activity_type' => 'nullable|string',
+        ]);
+
+        $targetUserId = $validated['user_id'] ?? $validated['delegate_id'] ?? auth()->id();
+        $subsidiary = \App\Models\Subsidiary::first();
+        $dateAct = $validated['date_activite'] ?? $validated['date_duo'] ?? now()->toDateString();
+
+        $activity = Activity::create([
+            'subsidiary_id' => $subsidiary?->id,
+            'user_id' => $targetUserId,
+            'contact_id' => $validated['contact_id'] ?? null,
+            'account_id' => $validated['account_id'] ?? null,
+            'date_activite' => $dateAct,
+            'activity_type' => 'visite',
+            'statut' => 'planifiee',
+            'is_duo' => true,
+            'notes' => '[VISITE DUO SUPERVISEUR] ' . ($validated['notes'] ?? $validated['objective'] ?? 'Visite conjointe de coaching avec le superviseur.'),
+        ]);
+
+        // Send Notification to Delegate
+        $delegate = \App\Models\User::find($targetUserId);
+        if ($delegate) {
+            \App\Models\Notification::create([
+                'user_id' => $delegate->id,
+                'title' => 'Visite en Duo Programmée',
+                'message' => "Votre superviseur a programmé une visite en duo pour le {$dateAct}.",
+                'type' => 'duo',
+                'read' => false,
+            ]);
+        }
+
+        return response()->json([
+            'message' => 'Visite en Duo programmée avec succès',
+            'data' => new ActivityResource($activity->load(['delegue', 'contact', 'account']))
+        ], 201);
     }
 }

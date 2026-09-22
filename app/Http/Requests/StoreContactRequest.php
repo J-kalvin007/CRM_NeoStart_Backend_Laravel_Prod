@@ -21,8 +21,8 @@ class StoreContactRequest extends FormRequest
             'gps_lat'         => 'nullable|numeric|between:-90,90',
             'gps_lng'         => 'nullable|numeric|between:-180,180',
             'potentiel'       => 'nullable|in:faible,moyen,fort',
-            'influence'       => 'nullable|in:faible,moyen,fort',
-            'statut'          => 'in:en_attente,actif,inactif,archive,rejete',
+            'specialite'      => 'nullable|string|max:100',
+            'statut'          => 'nullable|string|max:50',
             'meta'            => 'nullable|array',
             'local_uuid'      => 'nullable|uuid|unique:contacts,local_uuid',
         ];
