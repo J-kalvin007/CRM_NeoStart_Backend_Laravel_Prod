@@ -38,8 +38,8 @@ class SupervisorDashboardController extends Controller
         $targetVisitsMtd = max(40, $activeDelegatesCount * 40);
         $progressMtd = min(1.0, round($completedVisitsMtd / max(1, $targetVisitsMtd), 2));
 
-        $pendingValidations = \App\Models\Expense::whereIn('user_id', $teamUserIds)->where('status', 'pending')->count()
-            + \App\Models\TourPlan::whereIn('user_id', $teamUserIds)->where('status', 'submitted')->count();
+        $pendingValidations = \App\Models\Expense::whereIn('user_id', $teamUserIds)->where('status', 'submitted')->count()
+            + \App\Models\TourPlan::whereIn('user_id', $teamUserIds)->where('statut', 'soumis')->count();
 
         $coverage = 88;
 
