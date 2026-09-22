@@ -8,6 +8,7 @@ use App\Models\Contact;
 use App\Models\Account;
 use OpenApi\Attributes as OA;
 
+#[OA\Tag(name: 'Validations', description: 'API de modération des fiches en attente')]
 class ValidationController extends Controller
 {
     #[OA\Get(
@@ -22,10 +23,10 @@ class ValidationController extends Controller
     public function index(Request $request)
     {
         $user = auth()->user();
-        
+
         // Pour un superviseur, on récupère les membres de son équipe
         $teamIds = $user->team_id ? [$user->team_id] : [];
-        
+
         $pendingContacts = Contact::where('statut_validation', 'en_attente')
             ->whereHas('owner', fn($q) => $q->whereIn('team_id', $teamIds))
             ->with(['owner:id,name', 'account:id,nom'])

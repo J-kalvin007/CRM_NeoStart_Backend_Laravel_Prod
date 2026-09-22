@@ -85,27 +85,32 @@ class DuplicateDetectionService
     }
 
     /**
-     * Lance une exception 409 Conflict si un doublon est détecté.
+     * Lance une exception 409 Conflict si un doublon de contact est détecté.
      */
     public function abortIfDuplicateContact(?string $countryId, array $data, ?string $excludeId = null): void
     {
         $duplicate = $this->findDuplicateContact($countryId, $data, $excludeId);
         if ($duplicate) {
-            abort(409, json_encode([
-                'message' => 'Un contact similaire existe déjà.',
-                'duplicate_id' => $duplicate->id
-            ]));
+            abort(response()->json([
+                'message'        => 'Un contact similaire existe déjà.',
+                'duplicate_id'   => $duplicate->id,
+                'duplicate_name' => trim(($duplicate->nom ?? '') . ' ' . ($duplicate->prenom ?? '')),
+            ], 409));
         }
     }
 
+    /**
+     * Lance une exception 409 Conflict si un doublon de compte est détecté.
+     */
     public function abortIfDuplicateAccount(string $subsidiaryId, array $data, ?string $excludeId = null): void
     {
         $duplicate = $this->findDuplicateAccount($subsidiaryId, $data, $excludeId);
         if ($duplicate) {
-            abort(409, json_encode([
-                'message' => 'Un compte similaire existe déjà dans cette filiale.',
-                'duplicate_id' => $duplicate->id
-            ]));
+            abort(response()->json([
+                'message'        => 'Un compte similaire existe déjà dans cette filiale.',
+                'duplicate_id'   => $duplicate->id,
+                'duplicate_name' => $duplicate->nom ?? 'Inconnu',
+            ], 409));
         }
     }
 }

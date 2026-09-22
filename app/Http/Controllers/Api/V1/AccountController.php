@@ -32,7 +32,7 @@ class AccountController extends Controller
     )]
     public function index(Request $request)
     {
-        $query = Account::with(['subsidiary', 'categories'])
+        $query = Account::with(['subsidiary', 'categories', 'accountType'])
             ->when($request->account_type, fn($q, $v) => $q->where('account_type', $v))
             ->when($request->statut, fn($q, $v) => $q->where('statut', $v))
             ->when($request->search, fn($q, $v) => $q->where(function ($q) use ($v) {
@@ -40,6 +40,11 @@ class AccountController extends Controller
                   ->orWhere('ville', 'like', "%$v%")
                   ->orWhere('responsable', 'like', "%$v%");
             }));
+
+        $user = auth()->user();
+        if ($user && !$user->isAdminOrSupervisor()) {
+            $query->whereIn('statut', ['actif', 'valide']);
+        }
 
         return AccountResource::collection($query->paginate(25));
     }
@@ -120,6 +125,13 @@ class AccountController extends Controller
         DuplicateDetectionService $duplicateService
     ) {
         $validated = $request->validated();
+
+        $user = auth()->user();
+        if ($user && !$user->isAdminOrSupervisor()) {
+            $validated['statut'] = 'en_attente';
+        } else {
+            $validated['statut'] = 'valide';
+        }
 
         // Validation dynamique du champ meta
         if (!empty($validated['account_type_id'])) {

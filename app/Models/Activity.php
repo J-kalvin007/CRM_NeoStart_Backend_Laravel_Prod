@@ -79,6 +79,11 @@ class Activity extends Model
         return $this->belongsTo(User::class, 'user_id');
     }
 
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
+
     public function accompanyingUser()
     {
         return $this->belongsTo(User::class, 'accompanying_user_id');
@@ -119,6 +124,45 @@ class Activity extends Model
     }
 
     /* ─── Business Logic ─────────────────────────────────────── */
+
+    /**
+     * Marque automatiquement comme 'manquee' les activités dont l'heure/date prévue est dépassée sans réalisation.
+     */
+    public static function markMissedPastActivities(): void
+    {
+        $today = now()->toDateString();
+        $currentTime = now()->format('H:i:s');
+
+        // 1. Visites sur des dates antérieures non réalisées
+        static::whereDate('date_activite', '<', $today)
+            ->whereNotIn('statut', ['realisee', 'effectuee', 'manquee', 'annulee'])
+            ->where(function ($q) {
+                $q->whereNull('report_status')
+                  ->orWhereNotIn('report_status', ['submitted', 'validated', 'approved']);
+            })
+            ->update(['statut' => 'manquee']);
+
+        // 2. Visites d'aujourd'hui dont l'heure prévue (+ 30 minutes) est dépassée
+        $todayActivities = static::whereDate('date_activite', $today)
+            ->whereNotIn('statut', ['realisee', 'effectuee', 'manquee', 'annulee'])
+            ->where(function ($q) {
+                $q->whereNull('report_status')
+                  ->orWhereNotIn('report_status', ['submitted', 'validated', 'approved']);
+            })
+            ->get();
+
+        foreach ($todayActivities as $act) {
+            $timeStr = $act->heure_fin ?: $act->heure_debut;
+            if ($timeStr) {
+                try {
+                    $scheduledTime = \Carbon\Carbon::parse($today . ' ' . $timeStr)->addMinutes(30)->format('H:i:s');
+                    if ($currentTime > $scheduledTime) {
+                        $act->update(['statut' => 'manquee']);
+                    }
+                } catch (\Exception $e) {}
+            }
+        }
+    }
 
     /**
      * Verrouille l'activité après réalisation (empêche toute modification).

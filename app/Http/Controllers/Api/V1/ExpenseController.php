@@ -187,7 +187,7 @@ class ExpenseController extends Controller
 
         // Notification manager
         $user = Auth::user();
-        $manager = $user?->manager ?? \App\Models\User::whereHas('roles', fn($q) => $q->whereIn('name', ['manager', 'supervisor', 'dir-commercial']))->first();
+        $manager = $user?->manager ?? \App\Models\User::whereHas('roles', fn($q) => $q->whereIn('name', ['superviseur', 'supervisor', 'manager', 'Manager', 'Superviseur', 'dir-commercial']))->first();
         if ($manager && $user) {
             app(\App\Services\NotificationService::class)->send(
                 $manager,

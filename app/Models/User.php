@@ -128,4 +128,21 @@ class User extends Authenticatable
     {
         return $this->belongsTo(Team::class, 'team_id');
     }
+
+    public function isAdminOrSupervisor(): bool
+    {
+        return $this->hasRole([
+            'super-admin',
+            'superadmin',
+            'Administrateur Groupe',
+            'Administrateur Pays',
+            'Direction Générale',
+            'Manager',
+            'directeur-commercial',
+            'directeur_commercial',
+            'directeur-marketing',
+            'directeur_marketing',
+            'superviseur'
+        ]);
+    }
 }

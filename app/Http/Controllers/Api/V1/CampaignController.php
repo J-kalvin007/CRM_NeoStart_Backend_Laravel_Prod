@@ -57,7 +57,7 @@ class CampaignController extends Controller
             'budget' => 'nullable|numeric',
             'objectifs' => 'nullable|array',
             'meta' => 'nullable|array',
-            'statut' => 'nullable|string|in:creation,validation,deploiement,execution,suivi,analyse,cloture',
+            'statut' => 'nullable|string|in:brouillon,validation,active,terminee,suspendue',
             'product_ids' => 'nullable|array',
             'product_ids.*' => 'uuid|exists:products,id',
             'team_ids' => 'nullable|array',
@@ -129,7 +129,7 @@ class CampaignController extends Controller
             'budget' => 'nullable|numeric',
             'objectifs' => 'nullable|array',
             'meta' => 'nullable|array',
-            'statut' => 'sometimes|string|in:creation,validation,deploiement,execution,suivi,analyse,cloture',
+            'statut' => 'sometimes|string|in:brouillon,validation,active,terminee,suspendue',
             'product_ids' => 'nullable|array',
             'product_ids.*' => 'uuid|exists:products,id',
             'team_ids' => 'nullable|array',
@@ -164,5 +164,135 @@ class CampaignController extends Controller
     {
         Campaign::findOrFail($id)->delete();
         return response()->json(null, 204);
+    }
+
+    #[OA\Patch(
+        path: '/api/v1/campaigns/{id}/status',
+        summary: 'Mettre à jour le statut d\'une campagne',
+        security: [['bearerAuth' => []]],
+        tags: ['Campaigns'],
+        parameters: [
+            new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))
+        ],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                properties: [
+                    new OA\Property(property: 'statut', type: 'string')
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Statut mis à jour')
+        ]
+    )]
+    public function updateStatus(Request $request, string $id)
+    {
+        $campaign = Campaign::findOrFail($id);
+        $validated = $request->validate([
+            'statut' => 'required|string|in:brouillon,validation,active,terminee,suspendue'
+        ]);
+        $campaign->update($validated);
+        return response()->json($campaign);
+    }
+
+    #[OA\Post(
+        path: '/api/v1/campaigns/{id}/products',
+        summary: 'Ajouter un produit à la campagne',
+        security: [['bearerAuth' => []]],
+        tags: ['Campaigns'],
+        parameters: [
+            new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))
+        ],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                properties: [
+                    new OA\Property(property: 'product_id', type: 'string', format: 'uuid')
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Produit ajouté')
+        ]
+    )]
+    public function attachProduct(Request $request, string $id)
+    {
+        $campaign = Campaign::findOrFail($id);
+        $validated = $request->validate([
+            'product_id' => 'required|uuid|exists:products,id'
+        ]);
+        $campaign->products()->syncWithoutDetaching([$validated['product_id']]);
+        return response()->json($campaign->load('products'));
+    }
+
+    #[OA\Delete(
+        path: '/api/v1/campaigns/{id}/products/{product_id}',
+        summary: 'Retirer un produit de la campagne',
+        security: [['bearerAuth' => []]],
+        tags: ['Campaigns'],
+        parameters: [
+            new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid')),
+            new OA\Parameter(name: 'product_id', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Produit retiré')
+        ]
+    )]
+    public function detachProduct(string $id, string $product_id)
+    {
+        $campaign = Campaign::findOrFail($id);
+        $campaign->products()->detach($product_id);
+        return response()->json($campaign->load('products'));
+    }
+
+    #[OA\Post(
+        path: '/api/v1/campaigns/{id}/teams',
+        summary: 'Assigner une équipe à la campagne',
+        security: [['bearerAuth' => []]],
+        tags: ['Campaigns'],
+        parameters: [
+            new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))
+        ],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                properties: [
+                    new OA\Property(property: 'team_id', type: 'string', format: 'uuid')
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Équipe assignée')
+        ]
+    )]
+    public function attachTeam(Request $request, string $id)
+    {
+        $campaign = Campaign::findOrFail($id);
+        $validated = $request->validate([
+            'team_id' => 'required|uuid|exists:teams,id'
+        ]);
+        $campaign->teams()->syncWithoutDetaching([$validated['team_id']]);
+        return response()->json($campaign->load('teams'));
+    }
+
+    #[OA\Delete(
+        path: '/api/v1/campaigns/{id}/teams/{team_id}',
+        summary: 'Retirer une équipe de la campagne',
+        security: [['bearerAuth' => []]],
+        tags: ['Campaigns'],
+        parameters: [
+            new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid')),
+            new OA\Parameter(name: 'team_id', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Équipe retirée')
+        ]
+    )]
+    public function detachTeam(string $id, string $team_id)
+    {
+        $campaign = Campaign::findOrFail($id);
+        $campaign->teams()->detach($team_id);
+        return response()->json($campaign->load('teams'));
     }
 }

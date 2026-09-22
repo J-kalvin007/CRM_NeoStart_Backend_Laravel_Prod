@@ -16,7 +16,7 @@ class ObjectifController extends Controller
         parameters: [
             new OA\Parameter(name: 'user_id', in: 'query', required: false, schema: new OA\Schema(type: 'integer')),
             new OA\Parameter(name: 'team_id', in: 'query', required: false, schema: new OA\Schema(type: 'string', format: 'uuid')),
-            new OA\Parameter(name: 'type_objectif', in: 'query', required: false, schema: new OA\Schema(type: 'string')),
+            new OA\Parameter(name: 'indicator_id', in: 'query', required: false, schema: new OA\Schema(type: 'string', format: 'uuid')),
             new OA\Parameter(name: 'statut', in: 'query', required: false, schema: new OA\Schema(type: 'string', enum: ['actif','atteint','depasse','non_atteint','annule'])),
             new OA\Parameter(name: 'periode', in: 'query', required: false, schema: new OA\Schema(type: 'string'), description: 'Ex: Q3-2026, Oct-2026'),
         ],
@@ -24,10 +24,10 @@ class ObjectifController extends Controller
     )]
     public function index(Request $request)
     {
-        $query = Objectif::with(['user', 'team', 'product'])
+        $query = Objectif::with(['user', 'team', 'product', 'indicator'])
             ->when($request->user_id, fn($q, $v) => $q->where('user_id', $v))
             ->when($request->team_id, fn($q, $v) => $q->where('team_id', $v))
-            ->when($request->type_objectif, fn($q, $v) => $q->where('type_objectif', $v))
+            ->when($request->indicator_id, fn($q, $v) => $q->where('indicator_id', $v))
             ->when($request->statut, fn($q, $v) => $q->where('statut', $v))
             ->when($request->periode, fn($q, $v) => $q->where('periode', 'like', "%$v%"));
         return ObjectifResource::collection($query->paginate(25));
@@ -35,18 +35,18 @@ class ObjectifController extends Controller
 
     #[OA\Post(path: '/api/v1/objectifs', summary: 'Créer un objectif de performance', security: [['bearerAuth' => []]], tags: ['Objectifs'],
         requestBody: new OA\RequestBody(required: true, content: new OA\JsonContent(
-            required: ['type_objectif', 'valeur_cible', 'date_debut', 'date_fin'],
+            required: ['indicator_id', 'valeur_cible', 'date_debut', 'date_fin'],
             properties: [
                 new OA\Property(property: 'user_id', type: 'integer', nullable: true),
                 new OA\Property(property: 'team_id', type: 'string', format: 'uuid', nullable: true),
-                new OA\Property(property: 'type_objectif', type: 'string', enum: ['nombre_visites','couverture_categorie_a','produit_prioritaire','ca_ventes','autre']),
+                new OA\Property(property: 'indicator_id', type: 'string', format: 'uuid'),
                 new OA\Property(property: 'valeur_cible', type: 'number', format: 'float', example: 100),
-                new OA\Property(property: 'unite', type: 'string', example: 'visites', nullable: true),
                 new OA\Property(property: 'date_debut', type: 'string', format: 'date'),
                 new OA\Property(property: 'date_fin', type: 'string', format: 'date'),
                 new OA\Property(property: 'periode', type: 'string', example: 'Q3-2026', nullable: true),
                 new OA\Property(property: 'product_id', type: 'string', format: 'uuid', nullable: true),
                 new OA\Property(property: 'description', type: 'string', nullable: true),
+                new OA\Property(property: 'subsidiary_id', type: 'string', format: 'uuid'),
             ]
         )),
         responses: [new OA\Response(response: 201, description: 'Objectif créé avec succès')]
@@ -57,7 +57,8 @@ class ObjectifController extends Controller
             return response()->json(['message' => 'Non autorisé. Seul un manager peut créer des objectifs.'], 403);
         }
         $objectif = Objectif::create($request->validated());
-        return new ObjectifResource($objectif->load(['user', 'team', 'product']));
+        $objectif->recalculerTaux();
+        return new ObjectifResource($objectif->load(['user', 'team', 'product', 'indicator']));
     }
 
     #[OA\Get(path: '/api/v1/objectifs/{id}', summary: 'Détails d\'un objectif', security: [['bearerAuth' => []]], tags: ['Objectifs'],
@@ -66,7 +67,7 @@ class ObjectifController extends Controller
     )]
     public function show(string $id)
     {
-        return new ObjectifResource(Objectif::with(['user', 'team', 'product'])->findOrFail($id));
+        return new ObjectifResource(Objectif::with(['user', 'team', 'product', 'indicator'])->findOrFail($id));
     }
 
     #[OA\Put(path: '/api/v1/objectifs/{id}', summary: 'Mettre à jour un objectif (valeur réalisée)', security: [['bearerAuth' => []]], tags: ['Objectifs'],
@@ -85,7 +86,7 @@ class ObjectifController extends Controller
         $objectif = Objectif::findOrFail($id);
         $objectif->update($request->validated());
         $objectif->recalculerTaux();
-        return new ObjectifResource($objectif->load(['user', 'team', 'product']));
+        return new ObjectifResource($objectif->load(['user', 'team', 'product', 'indicator']));
     }
 
     #[OA\Delete(path: '/api/v1/objectifs/{id}', summary: 'Supprimer un objectif', security: [['bearerAuth' => []]], tags: ['Objectifs'],

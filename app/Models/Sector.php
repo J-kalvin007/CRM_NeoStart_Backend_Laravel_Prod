@@ -12,6 +12,7 @@ class Sector extends Model
 
     protected $fillable = [
         'zone_id',
+        'organizational_unit_id',
         'name',
         'code',
         'is_active',
@@ -25,5 +26,10 @@ class Sector extends Model
     public function teams()
     {
         return $this->hasMany(Team::class);
+    }
+
+    public function organizationalUnit()
+    {
+        return $this->belongsTo(OrganizationalUnit::class, 'organizational_unit_id');
     }
 }

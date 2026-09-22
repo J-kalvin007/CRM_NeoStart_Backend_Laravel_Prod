@@ -39,6 +39,10 @@ class ConfigurationController extends Controller
     )]
     public function accountTypeIndex()
     {
+        $user = auth()->user();
+        if ($user && $user->isAdminOrSupervisor()) {
+            return AccountTypeResource::collection(AccountType::all());
+        }
         return AccountTypeResource::collection(AccountType::active()->get());
     }
 
@@ -68,7 +72,14 @@ class ConfigurationController extends Controller
     )]
     public function accountTypeStore(StoreAccountTypeRequest $request)
     {
-        return new AccountTypeResource(AccountType::create($request->validated()));
+        $validated = $request->validated();
+        $user = auth()->user();
+        if ($user && !$user->isAdminOrSupervisor()) {
+            $validated['statut'] = 'en_attente';
+        } else {
+            $validated['statut'] = 'valide';
+        }
+        return new AccountTypeResource(AccountType::create($validated));
     }
 
     #[OA\Put(
@@ -114,6 +125,10 @@ class ConfigurationController extends Controller
     )]
     public function contactTypeIndex()
     {
+        $user = auth()->user();
+        if ($user && $user->isAdminOrSupervisor()) {
+            return ContactTypeResource::collection(ContactType::all());
+        }
         return ContactTypeResource::collection(ContactType::active()->get());
     }
 
@@ -136,7 +151,14 @@ class ConfigurationController extends Controller
     )]
     public function contactTypeStore(StoreContactTypeRequest $request)
     {
-        return new ContactTypeResource(ContactType::create($request->validated()));
+        $validated = $request->validated();
+        $user = auth()->user();
+        if ($user && !$user->isAdminOrSupervisor()) {
+            $validated['statut'] = 'en_attente';
+        } else {
+            $validated['statut'] = 'valide';
+        }
+        return new ContactTypeResource(ContactType::create($validated));
     }
 
     #[OA\Put(

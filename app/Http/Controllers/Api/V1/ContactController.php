@@ -68,6 +68,11 @@ class ContactController extends Controller
                   ->orWhereHas('account', fn($aq) => $aq->where('nom', 'like', "%$v%"));
             }));
 
+        $user = auth()->user();
+        if ($user && !$user->isAdminOrSupervisor()) {
+            $query->whereIn('statut', ['actif', 'valide']);
+        }
+
         $perPage = $request->get('per_page', 100);
         return ContactResource::collection($query->paginate($perPage));
     }
@@ -97,10 +102,11 @@ class ContactController extends Controller
     {
         $request->validate([
             'account_id' => 'nullable|uuid|exists:accounts,id',
-            'nom' => 'nullable|string',
-            'prenom' => 'nullable|string',
-            'telephone' => 'nullable|string',
-            'email' => 'nullable|email',
+            'nom'        => 'nullable|string',
+            'prenom'     => 'nullable|string',
+            'telephone'  => 'nullable|string',
+            'email'      => 'nullable|email',
+            'exclude_id' => 'nullable|string', // ID du contact à exclure (utile lors d'une édition)
         ]);
 
         $countryId = null;
@@ -109,7 +115,8 @@ class ContactController extends Controller
             $countryId = $account?->subsidiary?->country_id;
         }
 
-        $duplicate = $duplicateService->findDuplicateContact($countryId, $request->all());
+        $excludeId = $request->exclude_id ?: null;
+        $duplicate = $duplicateService->findDuplicateContact($countryId, $request->all(), $excludeId);
 
         return response()->json([
             'is_duplicate' => $duplicate ? true : false,
@@ -155,6 +162,13 @@ class ContactController extends Controller
         DuplicateDetectionService $duplicateService
     ) {
         $validated = $request->validated();
+
+        $user = auth()->user();
+        if ($user && !$user->isAdminOrSupervisor()) {
+            $validated['statut'] = 'en_attente';
+        } else {
+            $validated['statut'] = 'valide';
+        }
 
         // Validation dynamique
         if (!empty($validated['contact_type_id'])) {
@@ -246,11 +260,14 @@ class ContactController extends Controller
 
         // Validation dynamique
         $typeId = $validated['contact_type_id'] ?? $contact->contact_type_id;
+        $mergedMeta = array_merge($contact->meta ?? [], $validated['meta'] ?? []);
         if ($typeId) {
             $type = ContactType::find($typeId);
-            $mergedMeta = array_merge($contact->meta ?? [], $validated['meta'] ?? []);
-            $validationService->validateMeta($mergedMeta, $type);
+            if ($type) {
+                $validationService->validateMeta($mergedMeta, $type);
+            }
         }
+        $validated['meta'] = $mergedMeta;
 
         // Détection de doublons
         $accountId = $validated['account_id'] ?? $contact->account_id;

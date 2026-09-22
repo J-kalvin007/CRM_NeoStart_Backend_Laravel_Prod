@@ -74,6 +74,7 @@ class SampleMovementController extends Controller
     public function myStock(Request $request)
     {
         $user = $request->user();
+        $user = $request->user();
 
         $movements = SampleMovement::with('product')
             ->where('user_id', $user->id)

@@ -43,6 +43,11 @@ use App\Http\Controllers\Api\V1\ConversationController;
 use App\Http\Controllers\Api\V1\ClmAnalyticController;
 use App\Http\Controllers\Api\V1\CoachingController;
 use App\Http\Controllers\Api\V1\ObjectionController;
+use App\Http\Controllers\Api\V1\ValidationController;
+use App\Http\Controllers\Api\V1\SupervisorDashboardController;
+
+use App\Http\Controllers\Api\V1\LaboratoryController;
+use App\Http\Controllers\Api\V1\TherapeuticClassController;
 
 Route::get('/login', fn() => response()->json(['message' => 'Non authentifié'], 401))->name('login');
 
@@ -91,6 +96,11 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('zones', ZoneController::class);
         Route::apiResource('sectors', SectorController::class);
         Route::apiResource('teams', TeamController::class);
+        Route::patch('campaigns/{campaign}/status', [CampaignController::class, 'updateStatus']);
+        Route::post('campaigns/{campaign}/products', [CampaignController::class, 'attachProduct']);
+        Route::delete('campaigns/{campaign}/products/{product}', [CampaignController::class, 'detachProduct']);
+        Route::post('campaigns/{campaign}/teams', [CampaignController::class, 'attachTeam']);
+        Route::delete('campaigns/{campaign}/teams/{team}', [CampaignController::class, 'detachTeam']);
         Route::apiResource('campaigns', CampaignController::class);
         Route::apiResource('kol-profiles', KolProfileController::class);
 
@@ -148,10 +158,13 @@ Route::prefix('v1')->group(function () {
         Route::post('/notifications/mark-all-as-read', [NotificationController::class, 'markAllAsRead']);
         Route::post('/notifications/{id}/mark-as-read', [NotificationController::class, 'markAsRead']);
 
+        // ── Superviseur ──────────────────────────────────────────
+        Route::get('/supervisor/dashboard', [SupervisorDashboardController::class, 'dashboard']);
+
         // ── Répertoire (Comptes & Contacts) ────────────────────
-        Route::get('validations/pending', [App\Http\Controllers\Api\V1\ValidationController::class, 'index']);
-        Route::post('validations/{type}/{id}/approve', [App\Http\Controllers\Api\V1\ValidationController::class, 'approve']);
-        Route::post('validations/{type}/{id}/reject', [App\Http\Controllers\Api\V1\ValidationController::class, 'reject']);
+        Route::get('validations/pending', [ValidationController::class, 'index']);
+        Route::post('validations/{type}/{id}/approve', [ValidationController::class, 'approve']);
+        Route::post('validations/{type}/{id}/reject', [ValidationController::class, 'reject']);
 
         Route::post('accounts/check-duplicates', [AccountController::class, 'checkDuplicates']);
         Route::apiResource('accounts', AccountController::class);
@@ -172,13 +185,15 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('categories', CategoryController::class);
 
         // ── Catalogue Produits ─────────────────────────────────
+        Route::apiResource('laboratories', LaboratoryController::class);
+        Route::apiResource('therapeutic-classes', TherapeuticClassController::class);
         Route::apiResource('products', ProductController::class);
         Route::get('products/{product}/objections', [ObjectionController::class, 'indexByProduct']);
 
         // ── Opérationnel Terrain (Visites, Tâches, Agenda) ──────
         Route::post('tour-plans/optimize', [\App\Http\Controllers\Api\V1\TourPlanController::class, 'optimize']);
         Route::apiResource('tour-plans', TourPlanController::class);
-        Route::post('activities/duo', [CoachingController::class, 'scheduleDuoVisit']);
+        Route::post('activities/{activity}/validate', [ActivityController::class, 'validateActivity']);
         Route::apiResource('activities', ActivityController::class);
         Route::post('activities/{activity}/clm-analytics', [ClmAnalyticController::class, 'store']);
         Route::post('activities/{activity}/objections', [ObjectionController::class, 'storeForActivity']);
@@ -201,8 +216,15 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('sample-movements', SampleMovementController::class);
         Route::apiResource('stocks', SampleMovementController::class);
 
+        // Demandes de réassort d'échantillons
+        Route::get('sample-requests', [\App\Http\Controllers\Api\V1\SampleRequestController::class, 'index']);
+        Route::post('sample-requests', [\App\Http\Controllers\Api\V1\SampleRequestController::class, 'store']);
+        Route::post('sample-requests/{id}/approve', [\App\Http\Controllers\Api\V1\SampleRequestController::class, 'approve']);
+        Route::post('sample-requests/{id}/reject', [\App\Http\Controllers\Api\V1\SampleRequestController::class, 'reject']);
+
         // -- Statistiques & Dashboards --
-        // Route::get('/analytics/dashboard', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'dashboard']);
+        Route::get('/analytics/executive', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'executiveSummary']);
+        // Route::get('/analytics/dashboard', ...) — méthode AnalyticsController::dashboard() inexistante, non enregistrée
         Route::get('/analytics/team-performance', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'teamPerformance']);
         Route::get('/analytics/edetailing-summary', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'edetailingSummary']);
         Route::get('/export/performance', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'exportPerformance']);
@@ -241,6 +263,7 @@ Route::prefix('v1')->group(function () {
         // ── Objectifs & Performance ────────────────────────────
         Route::get('me/objectifs-summary', [ObjectifController::class, 'summary']);
         Route::apiResource('objectifs', ObjectifController::class);
+        Route::get('indicators', [\App\Http\Controllers\Api\V1\IndicatorController::class, 'index']);
 
         // ── Congés (Leaves) ────────────────────────────────────
         Route::get('leaves', [LeaveController::class, 'index']);

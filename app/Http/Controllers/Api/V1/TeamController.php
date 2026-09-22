@@ -22,7 +22,7 @@ class TeamController extends Controller
     )]
     public function index()
     {
-        return TeamResource::collection(Team::all());
+        return TeamResource::collection(Team::with('manager')->withCount('members')->get());
     }
 
     #[OA\Post(

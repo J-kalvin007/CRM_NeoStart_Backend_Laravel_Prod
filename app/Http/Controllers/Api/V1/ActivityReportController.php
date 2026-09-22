@@ -43,15 +43,16 @@ class ActivityReportController extends Controller
 
         $activity->update($validated);
 
-        if ($validated['report_status'] === 'submitted' && $activity->user) {
-            $manager = $activity->user->manager ?? \App\Models\User::whereHas('roles', fn($q) => $q->whereIn('name', ['manager', 'supervisor', 'dir-commercial']))->first();
-            if ($manager) {
+        if ($validated['report_status'] === 'submitted') {
+            $user = $activity->delegue ?? $activity->user ?? auth()->user();
+            $manager = $user?->manager ?? \App\Models\User::whereHas('roles', fn($q) => $q->whereIn('name', ['superviseur', 'supervisor', 'manager', 'Manager', 'Superviseur', 'dir-commercial']))->first();
+            if ($manager && $user) {
                 app(NotificationService::class)->send(
                     $manager,
                     'Compte-rendu de visite soumis',
-                    "Le délégué {$activity->user->name} a transmis son compte-rendu de visite.",
+                    "Le délégué {$user->name} a transmis son compte-rendu de visite.",
                     'report',
-                    ['activity_id' => $activity->id]
+                    ['activity_id' => $activity->id, 'recipient_role' => 'manager', 'sender_id' => $user->id]
                 );
             }
         }

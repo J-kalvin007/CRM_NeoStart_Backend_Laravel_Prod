@@ -1152,6 +1152,25 @@
                 }
             }
         },
+        "/api/v1/analytics/executive": {
+            "get": {
+                "tags": [
+                    "Analytics"
+                ],
+                "summary": "Tableau de bord BI exécutif",
+                "operationId": "57c6459ad78304d668c330380140c00e",
+                "responses": {
+                    "200": {
+                        "description": "Données consolidées"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/analytics/team-performance": {
             "get": {
                 "tags": [
@@ -1433,7 +1452,7 @@
                     "App Branding"
                 ],
                 "summary": "Récupérer la configuration de branding de l'application",
-                "description": "Retourne le nom, le logo et la favicon de l'application.\r\n- Si `subsidiary_id` est fourni, les paramètres spécifiques à la filiale surchargent les globaux.\r\n- Les URLs de logo et favicon sont des URLs absolues prêtes à l'emploi.\r\n- **Accessible sans authentification** pour permettre l'affichage avant la connexion.",
+                "description": "Retourne le nom, le logo et la favicon de l'application.\n- Si `subsidiary_id` est fourni, les paramètres spécifiques à la filiale surchargent les globaux.\n- Les URLs de logo et favicon sont des URLs absolues prêtes à l'emploi.\n- **Accessible sans authentification** pour permettre l'affichage avant la connexion.",
                 "operationId": "cef5151ee7a274bf28fbad2e2931d387",
                 "parameters": [
                     {
@@ -1560,7 +1579,7 @@
                     "App Branding"
                 ],
                 "summary": "Uploader / remplacer le logo de l'application",
-                "description": "Upload du logo affiché dans l'interface (header, page de connexion, etc.).\r\n\r\n**Contraintes fichier :**\r\n- Formats acceptés : `jpeg`, `jpg`, `png`, `webp`\r\n- Taille maximale : **2 Mo**\r\n- L'ancien fichier est automatiquement supprimé du stockage.\r\n\r\nL'URL du logo est retournée dans le champ `logo_url`.",
+                "description": "Upload du logo affiché dans l'interface (header, page de connexion, etc.).\n\n**Contraintes fichier :**\n- Formats acceptés : `jpeg`, `jpg`, `png`, `webp`\n- Taille maximale : **2 Mo**\n- L'ancien fichier est automatiquement supprimé du stockage.\n\nL'URL du logo est retournée dans le champ `logo_url`.",
                 "operationId": "4649f50ef75cfb805b73fa562425c4c5",
                 "requestBody": {
                     "required": true,
@@ -1662,7 +1681,7 @@
                     "App Branding"
                 ],
                 "summary": "Uploader / remplacer la favicon (icône de l'onglet)",
-                "description": "Upload de la favicon affichée dans les onglets du navigateur.\r\n\r\n**Contraintes fichier :**\r\n- Formats acceptés : `png`, `ico`\r\n- Taille maximale : **512 Ko**\r\n- L'ancien fichier est automatiquement supprimé.\r\n\r\n> **Recommandation** : utiliser une image carrée de **32×32 px** ou **64×64 px** en PNG pour une compatibilité maximale.",
+                "description": "Upload de la favicon affichée dans les onglets du navigateur.\n\n**Contraintes fichier :**\n- Formats acceptés : `png`, `ico`\n- Taille maximale : **512 Ko**\n- L'ancien fichier est automatiquement supprimé.\n\n> **Recommandation** : utiliser une image carrée de **32×32 px** ou **64×64 px** en PNG pour une compatibilité maximale.",
                 "operationId": "6043f9f572a3a7680f06edfaff8d57dd",
                 "requestBody": {
                     "required": true,
@@ -2372,6 +2391,221 @@
                 "responses": {
                     "204": {
                         "description": "Supprimé"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/campaigns/{id}/status": {
+            "patch": {
+                "tags": [
+                    "Campaigns"
+                ],
+                "summary": "Mettre à jour le statut d'une campagne",
+                "operationId": "96af18e47c8717ce0d5c37b9fbc1fe07",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "statut": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Statut mis à jour"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/campaigns/{id}/products": {
+            "post": {
+                "tags": [
+                    "Campaigns"
+                ],
+                "summary": "Ajouter un produit à la campagne",
+                "operationId": "c672caf883d9ddd90814391f2ff3b825",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "product_id": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Produit ajouté"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/campaigns/{id}/products/{product_id}": {
+            "delete": {
+                "tags": [
+                    "Campaigns"
+                ],
+                "summary": "Retirer un produit de la campagne",
+                "operationId": "ca0ced6163be89f3666767d25c2b3f34",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "product_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Produit retiré"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/campaigns/{id}/teams": {
+            "post": {
+                "tags": [
+                    "Campaigns"
+                ],
+                "summary": "Assigner une équipe à la campagne",
+                "operationId": "2d3929a324c91a350c96abdd8f065573",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "team_id": {
+                                        "type": "string",
+                                        "format": "uuid"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Équipe assignée"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/campaigns/{id}/teams/{team_id}": {
+            "delete": {
+                "tags": [
+                    "Campaigns"
+                ],
+                "summary": "Retirer une équipe de la campagne",
+                "operationId": "7105735058888f65fe43a2cd640e3d73",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "team_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Équipe retirée"
                     }
                 },
                 "security": [
@@ -4829,6 +5063,25 @@
                 }
             }
         },
+        "/api/v1/indicators": {
+            "get": {
+                "tags": [
+                    "Indicators"
+                ],
+                "summary": "Lister les indicateurs de performance",
+                "operationId": "3b760f7a9b81e6cf41a73a2204e4485e",
+                "responses": {
+                    "200": {
+                        "description": "Liste des indicateurs"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/influences": {
             "get": {
                 "tags": [
@@ -5017,6 +5270,188 @@
                 ]
             }
         },
+        "/api/v1/laboratories": {
+            "get": {
+                "tags": [
+                    "Laboratories"
+                ],
+                "summary": "Lister les laboratoires",
+                "operationId": "a566229267622a268a9fef553e417eca",
+                "responses": {
+                    "200": {
+                        "description": "Liste des laboratoires"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Laboratories"
+                ],
+                "summary": "Créer un laboratoire",
+                "operationId": "cabe95ea6dee57dbf8a74829aec9d6ca",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "nom"
+                                ],
+                                "properties": {
+                                    "nom": {
+                                        "type": "string",
+                                        "example": "Pfizer"
+                                    },
+                                    "contact_email": {
+                                        "type": "string",
+                                        "format": "email",
+                                        "nullable": true
+                                    },
+                                    "is_active": {
+                                        "type": "boolean",
+                                        "default": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Laboratoire créé"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/laboratories/{id}": {
+            "get": {
+                "tags": [
+                    "Laboratories"
+                ],
+                "summary": "Afficher un laboratoire",
+                "operationId": "08ea16ed38d5a2686072aa7a12f8cfa4",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Détails du laboratoire"
+                    },
+                    "404": {
+                        "description": "Laboratoire non trouvé"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Laboratories"
+                ],
+                "summary": "Mettre à jour un laboratoire",
+                "operationId": "33f455885f1c322ad5951ad8f679ac3d",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "nom": {
+                                        "type": "string"
+                                    },
+                                    "contact_email": {
+                                        "type": "string",
+                                        "format": "email",
+                                        "nullable": true
+                                    },
+                                    "is_active": {
+                                        "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Laboratoire mis à jour"
+                    },
+                    "404": {
+                        "description": "Laboratoire non trouvé"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Laboratories"
+                ],
+                "summary": "Supprimer un laboratoire",
+                "operationId": "241e1d06faee5218816e8c6061214864",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Laboratoire supprimé"
+                    },
+                    "404": {
+                        "description": "Laboratoire non trouvé"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/media/upload": {
             "post": {
                 "tags": [
@@ -5066,6 +5501,58 @@
                 "responses": {
                     "200": {
                         "description": "Liste des notifications"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Notifications"
+                ],
+                "summary": "Créer et envoyer une notification",
+                "operationId": "1fd84d2c66035574da4902f416cbd96a",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "title",
+                                    "message"
+                                ],
+                                "properties": {
+                                    "title": {
+                                        "type": "string"
+                                    },
+                                    "message": {
+                                        "type": "string"
+                                    },
+                                    "type": {
+                                        "type": "string",
+                                        "example": "info"
+                                    },
+                                    "recipient_role": {
+                                        "type": "string",
+                                        "example": "delegate"
+                                    },
+                                    "user_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Notification envoyée avec succès"
                     }
                 },
                 "security": [
@@ -5150,11 +5637,12 @@
                         }
                     },
                     {
-                        "name": "type_objectif",
+                        "name": "indicator_id",
                         "in": "query",
                         "required": false,
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "uuid"
                         }
                     },
                     {
@@ -5205,7 +5693,7 @@
                         "application/json": {
                             "schema": {
                                 "required": [
-                                    "type_objectif",
+                                    "indicator_id",
                                     "valeur_cible",
                                     "date_debut",
                                     "date_fin"
@@ -5220,25 +5708,14 @@
                                         "format": "uuid",
                                         "nullable": true
                                     },
-                                    "type_objectif": {
+                                    "indicator_id": {
                                         "type": "string",
-                                        "enum": [
-                                            "nombre_visites",
-                                            "couverture_categorie_a",
-                                            "produit_prioritaire",
-                                            "ca_ventes",
-                                            "autre"
-                                        ]
+                                        "format": "uuid"
                                     },
                                     "valeur_cible": {
                                         "type": "number",
                                         "format": "float",
                                         "example": 100
-                                    },
-                                    "unite": {
-                                        "type": "string",
-                                        "example": "visites",
-                                        "nullable": true
                                     },
                                     "date_debut": {
                                         "type": "string",
@@ -5261,6 +5738,10 @@
                                     "description": {
                                         "type": "string",
                                         "nullable": true
+                                    },
+                                    "subsidiary_id": {
+                                        "type": "string",
+                                        "format": "uuid"
                                     }
                                 },
                                 "type": "object"
@@ -5986,9 +6467,39 @@
                                         "type": "string",
                                         "nullable": true
                                     },
-                                    "prix_unitaire": {
-                                        "type": "number",
-                                        "format": "float",
+                                    "laboratory_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    },
+                                    "therapeutic_class_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    },
+                                    "galenic_form_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    },
+                                    "dci": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "conditionnement": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "indications": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "posologie": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "effets_secondaires": {
+                                        "type": "string",
                                         "nullable": true
                                     },
                                     "stock_actuel": {
@@ -6006,16 +6517,6 @@
                                             "actif",
                                             "archive"
                                         ]
-                                    },
-                                    "meta": {
-                                        "description": "Attributs sectoriels libres. Pharma ex: {\"molecule\":\"Amoxicilline\",\"dosage\":\"500mg\",\"forme\":\"Comprimé\",\"numero_amm\":\"AMM-001\"}",
-                                        "type": "object",
-                                        "example": {
-                                            "molecule": "Amoxicilline",
-                                            "dosage": "500mg",
-                                            "forme": "Comprimé"
-                                        },
-                                        "nullable": true
                                     }
                                 },
                                 "type": "object"
@@ -6096,9 +6597,40 @@
                                     "nom": {
                                         "type": "string"
                                     },
-                                    "prix_unitaire": {
-                                        "type": "number",
-                                        "format": "float"
+                                    "laboratory_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    },
+                                    "therapeutic_class_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    },
+                                    "galenic_form_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    },
+                                    "dci": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "conditionnement": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "indications": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "posologie": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "effets_secondaires": {
+                                        "type": "string",
+                                        "nullable": true
                                     },
                                     "stock_alerte": {
                                         "type": "integer"
@@ -6110,10 +6642,6 @@
                                             "actif",
                                             "archive"
                                         ]
-                                    },
-                                    "meta": {
-                                        "type": "object",
-                                        "nullable": true
                                     }
                                 },
                                 "type": "object"
@@ -8018,6 +8546,186 @@
                 ]
             }
         },
+        "/api/v1/therapeutic-classes": {
+            "get": {
+                "tags": [
+                    "Therapeutic Classes"
+                ],
+                "summary": "Lister les classes thérapeutiques",
+                "operationId": "519f65066c436fc8c0b623d1eacf7917",
+                "responses": {
+                    "200": {
+                        "description": "Liste des classes thérapeutiques"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Therapeutic Classes"
+                ],
+                "summary": "Créer une classe thérapeutique",
+                "operationId": "5aa525232b89bf71c0ec0adf3d8830a9",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "nom"
+                                ],
+                                "properties": {
+                                    "nom": {
+                                        "type": "string",
+                                        "example": "Antibiotique"
+                                    },
+                                    "description": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "is_active": {
+                                        "type": "boolean",
+                                        "default": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Classe créée"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/therapeutic-classes/{id}": {
+            "get": {
+                "tags": [
+                    "Therapeutic Classes"
+                ],
+                "summary": "Afficher une classe thérapeutique",
+                "operationId": "4c80daa13d2bda229e48c03fcf5b7b1c",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Détails de la classe"
+                    },
+                    "404": {
+                        "description": "Classe non trouvée"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Therapeutic Classes"
+                ],
+                "summary": "Mettre à jour une classe thérapeutique",
+                "operationId": "cf9aa326e18e43e7613cf8971a0ddbf1",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "nom": {
+                                        "type": "string"
+                                    },
+                                    "description": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "is_active": {
+                                        "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Classe mise à jour"
+                    },
+                    "404": {
+                        "description": "Classe non trouvée"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Therapeutic Classes"
+                ],
+                "summary": "Supprimer une classe thérapeutique",
+                "operationId": "a4562bbb433f5379cffb657615d7a743",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Classe supprimée"
+                    },
+                    "404": {
+                        "description": "Classe non trouvée"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/tour-plans": {
             "get": {
                 "tags": [
@@ -8978,12 +9686,20 @@
             "description": "Gestion des utilisateurs"
         },
         {
+            "name": "Validations",
+            "description": "API de modération des fiches en attente"
+        },
+        {
             "name": "Accounts",
             "description": "Accounts"
         },
         {
             "name": "Activities",
             "description": "Activities"
+        },
+        {
+            "name": "Analytics",
+            "description": "Analytics"
         },
         {
             "name": "Manager Analytics",
@@ -9014,8 +9730,16 @@
             "description": "Digital Supports"
         },
         {
+            "name": "Indicators",
+            "description": "Indicators"
+        },
+        {
             "name": "KOLs",
             "description": "KOLs"
+        },
+        {
+            "name": "Laboratories",
+            "description": "Laboratories"
         },
         {
             "name": "Notifications",
@@ -9066,6 +9790,10 @@
             "description": "Territories"
         },
         {
+            "name": "Therapeutic Classes",
+            "description": "Therapeutic Classes"
+        },
+        {
             "name": "TourPlans",
             "description": "TourPlans"
         },
@@ -9076,10 +9804,6 @@
         {
             "name": "Trainings",
             "description": "Trainings"
-        },
-        {
-            "name": "Validations",
-            "description": "Validations"
         }
     ]
 }

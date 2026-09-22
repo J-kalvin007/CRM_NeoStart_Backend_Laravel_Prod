@@ -22,7 +22,8 @@ class UpdateProductRequest extends FormRequest
      */
     public function rules(): array
     {
-        $productId = $this->route('product') ? $this->route('product')->id : $this->route('id');
+        $product = $this->route('product');
+        $productId = is_object($product) ? $product->id : ($product ?: $this->route('id'));
 
         return [
             'subsidiary_id'   => 'sometimes|required|uuid|exists:subsidiaries,id',
@@ -31,7 +32,6 @@ class UpdateProductRequest extends FormRequest
             'code'            => 'nullable|string|max:100|unique:products,code,' . $productId,
             'marque'          => 'nullable|string|max:150',
             'gamme'           => 'nullable|string|max:150',
-            'prix_unitaire'   => 'nullable|numeric|min:0',
             'pght'            => 'nullable|numeric|min:0',
             'ppv'             => 'nullable|numeric|min:0',
             'devise'          => 'nullable|string|max:10',
@@ -40,6 +40,14 @@ class UpdateProductRequest extends FormRequest
             'description'     => 'nullable|string',
             'image_url'       => 'nullable|url',
             'statut'          => 'in:brouillon,actif,archive',
+            'laboratory_id'        => 'nullable|uuid|exists:laboratories,id',
+            'therapeutic_class_id' => 'nullable|uuid|exists:therapeutic_classes,id',
+            'galenic_form_id'      => 'nullable|uuid|exists:galenic_forms,id',
+            'dci'                  => 'nullable|string|max:255',
+            'conditionnement'      => 'nullable|string|max:255',
+            'indications'          => 'nullable|string',
+            'posologie'            => 'nullable|string',
+            'effets_secondaires'   => 'nullable|string',
             'meta'            => 'nullable|array',
         ];
     }

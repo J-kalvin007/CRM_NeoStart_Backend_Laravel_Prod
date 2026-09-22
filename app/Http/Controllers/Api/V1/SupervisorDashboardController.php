@@ -41,6 +41,8 @@ class SupervisorDashboardController extends Controller
         $pendingValidations = \App\Models\Expense::whereIn('user_id', $teamUserIds)->where('status', 'pending')->count()
             + \App\Models\TourPlan::whereIn('user_id', $teamUserIds)->where('status', 'submitted')->count();
 
+        $coverage = 88;
+
         $todayVisits = Activity::with(['delegue', 'contact', 'account'])
             ->whereIn('user_id', $teamUserIds)
             ->whereDate('date_activite', now()->toDateString())
@@ -97,15 +99,15 @@ class SupervisorDashboardController extends Controller
                 ],
                 [
                     'title' => 'COUVERTURE',
-                    'value' => '88%',
-                    'progress' => 0.88,
+                    'value' => $coverage . '%',
+                    'progress' => $coverage / 100,
                     'bottomLabel' => 'Cible A/B prioritaire',
                 ],
                 [
                     'title' => 'VALIDATIONS EN COURS',
                     'value' => (string) max(4, $pendingValidations),
                     'subtitleText' => 'À valider',
-                    'bottomBadge' => '⏳ Action requise',
+                    'bottomBadge' => $pendingValidations > 0 ? '⏳ Action requise' : '✅ À jour',
                 ],
                 [
                     'title' => 'DÉLÉGUÉS ACTIFS',

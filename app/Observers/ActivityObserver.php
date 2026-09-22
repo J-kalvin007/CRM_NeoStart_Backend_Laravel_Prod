@@ -42,7 +42,7 @@ class ActivityObserver
             if ($activity->heure_debut && $activity->heure_fin && !$activity->duree_minutes) {
                 $debut = Carbon::parse($activity->heure_debut);
                 $fin = Carbon::parse($activity->heure_fin);
-                $activity->duree_minutes = $debut->diffInMinutes($fin);
+                $activity->duree_minutes = abs($debut->diffInMinutes($fin, false));
             }
 
             // Vérification GPS (Alerte / Drapeau)

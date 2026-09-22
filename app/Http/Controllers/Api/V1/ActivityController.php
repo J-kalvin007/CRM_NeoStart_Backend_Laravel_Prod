@@ -33,6 +33,8 @@ class ActivityController extends Controller
     )]
     public function index(Request $request)
     {
+        Activity::markMissedPastActivities();
+
         $query = Activity::with(['delegue', 'contact', 'account', 'products'])
             ->when($request->user_id, fn($q, $v) => $q->where('user_id', $v))
             ->when($request->activity_type, fn($q, $v) => $q->where('activity_type', $v))
@@ -126,7 +128,7 @@ class ActivityController extends Controller
 
         // Notification au manager
         $user = auth()->user();
-        $manager = $user?->manager ?? \App\Models\User::whereHas('roles', fn($q) => $q->whereIn('name', ['manager', 'supervisor', 'dir-commercial']))->first();
+        $manager = $user?->manager ?? \App\Models\User::whereHas('roles', fn($q) => $q->whereIn('name', ['superviseur', 'supervisor', 'manager', 'Manager', 'Superviseur', 'dir-commercial']))->first();
         if ($manager && $user) {
             if (in_array($activity->statut, ['realisee', 'soumis_definitif'])) {
                 app(\App\Services\NotificationService::class)->send(
@@ -134,7 +136,7 @@ class ActivityController extends Controller
                     'Nouveau compte-rendu de visite',
                     "Le délégué {$user->name} a finalisé son compte-rendu de visite.",
                     'report',
-                    ['activity_id' => $activity->id]
+                    ['activity_id' => $activity->id, 'recipient_role' => 'manager', 'sender_id' => $user->id]
                 );
             } else {
                 app(\App\Services\NotificationService::class)->send(
@@ -142,7 +144,7 @@ class ActivityController extends Controller
                     'Nouvelle visite planifiée',
                     "Le délégué {$user->name} a planifié une nouvelle visite.",
                     'planning',
-                    ['activity_id' => $activity->id]
+                    ['activity_id' => $activity->id, 'recipient_role' => 'manager', 'sender_id' => $user->id]
                 );
             }
         }
@@ -237,6 +239,32 @@ class ActivityController extends Controller
             return response()->json(['message' => 'Activité verrouillée.'], 403);
         }
         $activity->delete();
-        return response()->json(null, 204);
+    }
+
+    public function validateActivity(Request $request, string $id)
+    {
+        $activity = Activity::findOrFail($id);
+
+        $request->validate([
+            'statut' => 'required|in:validee,rejetee',
+            'rejection_reason' => 'required_if:statut,rejetee|string|nullable'
+        ]);
+
+        $newStatut = $request->statut === 'validee' ? 'realisee' : 'annulee';
+
+        $notes = $activity->notes;
+        if ($request->statut === 'rejetee') {
+            $notes = $notes ? $notes . "\n[Rejeté]: " . $request->rejection_reason : "[Rejeté]: " . $request->rejection_reason;
+        }
+
+        $activity->update([
+            'statut' => $newStatut,
+            'notes' => $notes
+        ]);
+
+        return response()->json([
+            'message' => 'Activity validated successfully', 
+            'data' => new ActivityResource($activity->load(['delegue', 'contact', 'account', 'products']))
+        ]);
     }
 }

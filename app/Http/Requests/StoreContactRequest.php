@@ -22,7 +22,7 @@ class StoreContactRequest extends FormRequest
             'gps_lng'         => 'nullable|numeric|between:-180,180',
             'potentiel'       => 'nullable|in:faible,moyen,fort',
             'influence'       => 'nullable|in:faible,moyen,fort',
-            'statut'          => 'in:actif,inactif,archive',
+            'statut'          => 'in:en_attente,actif,inactif,archive,rejete',
             'meta'            => 'nullable|array',
             'local_uuid'      => 'nullable|uuid|unique:contacts,local_uuid',
         ];
