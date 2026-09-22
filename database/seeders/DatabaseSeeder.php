@@ -24,7 +24,10 @@ class DatabaseSeeder extends Seeder
         // Clear cached permissions
         app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
 
-        // 1. Create Scope Permissions
+        // 1. Créer les 5 rôles réels en premier (source de vérité)
+        $this->call([RoleAndPermissionSeeder::class]);
+
+        // 2. Create Scope Permissions
         $scopePermissions = [
             'scope:global',
             'scope:country',
@@ -40,13 +43,13 @@ class DatabaseSeeder extends Seeder
             \App\Models\Permission::firstOrCreate(['name' => $perm, 'guard_name' => 'web']);
         }
 
-        // 2. Create Roles and assign scope permissions
+        // 3. Assigner les permissions de scope aux rôles réels
         $rolesConfig = [
-            'Administrateur Groupe' => ['scope:global'],
-            'Administrateur Pays' => ['scope:country'],
-            'Direction Générale' => ['scope:subsidiary'], // Ou country selon le besoin
-            'Manager' => ['scope:subsidiary'], // Ou team, peut varier dynamiquement
-            'Délégué Médical' => ['scope:team']
+            'super-admin'            => ['scope:global'],
+            'directeur-commercial'   => ['scope:global'],
+            'directeur-marketing'    => ['scope:global'],
+            'superviseur'            => ['scope:team'],
+            'delegue-medical'        => ['scope:team'],
         ];
 
         foreach ($rolesConfig as $roleName => $perms) {
@@ -103,8 +106,9 @@ class DatabaseSeeder extends Seeder
             'status' => true
         ]);
 
-        if (!$admin->hasRole('Administrateur Groupe')) {
-            $admin->assignRole('Administrateur Groupe');
+        if (!$admin->hasRole('super-admin')) {
+            // Révoquer les anciens rôles éventuels et assigner le bon slug
+            $admin->syncRoles(['super-admin']);
         }
 
         $this->call([

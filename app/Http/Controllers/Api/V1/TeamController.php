@@ -22,7 +22,7 @@ class TeamController extends Controller
     )]
     public function index()
     {
-        return TeamResource::collection(Team::with('manager')->withCount('members')->get());
+        return TeamResource::collection(Team::with(['manager', 'sector'])->withCount('members')->get());
     }
 
     #[OA\Post(
@@ -49,7 +49,7 @@ class TeamController extends Controller
     public function store(StoreTeamRequest $request)
     {
         $team = Team::create($request->validated());
-        return new TeamResource($team);
+        return new TeamResource($team->load(['manager', 'sector']));
     }
 
     #[OA\Get(
@@ -67,7 +67,7 @@ class TeamController extends Controller
     )]
     public function show(Team $team)
     {
-        return new TeamResource($team);
+        return new TeamResource($team->load(['manager', 'sector']));
     }
 
     #[OA\Put(
@@ -97,7 +97,7 @@ class TeamController extends Controller
     public function update(UpdateTeamRequest $request, Team $team)
     {
         $team->update($request->validated());
-        return new TeamResource($team);
+        return new TeamResource($team->load(['manager', 'sector']));
     }
 
     #[OA\Delete(

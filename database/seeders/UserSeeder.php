@@ -28,7 +28,7 @@ class UserSeeder extends Seeder
             'force_password_change' => false,
             'is_active' => true,
         ]);
-        $manager->assignRole('manager');
+        $manager->assignRole('Superviseur');
 
         $delegue = User::firstOrCreate([
             'email' => 'delegue@crm.local'
