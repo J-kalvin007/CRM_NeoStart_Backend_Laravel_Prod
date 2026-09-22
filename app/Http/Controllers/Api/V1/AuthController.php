@@ -310,6 +310,52 @@ class AuthController extends Controller
         ]);
     }
 
+    #[OA\Post(
+        path: '/api/v1/resend-otp',
+        summary: 'Renvoi d\'un nouveau code OTP',
+        description: 'Génère un nouveau code OTP à 6 chiffres et l\'envoie à l\'utilisateur.',
+        tags: ['Authentication'],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['user_id'],
+                properties: [
+                    new OA\Property(property: 'user_id', type: 'string', format: 'uuid'),
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Nouveau code OTP envoyé'),
+            new OA\Response(response: 404, description: 'Utilisateur introuvable')
+        ]
+    )]
+    public function resendOtp(Request $request)
+    {
+        $request->validate([
+            'user_id' => 'required|uuid',
+        ]);
+
+        $user = User::find($request->user_id);
+        if (!$user) {
+            return response()->json(['message' => 'Utilisateur introuvable.'], 404);
+        }
+
+        $otpCode = (string) random_int(100000, 999999);
+        Cache::put('login_otp_' . $user->id, $otpCode, now()->addMinutes(10));
+        
+        try {
+            Mail::to($user->email)->send(new LoginOtpMail($user, $otpCode));
+        } catch (\Exception $e) {
+            // Log warning on mail failure, but continue
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Un nouveau code de vérification a été envoyé à votre adresse email.',
+            'user_id' => $user->id
+        ], 200);
+    }
+
     #[OA\Get(
         path: '/api/v1/me',
         summary: 'Obtenir les informations de l\'utilisateur connecté',

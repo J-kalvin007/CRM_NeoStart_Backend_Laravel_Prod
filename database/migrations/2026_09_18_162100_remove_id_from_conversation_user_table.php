@@ -11,9 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('conversation_user', function (Blueprint $table) {
-            $table->dropColumn('id');
-        });
+        if (Schema::hasColumn('conversation_user', 'id') && \Illuminate\Support\Facades\DB::getDriverName() !== 'sqlite') {
+            Schema::table('conversation_user', function (Blueprint $table) {
+                $table->dropColumn('id');
+            });
+        }
     }
 
     /**

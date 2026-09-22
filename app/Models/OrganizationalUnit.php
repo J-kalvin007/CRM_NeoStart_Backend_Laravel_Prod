@@ -11,7 +11,7 @@ class OrganizationalUnit extends Model
 {
     use HasFactory, HasUuids, HasActivityLogs;
 
-    protected  = [
+    protected $fillable = [
         'name',
         'type',
         'parent_id',

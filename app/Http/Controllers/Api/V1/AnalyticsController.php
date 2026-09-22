@@ -123,7 +123,6 @@ class AnalyticsController extends Controller
     public function teamPerformance(Request $request)
     {
         $user = auth()->user();
-<<<<<<< HEAD
         $teamUsers = User::where('id', '!=', $user->id)
             ->whereDoesntHave('roles', function($q) {
                 $q->whereIn('name', ['superadmin', 'admin']);
@@ -171,49 +170,6 @@ class AnalyticsController extends Controller
         });
 
         return response()->json($data);
-=======
-        if (!$user) {
-            return response()->json([], 401);
-        }
-
-        $subordinates = User::where('manager_id', $user->id)->get();
-        if ($subordinates->isEmpty() && $user->team_id) {
-            $subordinates = User::where('team_id', $user->team_id)
-                ->where('id', '!=', $user->id)
-                ->get();
-        }
-        if ($subordinates->isEmpty()) {
-            $subordinates = User::whereDoesntHave('roles', function($q) {
-                $q->whereIn('name', ['Manager', 'super_admin', 'Administrateur Groupe']);
-            })->get();
-        }
-
-        $rankCounter = 1;
-        $performanceList = $subordinates->map(function ($sub) use (&$rankCounter) {
-            $visitCount = Activity::where('user_id', $sub->id)->count();
-            $completedVisits = Activity::where('user_id', $sub->id)
-                ->whereIn('statut', ['effectuee', 'cloturee', 'validee', 'terminee'])
-                ->count();
-
-            $objCount = Objectif::where('user_id', $sub->id)->count();
-            $objRate = $objCount > 0 ? min(100, round(($completedVisits / max(1, $objCount)) * 100, 1)) : 85.0;
-
-            return [
-                'delegate' => [
-                    'id' => $sub->id,
-                    'name' => trim(($sub->prenom ?? '') . ' ' . ($sub->nom ?? '')) ?: $sub->name ?: $sub->email,
-                ],
-                'visit_count' => $visitCount > 0 ? $visitCount : 15,
-                'completed_visits' => $completedVisits > 0 ? $completedVisits : 12,
-                'objective_rate' => $objRate,
-                'revenue' => 0.00,
-                'rank' => $rankCounter++,
-                'period' => 'monthly'
-            ];
-        })->values();
-
-        return response()->json($performanceList);
->>>>>>> backup-backend-fixes
     }
 
     #[OA\Get(

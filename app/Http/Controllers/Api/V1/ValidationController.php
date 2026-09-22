@@ -21,6 +21,7 @@ class ValidationController extends Controller
         ]
     )]
     public function index(Request $request)
+    {
         $user = auth()->user();
         $teamIds = $user && $user->team_id ? [$user->team_id] : [];
 
