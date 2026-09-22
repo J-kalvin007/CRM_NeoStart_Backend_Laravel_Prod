@@ -42,10 +42,10 @@ class StoreActivityRequest extends FormRequest
             }
         }
 
-        if ($this->has('contact_id') && !\Illuminate\Support\Str::isUuid((string)$this->contact_id)) {
+        if ($this->has('contact_id') && (!\Illuminate\Support\Str::isUuid((string)$this->contact_id) || !\App\Models\Contact::where('id', (string)$this->contact_id)->exists())) {
             $merge['contact_id'] = null;
         }
-        if ($this->has('account_id') && !\Illuminate\Support\Str::isUuid((string)$this->account_id)) {
+        if ($this->has('account_id') && (!\Illuminate\Support\Str::isUuid((string)$this->account_id) || !\App\Models\Account::where('id', (string)$this->account_id)->exists())) {
             $merge['account_id'] = null;
         }
 

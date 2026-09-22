@@ -129,25 +129,20 @@ class ActivityController extends Controller
 
         // Notification au manager
         $user = auth()->user();
-        $manager = $user?->manager ?? \App\Models\User::whereHas('roles', fn($q) => $q->whereIn('name', ['superviseur', 'supervisor', 'manager', 'Manager', 'Superviseur', 'dir-commercial']))->first();
+        $manager = $user?->manager ?? ($user?->manager_id ? \App\Models\User::find($user->manager_id) : null) ?? \App\Models\User::whereHas('roles', fn($q) => $q->whereIn('name', ['superviseur', 'supervisor', 'manager', 'Manager', 'Superviseur', 'dir-commercial']))->first();
         if ($manager && $user) {
-            if (in_array($activity->statut, ['realisee', 'soumis_definitif'])) {
-                app(\App\Services\NotificationService::class)->send(
-                    $manager,
-                    'Nouveau compte-rendu de visite',
-                    "Le délégué {$user->name} a finalisé son compte-rendu de visite.",
-                    'report',
-                    ['activity_id' => $activity->id, 'recipient_role' => 'manager', 'sender_id' => $user->id]
-                );
-            } else {
-                app(\App\Services\NotificationService::class)->send(
-                    $manager,
-                    'Nouvelle visite planifiée',
-                    "Le délégué {$user->name} a planifié une nouvelle visite.",
-                    'planning',
-                    ['activity_id' => $activity->id, 'recipient_role' => 'manager', 'sender_id' => $user->id]
-                );
-            }
+            $isRealized = in_array($activity->statut, ['realisee', 'soumis_definitif']);
+            $title = $isRealized ? 'Nouveau compte-rendu de visite' : 'Nouvelle visite planifiée';
+            $msg = $isRealized ? "Le délégué {$user->name} a finalisé son compte-rendu de visite." : "Le délégué {$user->name} a planifié une nouvelle visite.";
+            
+            NotificationController::sendNotification(
+                $manager,
+                $title,
+                $msg,
+                $isRealized ? 'report' : 'planning',
+                'manager',
+                ['activity_id' => (string) $activity->id, 'sender_id' => (string) $user->id]
+            );
         }
 
         return new ActivityResource($activity->load(['delegue', 'contact', 'account', 'products', 'sampleMovements']));
