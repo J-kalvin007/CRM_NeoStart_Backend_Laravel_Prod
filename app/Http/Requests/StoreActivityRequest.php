@@ -66,7 +66,7 @@ class StoreActivityRequest extends FormRequest
             'motif'          => 'nullable|string',
             'notes'          => 'nullable|string',
             'niveau_interet' => 'nullable|integer',
-            'statut'         => 'in:planifiee,en_cours,realisee,manquee,annulee,brouillon,soumis_definitif,en_attente,en attente de validation,soumis',
+            'statut'         => 'in:planifiee,validee,refusee,en_cours,realisee,manquee,annulee,brouillon,soumis_definitif,en_attente,en attente de validation,soumis',
             'local_uuid'     => 'nullable|string',
             'signature_base64'=> 'nullable|string',
             

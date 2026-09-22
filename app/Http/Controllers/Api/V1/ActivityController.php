@@ -211,7 +211,25 @@ class ActivityController extends Controller
             return response()->json(['message' => 'Cette activité est verrouillée et ne peut plus être modifiée.'], 403);
         }
 
-        $activity->update($request->validated());
+        $validatedData = $request->validated();
+        $targetStatus = $validatedData['statut'] ?? null;
+
+        // Contrôle de sécurité 1: Démarrer la visite (en_cours) nécessite que la visite soit validée
+        if ($targetStatus === 'en_cours' && !in_array(strtolower($activity->statut), ['validee', 'validated', 'en_cours', 'realisee'])) {
+            return response()->json([
+                'message' => 'Démarrage impossible : Cette visite n\'a pas encore été validée par votre responsable.'
+            ], 403);
+        }
+
+        // Contrôle de sécurité 2: Passer au statut réalisé nécessite un Check-in GPS effectif (gps_debut_lat)
+        $hasGpsStart = !empty($activity->gps_debut_lat) || !empty($validatedData['gps_debut_lat']);
+        if ($targetStatus === 'realisee' && !$hasGpsStart) {
+            return response()->json([
+                'message' => 'Finalisation impossible : Le Check-in GPS de début de visite est obligatoire.'
+            ], 422);
+        }
+
+        $activity->update($validatedData);
 
         if ($activity->statut === 'realisee') {
             $activity->lock();
@@ -247,24 +265,47 @@ class ActivityController extends Controller
         $activity = Activity::findOrFail($id);
 
         $request->validate([
-            'statut' => 'required|in:validee,rejetee',
-            'rejection_reason' => 'required_if:statut,rejetee|string|nullable'
+            'statut' => 'required|in:validee,validated,rejetee,refusee',
+            'rejection_reason' => 'required_if:statut,rejetee,refusee|string|nullable'
         ]);
 
-        $newStatut = $request->statut === 'validee' ? 'realisee' : 'annulee';
+        $st = strtolower($request->statut);
+        $newStatut = ($st === 'validee' || $st === 'validated') ? 'validee' : 'refusee';
 
         $notes = $activity->notes;
-        if ($request->statut === 'rejetee') {
+        if (in_array($st, ['rejetee', 'refusee']) && $request->rejection_reason) {
             $notes = $notes ? $notes . "\n[Rejeté]: " . $request->rejection_reason : "[Rejeté]: " . $request->rejection_reason;
         }
 
         $activity->update([
             'statut' => $newStatut,
-            'notes' => $notes
+            'validated_by_id' => auth()->id(),
+            'validation_date' => now(),
+            'notes' => $notes,
+            'rejection_reason' => $request->rejection_reason ?? null,
         ]);
 
+        // Notifier le délégué de la décision du manager
+        if ($activity->user) {
+            $title = $newStatut === 'validee' ? 'Visite Validée' : 'Visite Refusée';
+            $dateStr = $activity->date_activite ? $activity->date_activite->format('d/m/Y') : now()->format('d/m/Y');
+            $msg = $newStatut === 'validee'
+                ? "Votre visite prévue le {$dateStr} a été validée par votre responsable."
+                : "Votre visite prévue le {$dateStr} a été refusée par votre responsable.";
+            
+            try {
+                app(\App\Services\NotificationService::class)->send(
+                    $activity->user,
+                    $title,
+                    $msg,
+                    'planning',
+                    ['activity_id' => $activity->id, 'recipient_role' => 'delegate', 'sender_id' => auth()->id()]
+                );
+            } catch (\Exception $e) {}
+        }
+
         return response()->json([
-            'message' => 'Activity validated successfully', 
+            'message' => 'Activité mise à jour avec succès', 
             'data' => new ActivityResource($activity->load(['delegue', 'contact', 'account', 'products']))
         ]);
     }
