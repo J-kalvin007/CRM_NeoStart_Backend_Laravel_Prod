@@ -25,14 +25,37 @@ class StoreActivityRequest extends FormRequest
             $type = 'visite';
         }
 
-        $this->merge([
+        $user = auth()->user();
+        $merge = [
             'activity_type' => $type,
-        ]);
+        ];
+        if (!$this->has('subsidiary_id') || empty($this->subsidiary_id)) {
+            $merge['subsidiary_id'] = $user?->subsidiary_id ?? \App\Models\Subsidiary::first()?->id;
+        }
+
+        if ($this->has('statut')) {
+            $st = strtolower(trim((string)$this->statut));
+            if (in_array($st, ['en attente de validation', 'en_attente_de_validation', 'soumis', 'submitted', 'planifie', 'brouillon'])) {
+                $merge['statut'] = 'planifiee';
+            } elseif (in_array($st, ['realise', 'réalisée', 'effectuée', 'effectuee'])) {
+                $merge['statut'] = 'realisee';
+            }
+        }
+
+        if ($this->has('contact_id') && (!\Illuminate\Support\Str::isUuid((string)$this->contact_id) || !\App\Models\Contact::where('id', (string)$this->contact_id)->exists())) {
+            $merge['contact_id'] = null;
+        }
+        if ($this->has('account_id') && (!\Illuminate\Support\Str::isUuid((string)$this->account_id) || !\App\Models\Account::where('id', (string)$this->account_id)->exists())) {
+            $merge['account_id'] = null;
+        }
+
+        $this->merge($merge);
     }
 
     public function rules(): array
     {
         return [
+            'subsidiary_id'  => 'nullable|uuid',
             'tour_plan_id'   => 'nullable|uuid|exists:tour_plans,id',
             'contact_id'     => 'nullable|string|exists:contacts,id',
             'account_id'     => 'nullable|string|exists:accounts,id',
@@ -43,7 +66,7 @@ class StoreActivityRequest extends FormRequest
             'motif'          => 'nullable|string',
             'notes'          => 'nullable|string',
             'niveau_interet' => 'nullable|integer',
-            'statut'         => 'in:planifiee,en_cours,realisee,manquee,annulee,brouillon,soumis_definitif,en_attente,en attente de validation,soumis',
+            'statut'         => 'in:planifiee,validee,refusee,en_cours,realisee,manquee,annulee,brouillon,soumis_definitif,en_attente,en attente de validation,soumis',
             'local_uuid'     => 'nullable|string',
             'signature_base64'=> 'nullable|string',
             

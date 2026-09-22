@@ -11,17 +11,19 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('activity_objections', function (Blueprint $table) {
-            if (Schema::hasColumn('activity_objections', 'id')) {
-                $table->dropColumn('id');
-            }
-        });
+        if (\Illuminate\Support\Facades\DB::getDriverName() !== 'sqlite') {
+            Schema::table('activity_objections', function (Blueprint $table) {
+                if (Schema::hasColumn('activity_objections', 'id')) {
+                    $table->dropColumn('id');
+                }
+            });
 
-        Schema::table('activity_document', function (Blueprint $table) {
-            if (Schema::hasColumn('activity_document', 'id')) {
-                $table->dropColumn('id');
-            }
-        });
+            Schema::table('activity_document', function (Blueprint $table) {
+                if (Schema::hasColumn('activity_document', 'id')) {
+                    $table->dropColumn('id');
+                }
+            });
+        }
     }
 
     /**

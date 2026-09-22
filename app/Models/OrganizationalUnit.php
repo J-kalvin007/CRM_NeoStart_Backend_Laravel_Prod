@@ -15,15 +15,13 @@ class OrganizationalUnit extends Model
         'name',
         'type',
         'parent_id',
+        'manager_id',
         'metadata',
     ];
 
-    protected function casts(): array
-    {
-        return [
-            'metadata' => 'array',
-        ];
-    }
+    protected $casts = [
+        'metadata' => 'array',
+    ];
 
     public function parent()
     {
@@ -38,5 +36,10 @@ class OrganizationalUnit extends Model
     public function users()
     {
         return $this->belongsToMany(User::class, 'user_scopes');
+    }
+
+    public function manager()
+    {
+        return $this->belongsTo(User::class, 'manager_id');
     }
 }

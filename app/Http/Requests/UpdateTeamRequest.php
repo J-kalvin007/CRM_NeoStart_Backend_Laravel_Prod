@@ -15,7 +15,7 @@ class UpdateTeamRequest extends FormRequest
     {
         return [
             'name' => 'sometimes|required|string|max:255',
-            'manager_id' => 'nullable|exists:users,id',
+            'manager_id' => 'nullable|sometimes|exists:users,id',
         ];
     }
 }

@@ -31,6 +31,8 @@ class Account extends Model
 
     public function subsidiary()   { return $this->belongsTo(Subsidiary::class); }
     public function owner()        { return $this->belongsTo(User::class, 'user_id'); }
+    public function user()         { return $this->belongsTo(User::class, 'user_id'); }
+    public function delegue()      { return $this->belongsTo(User::class, 'user_id'); }
     public function accountType()  { return $this->belongsTo(AccountType::class); }
     public function contacts()     { return $this->hasMany(Contact::class); }
     public function categories()   { return $this->belongsToMany(Category::class, 'account_category'); }

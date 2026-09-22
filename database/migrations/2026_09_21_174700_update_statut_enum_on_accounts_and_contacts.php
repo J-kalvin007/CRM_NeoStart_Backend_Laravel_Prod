@@ -10,8 +10,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-        DB::statement("ALTER TABLE accounts MODIFY COLUMN statut ENUM('en_attente', 'valide', 'actif', 'inactif', 'suspendu', 'rejete') NOT NULL DEFAULT 'en_attente'");
-        DB::statement("ALTER TABLE contacts MODIFY COLUMN statut ENUM('en_attente', 'valide', 'actif', 'inactif', 'archive', 'rejete') NOT NULL DEFAULT 'en_attente'");
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("ALTER TABLE accounts MODIFY COLUMN statut ENUM('en_attente', 'valide', 'actif', 'inactif', 'suspendu', 'rejete') NOT NULL DEFAULT 'en_attente'");
+            DB::statement("ALTER TABLE contacts MODIFY COLUMN statut ENUM('en_attente', 'valide', 'actif', 'inactif', 'archive', 'rejete') NOT NULL DEFAULT 'en_attente'");
+        }
     }
 
     /**

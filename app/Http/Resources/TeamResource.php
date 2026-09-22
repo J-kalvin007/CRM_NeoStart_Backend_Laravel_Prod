@@ -11,9 +11,14 @@ class TeamResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'territory_id' => $this->territory_id,
             'name' => $this->name,
+            'sector_id' => $this->sector_id,
             'manager_id' => $this->manager_id,
+            'sector' => $this->whenLoaded('sector', fn () => [
+                'id' => $this->sector->id,
+                'name' => $this->sector->name,
+                'code' => $this->sector->code,
+            ]),
             'manager' => new UserResource($this->whenLoaded('manager')),
             'members_count' => $this->when(isset($this->members_count), $this->members_count),
             'created_at' => $this->created_at,

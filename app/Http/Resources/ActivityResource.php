@@ -28,6 +28,7 @@ class ActivityResource extends JsonResource
             'report_content' => $this->report_content,
             'validation_date'=> $this->validation_date,
             'rejection_reason'=> $this->rejection_reason,
+            'signature'      => $this->signature,
             'subsidiary_id'  => $this->subsidiary_id,
             'user_id'        => $this->user_id,
             'delegate_name'  => $this->delegue?->name ?? 'Délégué Médical',
@@ -41,8 +42,9 @@ class ActivityResource extends JsonResource
             'contact'        => new ContactResource($this->whenLoaded('contact')),
             'account'        => new AccountResource($this->whenLoaded('account')),
             'tour_plan'      => $this->whenLoaded('tourPlan', fn() => [
-                'id'  => $this->tourPlan->id,
-                'nom' => $this->tourPlan->nom,
+                'id'     => $this->tourPlan->id,
+                'nom'    => $this->tourPlan->nom,
+                'statut' => $this->tourPlan->statut,
             ]),
             'documents'      => $this->whenLoaded('documents', function() {
                 return $this->documents->map(function($doc) {

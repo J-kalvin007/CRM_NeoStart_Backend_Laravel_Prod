@@ -16,6 +16,7 @@ return new class extends Migration
             $table->string('name');
             $table->string('type'); // 'group', 'country', 'subsidiary', 'region', 'territory', 'zone', 'sector', 'team'
             $table->uuid('parent_id')->nullable();
+            $table->foreignUuid('manager_id')->nullable()->constrained('users')->nullOnDelete();
             $table->json('metadata')->nullable(); // For additional data like code, currency, description
             $table->timestamps();
 

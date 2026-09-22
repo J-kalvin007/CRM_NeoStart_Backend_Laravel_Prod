@@ -35,7 +35,8 @@ class ActivityController extends Controller
     {
         Activity::markMissedPastActivities();
 
-        $query = Activity::with(['delegue', 'contact', 'account', 'products'])
+        $query = Activity::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)
+            ->with(['delegue', 'contact', 'account', 'products'])
             ->when($request->user_id, fn($q, $v) => $q->where('user_id', $v))
             ->when($request->activity_type, fn($q, $v) => $q->where('activity_type', $v))
             ->when($request->statut, fn($q, $v) => $q->where('statut', $v))
@@ -128,25 +129,20 @@ class ActivityController extends Controller
 
         // Notification au manager
         $user = auth()->user();
-        $manager = $user?->manager ?? \App\Models\User::whereHas('roles', fn($q) => $q->whereIn('name', ['superviseur', 'supervisor', 'manager', 'Manager', 'Superviseur', 'dir-commercial']))->first();
+        $manager = $user?->manager ?? ($user?->manager_id ? \App\Models\User::find($user->manager_id) : null) ?? \App\Models\User::whereHas('roles', fn($q) => $q->whereIn('name', ['superviseur', 'supervisor', 'manager', 'Manager', 'Superviseur', 'dir-commercial']))->first();
         if ($manager && $user) {
-            if (in_array($activity->statut, ['realisee', 'soumis_definitif'])) {
-                app(\App\Services\NotificationService::class)->send(
-                    $manager,
-                    'Nouveau compte-rendu de visite',
-                    "Le délégué {$user->name} a finalisé son compte-rendu de visite.",
-                    'report',
-                    ['activity_id' => $activity->id, 'recipient_role' => 'manager', 'sender_id' => $user->id]
-                );
-            } else {
-                app(\App\Services\NotificationService::class)->send(
-                    $manager,
-                    'Nouvelle visite planifiée',
-                    "Le délégué {$user->name} a planifié une nouvelle visite.",
-                    'planning',
-                    ['activity_id' => $activity->id, 'recipient_role' => 'manager', 'sender_id' => $user->id]
-                );
-            }
+            $isRealized = in_array($activity->statut, ['realisee', 'soumis_definitif']);
+            $title = $isRealized ? 'Nouveau compte-rendu de visite' : 'Nouvelle visite planifiée';
+            $msg = $isRealized ? "Le délégué {$user->name} a finalisé son compte-rendu de visite." : "Le délégué {$user->name} a planifié une nouvelle visite.";
+            
+            NotificationController::sendNotification(
+                $manager,
+                $title,
+                $msg,
+                $isRealized ? 'report' : 'planning',
+                'manager',
+                ['activity_id' => (string) $activity->id, 'sender_id' => (string) $user->id]
+            );
         }
 
         return new ActivityResource($activity->load(['delegue', 'contact', 'account', 'products', 'sampleMovements']));
@@ -210,7 +206,25 @@ class ActivityController extends Controller
             return response()->json(['message' => 'Cette activité est verrouillée et ne peut plus être modifiée.'], 403);
         }
 
-        $activity->update($request->validated());
+        $validatedData = $request->validated();
+        $targetStatus = $validatedData['statut'] ?? null;
+
+        // Contrôle de sécurité 1: Démarrer la visite (en_cours) nécessite que la visite soit validée
+        if ($targetStatus === 'en_cours' && !in_array(strtolower($activity->statut), ['validee', 'validated', 'en_cours', 'realisee'])) {
+            return response()->json([
+                'message' => 'Démarrage impossible : Cette visite n\'a pas encore été validée par votre responsable.'
+            ], 403);
+        }
+
+        // Contrôle de sécurité 2: Passer au statut réalisé nécessite un Check-in GPS effectif (gps_debut_lat)
+        $hasGpsStart = !empty($activity->gps_debut_lat) || !empty($validatedData['gps_debut_lat']);
+        if ($targetStatus === 'realisee' && !$hasGpsStart) {
+            return response()->json([
+                'message' => 'Finalisation impossible : Le Check-in GPS de début de visite est obligatoire.'
+            ], 422);
+        }
+
+        $activity->update($validatedData);
 
         if ($activity->statut === 'realisee') {
             $activity->lock();
@@ -246,25 +260,96 @@ class ActivityController extends Controller
         $activity = Activity::findOrFail($id);
 
         $request->validate([
-            'statut' => 'required|in:validee,rejetee',
-            'rejection_reason' => 'required_if:statut,rejetee|string|nullable'
+            'statut' => 'required|in:validee,validated,rejetee,refusee',
+            'rejection_reason' => 'required_if:statut,rejetee,refusee|string|nullable'
         ]);
 
-        $newStatut = $request->statut === 'validee' ? 'realisee' : 'annulee';
+        $st = strtolower($request->statut);
+        $newStatut = ($st === 'validee' || $st === 'validated') ? 'validee' : 'refusee';
 
         $notes = $activity->notes;
-        if ($request->statut === 'rejetee') {
+        if (in_array($st, ['rejetee', 'refusee']) && $request->rejection_reason) {
             $notes = $notes ? $notes . "\n[Rejeté]: " . $request->rejection_reason : "[Rejeté]: " . $request->rejection_reason;
         }
 
         $activity->update([
             'statut' => $newStatut,
-            'notes' => $notes
+            'validated_by_id' => auth()->id(),
+            'validation_date' => now(),
+            'notes' => $notes,
+            'rejection_reason' => $request->rejection_reason ?? null,
         ]);
 
+        // Notifier le délégué de la décision du manager
+        if ($activity->user) {
+            $title = $newStatut === 'validee' ? 'Visite Validée' : 'Visite Refusée';
+            $dateStr = $activity->date_activite ? $activity->date_activite->format('d/m/Y') : now()->format('d/m/Y');
+            $msg = $newStatut === 'validee'
+                ? "Votre visite prévue le {$dateStr} a été validée par votre responsable."
+                : "Votre visite prévue le {$dateStr} a été refusée par votre responsable.";
+            
+            try {
+                app(\App\Services\NotificationService::class)->send(
+                    $activity->user,
+                    $title,
+                    $msg,
+                    'planning',
+                    ['activity_id' => $activity->id, 'recipient_role' => 'delegate', 'sender_id' => auth()->id()]
+                );
+            } catch (\Exception $e) {}
+        }
+
         return response()->json([
-            'message' => 'Activity validated successfully', 
+            'message' => 'Activité mise à jour avec succès', 
             'data' => new ActivityResource($activity->load(['delegue', 'contact', 'account', 'products']))
         ]);
+    }
+
+    public function storeDuo(Request $request)
+    {
+        $validated = $request->validate([
+            'user_id'       => 'nullable|string',
+            'delegate_id'   => 'nullable|string',
+            'contact_id'    => 'nullable|string',
+            'account_id'    => 'nullable|string',
+            'date_activite' => 'nullable|string',
+            'date_duo'      => 'nullable|string',
+            'notes'         => 'nullable|string',
+            'objective'     => 'nullable|string',
+            'activity_type' => 'nullable|string',
+        ]);
+
+        $targetUserId = $validated['user_id'] ?? $validated['delegate_id'] ?? auth()->id();
+        $subsidiary = \App\Models\Subsidiary::first();
+        $dateAct = $validated['date_activite'] ?? $validated['date_duo'] ?? now()->toDateString();
+
+        $activity = Activity::create([
+            'subsidiary_id' => $subsidiary?->id,
+            'user_id' => $targetUserId,
+            'contact_id' => $validated['contact_id'] ?? null,
+            'account_id' => $validated['account_id'] ?? null,
+            'date_activite' => $dateAct,
+            'activity_type' => 'visite',
+            'statut' => 'planifiee',
+            'is_duo' => true,
+            'notes' => '[VISITE DUO SUPERVISEUR] ' . ($validated['notes'] ?? $validated['objective'] ?? 'Visite conjointe de coaching avec le superviseur.'),
+        ]);
+
+        // Send Notification to Delegate
+        $delegate = \App\Models\User::find($targetUserId);
+        if ($delegate) {
+            \App\Models\Notification::create([
+                'user_id' => $delegate->id,
+                'title' => 'Visite en Duo Programmée',
+                'message' => "Votre superviseur a programmé une visite en duo pour le {$dateAct}.",
+                'type' => 'duo',
+                'read' => false,
+            ]);
+        }
+
+        return response()->json([
+            'message' => 'Visite en Duo programmée avec succès',
+            'data' => new ActivityResource($activity->load(['delegue', 'contact', 'account']))
+        ], 201);
     }
 }

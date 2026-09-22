@@ -6,13 +6,17 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\NotificationService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use OpenApi\Attributes as OA;
 
 class NotificationController extends Controller
 {
     #[OA\Get(
         path: '/api/v1/notifications',
-        summary: 'Lister les notifications non lues',
+        summary: 'Lister les notifications',
         security: [['bearerAuth' => []]],
         tags: ['Notifications'],
         responses: [
@@ -21,7 +25,100 @@ class NotificationController extends Controller
     )]
     public function index(Request $request)
     {
-        return response()->json($request->user()->unreadNotifications);
+        $user = $request->user();
+        $notifications = DB::table('notifications')
+            ->where('notifiable_id', $user->id)
+            ->where('notifiable_type', 'App\Models\User')
+            ->orderByDesc('created_at')
+            ->take(50)
+            ->get()
+            ->map(function ($n) {
+                $data = json_decode($n->data, true) ?: [];
+                return [
+                    'id' => (string) $n->id,
+                    'type' => $data['type'] ?? 'info',
+                    'data' => [
+                        'id' => (string) $n->id,
+                        'title' => $data['title'] ?? 'Notification SKYNITY',
+                        'message' => $data['message'] ?? '',
+                        'type' => $data['type'] ?? 'info',
+                        'recipient_role' => $data['recipient_role'] ?? 'all',
+                    ],
+                    'title' => $data['title'] ?? 'Notification SKYNITY',
+                    'message' => $data['message'] ?? '',
+                    'body' => $data['message'] ?? '',
+                    'recipient_role' => $data['recipient_role'] ?? 'all',
+                    'read_at' => $n->read_at,
+                    'unread' => is_null($n->read_at),
+                    'created_at' => $n->created_at,
+                ];
+            });
+
+        return response()->json($notifications);
+    }
+
+    /**
+     * Helper statique universel pour envoyer une notification In-App et Email.
+     */
+    public static function sendNotification($users, string $title, string $message, string $type = 'info', string $recipientRole = 'all', array $extra = [])
+    {
+        if (!$users) {
+            return;
+        }
+
+        $userList = is_iterable($users) ? $users : [$users];
+
+        foreach ($userList as $user) {
+            if (!$user || empty($user->id)) {
+                continue;
+            }
+
+            // 1. Insertion en base de données (Table notifications)
+            try {
+                DB::table('notifications')->insert([
+                    'id' => (string) Str::uuid(),
+                    'type' => 'App\Notifications\GeneralNotification',
+                    'notifiable_type' => 'App\Models\User',
+                    'notifiable_id' => $user->id,
+                    'data' => json_encode(array_merge([
+                        'title' => $title,
+                        'message' => $message,
+                        'type' => $type,
+                        'recipient_role' => $recipientRole,
+                    ], $extra)),
+                    'read_at' => null,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            } catch (\Throwable $e) {
+                Log::error("Erreur enregistrement notification DB: " . $e->getMessage());
+            }
+
+            // 2. Envoi d'Email au destinataire
+            if (!empty($user->email)) {
+                try {
+                    Mail::raw(
+                        "Bonjour {$user->name},\n\n{$message}\n\nConsultez l'application SKYNITY pour le suivi complet.\n\nCordialement,\nL'équipe SKYNITY CRM",
+                        function ($mail) use ($user, $title) {
+                            $mail->to($user->email)
+                                 ->subject("[SKYNITY] " . $title);
+                        }
+                    );
+                } catch (\Throwable $e) {
+                    Log::warning("Alerte envoi email notification ({$user->email}): " . $e->getMessage());
+                }
+            }
+
+            // 3. Envoi Push Notification FCM si disponible
+            try {
+                if (!empty($user->fcm_token) && app()->bound(\App\Services\FcmNotificationService::class)) {
+                    $fcmService = app(\App\Services\FcmNotificationService::class);
+                    $fcmService->sendToUser($user, $title, $message, array_merge(['type' => $type], $extra));
+                }
+            } catch (\Throwable $e) {
+                Log::info("FCM non configuré ou token expiré pour {$user->id}: " . $e->getMessage());
+            }
+        }
     }
 
     #[OA\Post(
@@ -29,19 +126,6 @@ class NotificationController extends Controller
         summary: 'Créer et envoyer une notification',
         security: [['bearerAuth' => []]],
         tags: ['Notifications'],
-        requestBody: new OA\RequestBody(
-            required: true,
-            content: new OA\JsonContent(
-                required: ['title', 'message'],
-                properties: [
-                    new OA\Property(property: 'title', type: 'string'),
-                    new OA\Property(property: 'message', type: 'string'),
-                    new OA\Property(property: 'type', type: 'string', example: 'info'),
-                    new OA\Property(property: 'recipient_role', type: 'string', example: 'delegate'),
-                    new OA\Property(property: 'user_id', type: 'string', format: 'uuid', nullable: true)
-                ]
-            )
-        ),
         responses: [
             new OA\Response(response: 201, description: 'Notification envoyée avec succès')
         ]
@@ -63,53 +147,39 @@ class NotificationController extends Controller
             $targetUsers = User::where('id', $validated['user_id'])->get();
         } else {
             $role = strtolower($validated['recipient_role'] ?? 'all');
-            try {
-                if (in_array($role, ['manager', 'supervisor', 'superviseur'])) {
-                    if ($sender?->manager) {
-                        $targetUsers = collect([$sender->manager]);
-                    } else {
-                        $targetUsers = User::whereHas('roles', function ($q) {
-                            $q->whereIn('name', ['manager', 'supervisor', 'superviseur', 'super_admin', 'Manager', 'Supervisor', 'Superviseur', 'dir-commercial']);
-                        })->get();
-                    }
-                } elseif (in_array($role, ['delegate', 'delegue', 'delegue_medical'])) {
-                    if ($sender && $sender->subordinates()->exists()) {
-                        $targetUsers = $sender->subordinates;
-                    } else {
-                        $targetUsers = User::whereHas('roles', function ($q) {
-                            $q->whereIn('name', ['delegue', 'delegate', 'Délégué', 'Delegue', 'delegue_medical']);
-                        })->get();
-                    }
-                } else {
-                    $targetUsers = User::all();
+            if (in_array($role, ['manager', 'supervisor', 'superviseur'])) {
+                if ($sender?->manager) {
+                    $targetUsers->push($sender->manager);
                 }
-            } catch (\Throwable $e) {
-                $targetUsers = collect();
+                $mgrs = User::whereHas('roles', fn($q) => $q->whereIn('name', ['manager', 'supervisor', 'superviseur', 'super_admin', 'Manager']))->get();
+                $targetUsers = $targetUsers->concat($mgrs)->unique('id');
+                if ($targetUsers->isEmpty()) {
+                    $def = User::where('email', 'cmoucharif@gmail.com')->first();
+                    if ($def) $targetUsers->push($def);
+                }
+            } elseif (in_array($role, ['delegate', 'delegue', 'delegue_medical'])) {
+                if ($sender && $sender->subordinates()->exists()) {
+                    $targetUsers = $sender->subordinates;
+                } else {
+                    $targetUsers = User::whereHas('roles', fn($q) => $q->whereIn('name', ['delegue', 'delegate', 'Délégué', 'Délégué Médical']))->get();
+                }
+            } else {
+                $targetUsers = User::all();
             }
         }
 
         if ($targetUsers->isEmpty() && $sender) {
-            // If still empty and not explicitly for manager, fallback to sender
-            if (!in_array(strtolower($validated['recipient_role'] ?? ''), ['manager', 'supervisor', 'superviseur'])) {
-                $targetUsers = collect([$sender]);
-            } else {
-                $targetUsers = User::whereHas('roles', function ($q) {
-                    $q->whereIn('name', ['superviseur', 'supervisor', 'manager', 'Manager', 'Superviseur', 'super_admin']);
-                })->get();
-            }
+            $targetUsers = collect([$sender]);
         }
 
-        try {
-            app(NotificationService::class)->send(
-                $targetUsers,
-                $validated['title'],
-                $validated['message'],
-                $validated['type'] ?? 'info',
-                ['recipient_role' => $validated['recipient_role'] ?? 'all', 'sender_id' => $sender?->id]
-            );
-        } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::error("Notification send error: " . $e->getMessage());
-        }
+        self::sendNotification(
+            $targetUsers,
+            $validated['title'],
+            $validated['message'],
+            $validated['type'] ?? 'info',
+            $validated['recipient_role'] ?? 'all',
+            ['sender_id' => $sender?->id]
+        );
 
         return response()->json([
             'message' => 'Notification envoyée avec succès',
@@ -122,19 +192,17 @@ class NotificationController extends Controller
         summary: 'Marquer une notification comme lue',
         security: [['bearerAuth' => []]],
         tags: ['Notifications'],
-        parameters: [
-            new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))
-        ],
         responses: [
             new OA\Response(response: 204, description: 'Notification marquée comme lue')
         ]
     )]
     public function markAsRead(Request $request, string $id)
     {
-        $notification = $request->user()->notifications()->where('id', $id)->first();
-        if ($notification) {
-            $notification->markAsRead();
-        }
+        DB::table('notifications')
+            ->where('id', $id)
+            ->where('notifiable_id', $request->user()->id)
+            ->update(['read_at' => now(), 'updated_at' => now()]);
+
         return response()->json(null, 204);
     }
 
@@ -149,7 +217,11 @@ class NotificationController extends Controller
     )]
     public function markAllAsRead(Request $request)
     {
-        $request->user()->unreadNotifications->markAsRead();
+        DB::table('notifications')
+            ->where('notifiable_id', $request->user()->id)
+            ->whereNull('read_at')
+            ->update(['read_at' => now(), 'updated_at' => now()]);
+
         return response()->json(null, 204);
     }
 }
