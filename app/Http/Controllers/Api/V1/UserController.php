@@ -73,13 +73,6 @@ class UserController extends Controller
     {
         $data = $request->validated();
 
-<<<<<<< HEAD
-        if (array_key_exists('status', $data)) {
-            $data['status'] = in_array($data['status'], ['active', true, 1, '1'], true) ? true : false;
-        }
-        
-        $data['password'] = Hash::make(Str::random(12));
-=======
         // Convertir 'active'/'inactive' → boolean pour la colonne DB
         if (isset($data['status'])) {
             $data['status'] = $data['status'] === 'active' ? 1 : 0;
@@ -92,7 +85,6 @@ class UserController extends Controller
         $temporaryPassword = Str::upper(Str::random(4)) . rand(10, 99) . '!' . Str::random(4);
 
         $data['password'] = Hash::make($temporaryPassword);
->>>>>>> 3f45c15dfd167361f9f9e2f581bcc5692bacd07a
         $data['force_password_change'] = true;
 
         $user = User::create($data);
@@ -174,14 +166,9 @@ class UserController extends Controller
         $user = User::findOrFail($id);
         $data = $request->validated();
 
-<<<<<<< HEAD
-        if (array_key_exists('status', $data)) {
-            $data['status'] = in_array($data['status'], ['active', true, 1, '1'], true) ? true : false;
-=======
         // Convertir 'active'/'inactive' → boolean pour la colonne DB
         if (isset($data['status'])) {
             $data['status'] = $data['status'] === 'active' ? 1 : 0;
->>>>>>> 3f45c15dfd167361f9f9e2f581bcc5692bacd07a
         }
 
         $user->update($data);
