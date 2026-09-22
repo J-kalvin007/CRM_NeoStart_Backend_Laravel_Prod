@@ -18,7 +18,14 @@ class NotificationService
         }
 
         try {
-            Notification::send($users, new SystemNotification($title, $message, $type, $data, $actionUrl));
+            \App\Http\Controllers\Api\V1\NotificationController::sendNotification(
+                $users,
+                $title,
+                $message,
+                $type,
+                $data['recipient_role'] ?? 'all',
+                $data
+            );
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error("Notification failed: " . $e->getMessage());
         }

@@ -73,7 +73,54 @@ class ValidationController extends Controller
                 ];
             });
 
-        $pending = $pendingContacts->concat($pendingAccounts)->sortByDesc('created_at')->values();
+        $pendingActivities = \App\Models\Activity::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)
+            ->with(['contact', 'account', 'delegue', 'user'])
+            ->where(function ($q) {
+                $q->whereIn('statut', ['planifiee', 'en_attente_validation', 'brouillon', 'en_attente'])
+                  ->orWhereIn('report_status', ['submitted', 'soumis']);
+            })
+            ->get()
+            ->map(function ($act) {
+                $contactName = $act->contact?->name ?? $act->contact_name ?? 'Dr. Praticien';
+                $accountName = $act->account?->name ?? $act->establishment ?? 'Établissement';
+                $isReport = in_array(strtolower($act->report_status ?? ''), ['submitted', 'soumis']);
+                return [
+                    'id' => (string) $act->id,
+                    'type' => $isReport ? 'activity_report' : 'visit',
+                    'activity_type' => $act->activity_type,
+                    'date_activite' => $act->date_activite?->toDateString(),
+                    'heure_debut' => $act->heure_debut,
+                    'nom' => $contactName,
+                    'etablissement' => $accountName,
+                    'report_content' => $act->report_content ?? $act->notes,
+                    'statut' => $act->statut,
+                    'report_status' => $act->report_status,
+                    'created_by' => $act->delegue?->name ?? ($act->user ? ($act->user->name ?: $act->user->email) : 'Délégué Médical'),
+                    'created_at' => $act->created_at,
+                ];
+            });
+
+        $pendingTourPlans = \App\Models\TourPlan::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)
+            ->with(['user', 'delegue'])
+            ->whereIn('statut', ['soumis', 'en_attente_validation', 'en_attente'])
+            ->get()
+            ->map(function ($plan) {
+                return [
+                    'id' => (string) $plan->id,
+                    'type' => 'tour_plan',
+                    'nom' => $plan->nom ?? 'Planning Hebdomadaire',
+                    'statut' => $plan->statut,
+                    'created_by' => $plan->delegue?->name ?? ($plan->user ? ($plan->user->name ?: $plan->user->email) : 'Délégué Médical'),
+                    'created_at' => $plan->created_at,
+                ];
+            });
+
+        $pending = $pendingContacts
+            ->concat($pendingAccounts)
+            ->concat($pendingActivities)
+            ->concat($pendingTourPlans)
+            ->sortByDesc('created_at')
+            ->values();
 
         return response()->json([
             'data' => $pending
