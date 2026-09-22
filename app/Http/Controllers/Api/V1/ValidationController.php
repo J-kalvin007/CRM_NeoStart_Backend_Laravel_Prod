@@ -21,41 +21,61 @@ class ValidationController extends Controller
         ]
     )]
     public function index(Request $request)
-    {
         $user = auth()->user();
+        $teamIds = $user && $user->team_id ? [$user->team_id] : [];
 
-        // Pour un superviseur, on récupère les membres de son équipe
-        $teamIds = $user->team_id ? [$user->team_id] : [];
-
-        $pendingContacts = Contact::where('statut_validation', 'en_attente')
-            ->whereHas('owner', fn($q) => $q->whereIn('team_id', $teamIds))
-            ->with(['owner:id,name', 'account:id,nom'])
+        $pendingContacts = Contact::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)
+            ->with(['account', 'user', 'owner'])
+            ->where(function ($q) use ($teamIds) {
+                $q->whereIn('statut_validation', ['en_attente', 'pending'])
+                  ->orWhereIn('statut', ['en_attente', 'en_attente_validation', 'inactif', 'pending']);
+            })
             ->get()
-            ->map(fn($c) => [
-                'id' => $c->id,
-                'type' => 'contact',
-                'nom' => $c->nom,
-                'prenom' => $c->prenom,
-                'etablissement' => $c->account?->nom,
-                'created_by' => $c->owner?->name,
-                'created_at' => $c->created_at,
-            ]);
+            ->map(function ($contact) {
+                return [
+                    'id' => (string) $contact->id,
+                    'type' => 'contact',
+                    'nom' => $contact->nom,
+                    'prenom' => $contact->prenom,
+                    'titre' => $contact->titre,
+                    'specialite' => $contact->specialite ?? $contact->meta['specialite'] ?? 'Médecin',
+                    'telephone' => $contact->telephone,
+                    'email' => $contact->email,
+                    'etablissement' => $contact->account ? $contact->account->nom : null,
+                    'ville' => $contact->account ? $contact->account->ville : null,
+                    'created_by' => $contact->owner?->name ?? ($contact->user ? ($contact->user->name ?: $contact->user->email) : 'Délégué Médical'),
+                    'created_at' => $contact->created_at,
+                ];
+            });
 
-        $pendingAccounts = Account::where('statut_validation', 'en_attente')
-            ->whereHas('owner', fn($q) => $q->whereIn('team_id', $teamIds))
-            ->with(['owner:id,name'])
+        $pendingAccounts = Account::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)
+            ->with(['user', 'owner'])
+            ->where(function ($q) use ($teamIds) {
+                $q->whereIn('statut_validation', ['en_attente', 'pending'])
+                  ->orWhereIn('statut', ['en_attente', 'en_attente_validation', 'inactif', 'pending']);
+            })
             ->get()
-            ->map(fn($a) => [
-                'id' => $a->id,
-                'type' => 'account',
-                'nom' => $a->nom,
-                'ville' => $a->ville,
-                'created_by' => $a->owner?->name,
-                'created_at' => $a->created_at,
-            ]);
+            ->map(function ($account) {
+                return [
+                    'id' => (string) $account->id,
+                    'type' => 'account',
+                    'nom' => $account->nom,
+                    'prenom' => null,
+                    'titre' => null,
+                    'specialite' => 'Établissement',
+                    'telephone' => $account->telephone,
+                    'email' => $account->email,
+                    'etablissement' => $account->nom,
+                    'ville' => $account->ville,
+                    'created_by' => $account->owner?->name ?? ($account->user ? ($account->user->name ?: $account->user->email) : 'Délégué Médical'),
+                    'created_at' => $account->created_at,
+                ];
+            });
+
+        $pending = $pendingContacts->concat($pendingAccounts)->sortByDesc('created_at')->values();
 
         return response()->json([
-            'data' => $pendingContacts->concat($pendingAccounts)->sortByDesc('created_at')->values()
+            'data' => $pending
         ]);
     }
 
@@ -75,19 +95,34 @@ class ValidationController extends Controller
     public function approve(string $type, string $id)
     {
         $model = $this->getModel($type, $id);
-        $model->update(['statut_validation' => 'valide']);
+        $model->update([
+            'statut_validation' => 'valide',
+            'statut' => 'actif',
+        ]);
 
-        if ($model->owner) {
-            app(\App\Services\NotificationService::class)->send(
-                $model->owner,
-                ucfirst($type) . ' approuvé(e)',
-                "Votre demande de création de {$type} '{$model->nom}' a été validée par votre manager.",
-                'contact',
-                ['id' => $model->id, 'type' => $type]
+        $recipient = $model->owner ?? ($model->user_id ? \App\Models\User::find($model->user_id) : null);
+        if ($recipient) {
+            try {
+                app(\App\Services\NotificationService::class)->send(
+                    $recipient,
+                    ucfirst($type) . ' approuvé(e)',
+                    "Votre demande de création de {$type} '{$model->nom}' a été validée par votre manager.",
+                    'contact',
+                    ['id' => $model->id, 'type' => $type]
+                );
+            } catch (\Throwable $e) {}
+
+            NotificationController::sendNotification(
+                $recipient,
+                'Fiche Validée par le Manager',
+                "La fiche " . ($type === 'contact' ? "du prescripteur {$model->prenom} {$model->nom}" : "de l'établissement {$model->nom}") . " a été approuvée.",
+                'validation',
+                'delegate',
+                ['id' => (string) $model->id, 'type' => $type]
             );
         }
 
-        return response()->json(['message' => ucfirst($type) . ' approuvé avec succès']);
+        return response()->json(['message' => ucfirst($type) . ' approuvé avec succès', 'data' => $model]);
     }
 
     #[OA\Post(
@@ -106,19 +141,34 @@ class ValidationController extends Controller
     public function reject(string $type, string $id)
     {
         $model = $this->getModel($type, $id);
-        $model->update(['statut_validation' => 'rejete']);
+        $model->update([
+            'statut_validation' => 'rejete',
+            'statut' => 'rejete',
+        ]);
 
-        if ($model->owner) {
-            app(\App\Services\NotificationService::class)->send(
-                $model->owner,
-                ucfirst($type) . ' rejeté(e)',
-                "Votre demande de création de {$type} '{$model->nom}' a été rejetée par votre manager.",
-                'contact',
-                ['id' => $model->id, 'type' => $type]
+        $recipient = $model->owner ?? ($model->user_id ? \App\Models\User::find($model->user_id) : null);
+        if ($recipient) {
+            try {
+                app(\App\Services\NotificationService::class)->send(
+                    $recipient,
+                    ucfirst($type) . ' rejeté(e)',
+                    "Votre demande de création de {$type} '{$model->nom}' a été rejetée par votre manager.",
+                    'contact',
+                    ['id' => $model->id, 'type' => $type]
+                );
+            } catch (\Throwable $e) {}
+
+            NotificationController::sendNotification(
+                $recipient,
+                'Fiche Non Validée',
+                "La fiche " . ($type === 'contact' ? "du prescripteur {$model->prenom} {$model->nom}" : "de l'établissement {$model->nom}") . " n'a pas été validée par votre superviseur.",
+                'validation',
+                'delegate',
+                ['id' => (string) $model->id, 'type' => $type]
             );
         }
 
-        return response()->json(['message' => ucfirst($type) . ' rejeté avec succès']);
+        return response()->json(['message' => ucfirst($type) . ' rejeté avec succès', 'data' => $model]);
     }
 
     private function getModel(string $type, string $id)

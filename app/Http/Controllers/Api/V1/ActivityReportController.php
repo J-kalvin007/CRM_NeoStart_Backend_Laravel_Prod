@@ -10,6 +10,9 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use OpenApi\Attributes as OA;
 
+use App\Http\Controllers\Api\V1\NotificationController;
+use App\Http\Resources\ActivityResource;
+
 #[OA\Tag(name: 'Activity Reports', description: 'Gestion des comptes-rendus de visites')]
 class ActivityReportController extends Controller
 {
@@ -38,26 +41,57 @@ class ActivityReportController extends Controller
     {
         $validated = $request->validate([
             'report_content' => 'nullable|string',
-            'report_status' => 'required|in:draft,submitted'
+            'report_status'  => 'required|in:draft,submitted'
         ]);
 
-        $activity->update($validated);
+        $data = $validated;
+        if ($validated['report_status'] === 'submitted') {
+            $data['statut'] = 'realisee';
+        }
+        if ($request->has('notes') && !empty($request->input('notes'))) {
+            $data['notes'] = $request->input('notes');
+        }
+        if ($request->has('signature') && !empty($request->input('signature'))) {
+            $data['signature'] = $request->input('signature');
+        }
+        if ($request->has('prochain_rdv') && !empty($request->input('prochain_rdv'))) {
+            $data['prochain_rdv'] = $request->input('prochain_rdv');
+        }
+        if ($request->has('heure_fin') && !empty($request->input('heure_fin'))) {
+            $data['heure_fin'] = $request->input('heure_fin');
+        }
+        if ($request->has('duree_minutes') && !empty($request->input('duree_minutes'))) {
+            $data['duree_minutes'] = $request->input('duree_minutes');
+        }
+        if ($request->has('gps_fin_lat') && !empty($request->input('gps_fin_lat'))) {
+            $data['gps_fin_lat'] = $request->input('gps_fin_lat');
+        }
+        if ($request->has('gps_fin_lng') && !empty($request->input('gps_fin_lng'))) {
+            $data['gps_fin_lng'] = $request->input('gps_fin_lng');
+        }
+
+        $activity->update($data);
+
+        if ($activity->statut === 'realisee') {
+            $activity->lock();
+        }
 
         if ($validated['report_status'] === 'submitted') {
             $user = $activity->delegue ?? $activity->user ?? auth()->user();
             $manager = $user?->manager ?? \App\Models\User::whereHas('roles', fn($q) => $q->whereIn('name', ['superviseur', 'supervisor', 'manager', 'Manager', 'Superviseur', 'dir-commercial']))->first();
             if ($manager && $user) {
-                app(NotificationService::class)->send(
+                NotificationController::sendNotification(
                     $manager,
-                    'Compte-rendu de visite soumis',
-                    "Le délégué {$user->name} a transmis son compte-rendu de visite.",
+                    'Nouveau compte-rendu de visite soumis',
+                    "Le délégué {$user->name} a finalisé et soumis son compte-rendu de visite.",
                     'report',
-                    ['activity_id' => $activity->id, 'recipient_role' => 'manager', 'sender_id' => $user->id]
+                    'manager',
+                    ['activity_id' => (string) $activity->id, 'sender_id' => (string) $user->id]
                 );
             }
         }
 
-        return response()->json($activity);
+        return response()->json(new ActivityResource($activity->load(['delegue', 'contact', 'account', 'products'])));
     }
 
     #[OA\Post(

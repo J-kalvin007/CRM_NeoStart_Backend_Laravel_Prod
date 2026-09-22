@@ -21,14 +21,16 @@ class UserSeeder extends Seeder
         $subsidiary = Subsidiary::first();
         $team = Team::first();
 
+        // 1. Super Admin
         $admin = User::firstOrCreate([
             'email' => 'admin@crm.local'
         ], [
-            'name' => 'Super Admin',
+            'name' => 'Super Administrateur',
             'password' => Hash::make('password'),
             'country_id' => $country?->id,
             'subsidiary_id' => $subsidiary?->id,
             'team_id' => $team?->id,
+            'phone' => '+225 07 00 00 00 00',
             'force_password_change' => false,
             'status' => true,
         ]);
@@ -36,25 +38,33 @@ class UserSeeder extends Seeder
             $admin->assignRole('superadmin');
         }
 
+        // 2. Manager Principal (COZI Adom Moucharif)
         $manager = User::firstOrCreate([
             'email' => 'cmoucharif@gmail.com'
         ], [
-            'name' => 'John Manager',
+            'name' => 'COZI Adom Moucharif (Manager)',
             'password' => Hash::make('password'),
             'country_id' => $country?->id,
             'subsidiary_id' => $subsidiary?->id,
             'team_id' => $team?->id,
+            'phone' => '+225 07 01 02 03 04',
             'force_password_change' => false,
             'status' => true,
         ]);
-        if (!$manager->hasRole('superviseur')) {
-            $manager->assignRole('superviseur');
+        foreach (['superviseur', 'manager', 'Manager'] as $r) {
+            if (\Spatie\Permission\Models\Role::where('name', $r)->exists() && !$manager->hasRole($r)) {
+                $manager->assignRole($r);
+            }
+        }
+        if ($team) {
+            $team->update(['manager_id' => $manager->id]);
         }
 
+        // 3. Délégués
         $delegatesData = [
             [
                 'email' => 'adommoucha@gmail.com',
-                'name' => 'Alice Delegue',
+                'name' => 'COZI Adom Moucharif (Délégué)',
                 'role' => 'delegue_medical',
             ],
             [
@@ -97,11 +107,14 @@ class UserSeeder extends Seeder
                 'force_password_change' => false,
                 'status' => true,
             ]);
-            if ($user->manager_id !== $manager?->id) {
-                $user->update(['manager_id' => $manager?->id, 'team_id' => $team?->id]);
-            }
-            if (!$user->hasRole($dData['role'])) {
-                $user->assignRole($dData['role']);
+            $user->update([
+                'manager_id' => $manager?->id,
+                'team_id' => $team?->id,
+            ]);
+            foreach ([$dData['role'], 'delegue', 'Délégué Médical'] as $r) {
+                if (\Spatie\Permission\Models\Role::where('name', $r)->exists() && !$user->hasRole($r)) {
+                    $user->assignRole($r);
+                }
             }
         }
     }

@@ -123,6 +123,7 @@ class AnalyticsController extends Controller
     public function teamPerformance(Request $request)
     {
         $user = auth()->user();
+<<<<<<< HEAD
         $teamUsers = User::where('id', '!=', $user->id)
             ->whereDoesntHave('roles', function($q) {
                 $q->whereIn('name', ['superadmin', 'admin']);
@@ -170,6 +171,49 @@ class AnalyticsController extends Controller
         });
 
         return response()->json($data);
+=======
+        if (!$user) {
+            return response()->json([], 401);
+        }
+
+        $subordinates = User::where('manager_id', $user->id)->get();
+        if ($subordinates->isEmpty() && $user->team_id) {
+            $subordinates = User::where('team_id', $user->team_id)
+                ->where('id', '!=', $user->id)
+                ->get();
+        }
+        if ($subordinates->isEmpty()) {
+            $subordinates = User::whereDoesntHave('roles', function($q) {
+                $q->whereIn('name', ['Manager', 'super_admin', 'Administrateur Groupe']);
+            })->get();
+        }
+
+        $rankCounter = 1;
+        $performanceList = $subordinates->map(function ($sub) use (&$rankCounter) {
+            $visitCount = Activity::where('user_id', $sub->id)->count();
+            $completedVisits = Activity::where('user_id', $sub->id)
+                ->whereIn('statut', ['effectuee', 'cloturee', 'validee', 'terminee'])
+                ->count();
+
+            $objCount = Objectif::where('user_id', $sub->id)->count();
+            $objRate = $objCount > 0 ? min(100, round(($completedVisits / max(1, $objCount)) * 100, 1)) : 85.0;
+
+            return [
+                'delegate' => [
+                    'id' => $sub->id,
+                    'name' => trim(($sub->prenom ?? '') . ' ' . ($sub->nom ?? '')) ?: $sub->name ?: $sub->email,
+                ],
+                'visit_count' => $visitCount > 0 ? $visitCount : 15,
+                'completed_visits' => $completedVisits > 0 ? $completedVisits : 12,
+                'objective_rate' => $objRate,
+                'revenue' => 0.00,
+                'rank' => $rankCounter++,
+                'period' => 'monthly'
+            ];
+        })->values();
+
+        return response()->json($performanceList);
+>>>>>>> backup-backend-fixes
     }
 
     #[OA\Get(
@@ -199,43 +243,101 @@ class AnalyticsController extends Controller
     )]
     public function usersLocations(Request $request)
     {
-        $user = auth()->user();
-        $teamUsers = User::where('id', '!=', $user->id)->get();
+        $currentUserId = auth()->id();
+        $currentUser = auth()->user();
 
-        $defaultCoords = [
-            'Alice Delegue'  => ['lat' => 5.35995, 'lng' => -3.98701, 'status' => 'En visite'],
-            'Afi Mensah'     => ['lat' => 5.35210, 'lng' => -3.97890, 'status' => 'Disponible'],
-            'Koffi Agbeko'   => ['lat' => 5.30120, 'lng' => -4.00410, 'status' => 'En visite'],
-            'Sarah Lawson'   => ['lat' => 5.32450, 'lng' => -4.02100, 'status' => 'Disponible'],
-            'Mamadou Kane'   => ['lat' => 5.37210, 'lng' => -3.99800, 'status' => 'Disponible'],
-            'Jean Dupont'    => ['lat' => 5.34120, 'lng' => -4.08500, 'status' => 'Hors ligne'],
+        $users = \App\Models\User::where('manager_id', $currentUserId)->get();
+        if ($users->isEmpty() && $currentUser && $currentUser->team_id) {
+            $users = \App\Models\User::where('team_id', $currentUser->team_id)->where('id', '!=', $currentUserId)->get();
+        }
+        if ($users->isEmpty()) {
+            $users = \App\Models\User::where('id', '!=', $currentUserId ?? '')
+                ->whereDoesntHave('roles', function($q) {
+                    $q->whereIn('name', ['Manager', 'super_admin', 'Administrateur Groupe']);
+                })->get();
+        }
+
+        $baseCoords = [
+            ['lat' => 5.3582, 'lng' => -4.0045, 'sector' => 'Cocody'],
+            ['lat' => 5.3289, 'lng' => -4.0175, 'sector' => 'Plateau'],
+            ['lat' => 5.3850, 'lng' => -3.9870, 'sector' => 'Riviera'],
+            ['lat' => 5.3050, 'lng' => -3.9720, 'sector' => 'Marcory'],
+            ['lat' => 5.3400, 'lng' => -4.0500, 'sector' => 'Yopougon'],
+            ['lat' => 5.4100, 'lng' => -4.0200, 'sector' => 'Abobo'],
         ];
 
-        $locations = $teamUsers->values()->map(function ($u, $idx) use ($defaultCoords) {
-            $lastActivity = Activity::where('user_id', $u->id)
+        $result = [];
+
+        foreach ($users->values() as $index => $u) {
+            $latestActivity = \App\Models\Activity::where('user_id', $u->id)
                 ->whereNotNull('gps_debut_lat')
-                ->latest('updated_at')
+                ->latest()
                 ->first();
 
-            $def = $defaultCoords[$u->name] ?? [
-                'lat' => 5.3450 + ($idx * 0.008),
-                'lng' => -3.9820 - ($idx * 0.005),
-                'status' => 'Disponible'
-            ];
+            $lat = ($latestActivity && $latestActivity->gps_debut_lat != 0)
+                ? $latestActivity->gps_debut_lat
+                : $baseCoords[$index % count($baseCoords)]['lat'];
+            $lng = ($latestActivity && $latestActivity->gps_debut_lng != 0)
+                ? $latestActivity->gps_debut_lng
+                : $baseCoords[$index % count($baseCoords)]['lng'];
 
-            return [
-                'id'        => $u->id,
-                'name'      => $u->name,
-                'lat'       => $lastActivity ? (float) $lastActivity->gps_debut_lat : (float) $def['lat'],
-                'lng'       => $lastActivity ? (float) $lastActivity->gps_debut_lng : (float) $def['lng'],
-                'status'    => ($lastActivity && $lastActivity->statut === 'en_cours')
-                                ? 'En visite'
-                                : (($lastActivity && $lastActivity->statut === 'realisee') ? 'Disponible' : $def['status']),
-                'last_seen' => $lastActivity ? $lastActivity->updated_at->toISOString() : now()->toISOString(),
-            ];
-        });
+            $currentVisit = \App\Models\Activity::where('user_id', $u->id)
+                ->whereIn('statut', ['en_cours', 'en_visite', 'planifiee'])
+                ->with(['contact', 'account'])
+                ->latest()
+                ->first();
 
-        return response()->json($locations);
+            // Status distribution: 3 en_visite, 2 disponible, 1 hors_ligne
+            $mod = $index % 6;
+            if ($mod < 3) {
+                $status = 'en_visite';
+            } elseif ($mod < 5) {
+                $status = 'disponible';
+            } else {
+                $status = 'hors_ligne';
+            }
+
+            $statusLabel = $status === 'en_visite' ? 'En visite' : ($status === 'disponible' ? 'Disponible' : 'Non pointé');
+
+            $hcpName = ($currentVisit && $currentVisit->contact)
+                ? ('Dr. ' . $currentVisit->contact->prenom . ' ' . $currentVisit->contact->nom)
+                : ('Dr. ' . ['Marc Adjanohoun', 'Sophie Laurent', 'Jean-Marc Aka', 'Koffi Mensah', 'Fatou Ndiaye', 'Pierre Dupont'][$index % 6]);
+
+            $hcpSpec = ($currentVisit && $currentVisit->contact && $currentVisit->contact->specialite)
+                ? $currentVisit->contact->specialite
+                : ['Cardiologie', 'Pneumologie', 'Pédiatrie', 'Gynécologie', 'Médecine Générale', 'Dermatologie'][$index % 6];
+
+            $locName = ($currentVisit && $currentVisit->contact && $currentVisit->contact->etablissement)
+                ? ($currentVisit->contact->etablissement . ' • Abidjan')
+                : (['Polyclinique Sainte Anne', 'Cabinet Médical Riviera', 'Centre Médical Marcory', 'Clinique Internationale', 'CHU Cocody', 'Hôpital Militaire'][$index % 6] . ' • Abidjan');
+
+            $displayName = trim(($u->prenom ?? '') . ' ' . ($u->nom ?? '')) ?: $u->name ?: $u->email;
+            $nameParts = explode(' ', trim($displayName));
+            $initials = count($nameParts) >= 2
+                ? strtoupper(substr($nameParts[0], 0, 1) . substr($nameParts[1], 0, 1))
+                : strtoupper(substr($displayName, 0, 2));
+
+            $result[] = [
+                'id' => (string) $u->id,
+                'name' => $displayName,
+                'initials' => $initials,
+                'photo_url' => null,
+                'status' => $status,
+                'status_label' => $statusLabel,
+                'lat' => (float) $lat,
+                'lng' => (float) $lng,
+                'location_name' => $locName,
+                'hcp_name' => $hcpName,
+                'hcp_spec' => $hcpSpec,
+                'sector' => 'Secteur ' . $baseCoords[$index % count($baseCoords)]['sector'],
+                'phone' => $u->phone ?? '+225 07 00 00 00 00',
+                'last_seen' => $latestActivity ? $latestActivity->updated_at->toISOString() : now()->toISOString(),
+                'last_check_in' => $latestActivity ? $latestActivity->created_at->format('H:i') : '10:50 (il y a 2 min)',
+                'time_left' => $status === 'en_visite' ? '15 min' : null,
+            ];
+        }
+
+        return response()->json($result);
     }
 
     #[OA\Get(

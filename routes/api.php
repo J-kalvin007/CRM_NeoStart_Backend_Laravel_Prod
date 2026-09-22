@@ -105,6 +105,7 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('kol-profiles', KolProfileController::class);
 
         // Utilisateurs, Rôles & Permissions
+        Route::get('users/locations', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'usersLocations']);
         Route::apiResource('users', UserController::class);
         Route::apiResource('roles', RoleController::class);
         Route::get('permissions', [PermissionController::class, 'index']);
@@ -160,6 +161,8 @@ Route::prefix('v1')->group(function () {
 
         // ── Superviseur ──────────────────────────────────────────
         Route::get('/supervisor/dashboard', [SupervisorDashboardController::class, 'dashboard']);
+        Route::get('/supervisor/team-planning', [SupervisorDashboardController::class, 'teamPlanning']);
+        Route::get('/supervisor/alerts', [SupervisorDashboardController::class, 'alerts']);
 
         // ── Répertoire (Comptes & Contacts) ────────────────────
         Route::get('validations/pending', [ValidationController::class, 'index']);
@@ -193,6 +196,7 @@ Route::prefix('v1')->group(function () {
         // ── Opérationnel Terrain (Visites, Tâches, Agenda) ──────
         Route::post('tour-plans/optimize', [\App\Http\Controllers\Api\V1\TourPlanController::class, 'optimize']);
         Route::apiResource('tour-plans', TourPlanController::class);
+        Route::post('activities/duo', [ActivityController::class, 'storeDuo']);
         Route::post('activities/{activity}/validate', [ActivityController::class, 'validateActivity']);
         Route::apiResource('activities', ActivityController::class);
         Route::post('activities/{activity}/clm-analytics', [ClmAnalyticController::class, 'store']);
