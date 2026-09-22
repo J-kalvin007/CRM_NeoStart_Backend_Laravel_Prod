@@ -66,13 +66,13 @@ class AnalyticsController extends Controller
         $total_contacts = $contactsQuery->count();
         $total_visits = $activitiesQuery->count();
         
-        $kol_count = (clone $contactsQuery)->where('is_kol', true)->count();
+        $kol_count = (clone $contactsQuery)->whereHas('kolProfile')->count();
         
-        $cible_a = (clone $contactsQuery)->where('potentiel', 'fort')->count();
-        $cible_b = (clone $contactsQuery)->where('potentiel', 'moyen')->count();
+        $cible_a = (clone $contactsQuery)->whereHas('potential', fn($q) => $q->where('code', 'HIGH'))->count();
+        $cible_b = (clone $contactsQuery)->whereHas('potential', fn($q) => $q->where('code', 'MED'))->count();
         // Fallback to "faible" OR null
         $cible_c = (clone $contactsQuery)->where(function($q) {
-            $q->where('potentiel', 'faible')->orWhereNull('potentiel');
+            $q->whereHas('potential', fn($sq) => $sq->where('code', 'LOW'))->orWhereNull('potential_id');
         })->count();
 
         return response()->json([
@@ -356,10 +356,9 @@ class AnalyticsController extends Controller
         })->values();
 
         // 3. urgent_pharmacovigilance
-        // Assuming 'gravite' field exists and 'grave' is the value
         $urgentPharma = PharmacovigilanceReport::with('user')
             ->whereIn('user_id', $teamUserIds)
-            ->where('gravite', 'Grave')
+            ->where('severity', 'grave')
             ->where('created_at', '>=', $now->subHours(48))
             ->get();
             

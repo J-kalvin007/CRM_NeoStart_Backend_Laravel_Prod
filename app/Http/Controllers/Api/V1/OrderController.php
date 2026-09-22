@@ -11,14 +11,13 @@ class OrderController extends Controller
 {
     public function index()
     {
-        $orders = Order::with(['account', 'opportunity', 'user', 'items'])->get()->map(function ($order) {
-            $itemsCount = $order->items ? $order->items->sum('quantity') : 0;
+        $orders = Order::with(['account', 'opportunity', 'user'])->get()->map(function ($order) {
             return [
                 'id' => $order->id,
                 'reference' => $order->order_number,
                 'clientNom' => $order->account ? $order->account->nom : 'Client Officine',
                 'clientType' => $order->account ? ($order->account->type ?? 'pharmacie') : 'pharmacie',
-                'produitsCount' => $itemsCount > 0 ? (int) $itemsCount : 1,
+                'produitsCount' => 1,
                 'montantTotal' => (float) $order->total_amount,
                 'devise' => 'FCFA',
                 'statut' => $order->status, // draft, pending, confirmed, cancelled, invoiced

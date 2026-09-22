@@ -105,6 +105,7 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('kol-profiles', KolProfileController::class);
 
         // Utilisateurs, Rôles & Permissions
+        Route::get('/users/locations', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'usersLocations']);
         Route::apiResource('users', UserController::class);
         Route::apiResource('roles', RoleController::class);
         Route::get('permissions', [PermissionController::class, 'index']);
@@ -230,7 +231,6 @@ Route::prefix('v1')->group(function () {
         Route::get('/export/performance', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'exportPerformance']);
         Route::get('/export/expenses', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'exportExpenses']);
         Route::get('/marketing/objections-stats', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'objectionsStats']);
-        Route::get('/users/locations', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'usersLocations']);
         Route::get('/supervisor/alerts', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'alerts']);
         Route::get('/supervisor/dashboard', [\App\Http\Controllers\Api\V1\SupervisorDashboardController::class, 'dashboard']);
         Route::get('/supervisor/team-planning', [\App\Http\Controllers\Api\V1\SupervisorDashboardController::class, 'teamPlanning']);
