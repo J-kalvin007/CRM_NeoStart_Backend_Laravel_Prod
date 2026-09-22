@@ -12,13 +12,11 @@ class CampaignObserver
      * Chaque clé représente le statut ACTUEL. Le tableau représente les statuts SUIVANTS autorisés.
      */
     private array $allowedTransitions = [
-        'creation'    => ['validation'],
-        'validation'  => ['creation', 'deploiement'], // On peut revenir en création si refusé
-        'deploiement' => ['execution'],
-        'execution'   => ['suivi'],
-        'suivi'       => ['analyse'],
-        'analyse'     => ['cloture'],
-        'cloture'     => [], // Terminé, aucune transition possible
+        'brouillon'   => ['validation'],
+        'validation'  => ['brouillon', 'active'],
+        'active'      => ['suspendue', 'terminee'],
+        'suspendue'   => ['active', 'terminee'],
+        'terminee'    => [],
     ];
 
     /**
@@ -27,7 +25,7 @@ class CampaignObserver
     public function updating(Campaign $campaign): void
     {
         if ($campaign->isDirty('statut')) {
-            $oldStatus = $campaign->getOriginal('statut') ?? 'creation';
+            $oldStatus = $campaign->getOriginal('statut') ?? 'brouillon';
             $newStatus = $campaign->statut;
 
             // Si le statut ne change pas vraiment ou que l'ancien n'est pas dans la liste

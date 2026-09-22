@@ -69,6 +69,11 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('zones', ZoneController::class);
         Route::apiResource('sectors', SectorController::class);
         Route::apiResource('teams', TeamController::class);
+        Route::patch('campaigns/{campaign}/status', [CampaignController::class, 'updateStatus']);
+        Route::post('campaigns/{campaign}/products', [CampaignController::class, 'attachProduct']);
+        Route::delete('campaigns/{campaign}/products/{product}', [CampaignController::class, 'detachProduct']);
+        Route::post('campaigns/{campaign}/teams', [CampaignController::class, 'attachTeam']);
+        Route::delete('campaigns/{campaign}/teams/{team}', [CampaignController::class, 'detachTeam']);
         Route::apiResource('campaigns', CampaignController::class);
         Route::apiResource('kol-profiles', KolProfileController::class);
 

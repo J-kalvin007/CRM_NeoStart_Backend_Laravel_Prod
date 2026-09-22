@@ -25,6 +25,11 @@ class ProductResource extends JsonResource
             'description'    => $this->description,
             'image_url'      => $this->image_url,
             'statut'         => $this->statut,
+            'dci'            => $this->dci,
+            'conditionnement'=> $this->conditionnement,
+            'indications'    => $this->indications,
+            'posologie'      => $this->posologie,
+            'effets_secondaires' => $this->effets_secondaires,
             'meta'           => $this->meta,  // Attributs sectoriels libres (molecule, dosage, AMM...)
             'product_type'   => $this->whenLoaded('productType', fn() => [
                 'id'              => $this->productType->id,
