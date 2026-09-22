@@ -24,6 +24,7 @@ class AccountResource extends JsonResource
             'potentiel'     => $this->potentiel,
             'score'         => $this->score,
             'statut'        => $this->statut,
+            'statut_validation' => $this->statut_validation,
             'meta'          => $this->meta,
             'local_uuid'    => $this->local_uuid,
             'subsidiary_id' => $this->subsidiary_id,
@@ -44,6 +45,7 @@ class AccountResource extends JsonResource
             'contacts_count' => $this->whenCounted('contacts'),
             'created_at'    => $this->created_at,
             'updated_at'    => $this->updated_at,
+            'deleted_at'    => $this->deleted_at,
         ];
     }
 }

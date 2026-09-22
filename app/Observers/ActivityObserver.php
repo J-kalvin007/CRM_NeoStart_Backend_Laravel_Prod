@@ -86,12 +86,12 @@ class ActivityObserver
             $quantity = $product->pivot->quantity ?? 0;
             if ($quantity > 0) {
                 SampleMovement::create([
-                    'user_id' => $activity->user_id,
-                    'product_id' => $product->id,
-                    'activity_id' => $activity->id,
+                    'user_id'       => $activity->user_id,
+                    'product_id'    => $product->id,
+                    'activity_id'   => $activity->id,
                     'movement_type' => 'distribution',
-                    'quantity' => $quantity,
-                    'remarques' => 'Visite Clôturée',
+                    'quantity'      => $quantity,
+                    'remarques'     => 'Visite Clôturée',
                 ]);
             }
         }

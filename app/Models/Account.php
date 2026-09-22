@@ -19,7 +19,7 @@ class Account extends Model
         'subsidiary_id', 'user_id', 'account_type_id',
         'nom', 'adresse', 'ville', 'quartier',
         'gps_lat', 'gps_lng', 'telephone', 'email', 'responsable',
-        'potentiel', 'score', 'statut', 'meta', 'local_uuid',
+        'potentiel', 'score', 'statut', 'statut_validation', 'meta', 'local_uuid',
     ];
 
     protected $casts = [
@@ -31,6 +31,8 @@ class Account extends Model
 
     public function subsidiary()   { return $this->belongsTo(Subsidiary::class); }
     public function owner()        { return $this->belongsTo(User::class, 'user_id'); }
+    public function user()         { return $this->belongsTo(User::class, 'user_id'); }
+    public function delegue()      { return $this->belongsTo(User::class, 'user_id'); }
     public function accountType()  { return $this->belongsTo(AccountType::class); }
     public function contacts()     { return $this->hasMany(Contact::class); }
     public function categories()   { return $this->belongsToMany(Category::class, 'account_category'); }

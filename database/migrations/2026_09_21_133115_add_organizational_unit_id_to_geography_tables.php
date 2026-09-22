@@ -32,7 +32,9 @@ return new class extends Migration
         foreach ($tables as $table) {
             Schema::table($table, function (Blueprint $t) {
                 if (Schema::hasColumn($t->getTable(), 'organizational_unit_id')) {
-                    $t->dropForeign(['organizational_unit_id']);
+                    try {
+                        $t->dropForeign(['organizational_unit_id']);
+                    } catch (\Exception $e) {}
                     $t->dropColumn('organizational_unit_id');
                 }
             });

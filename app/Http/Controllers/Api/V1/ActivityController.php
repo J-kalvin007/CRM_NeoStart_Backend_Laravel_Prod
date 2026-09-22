@@ -35,9 +35,12 @@ class ActivityController extends Controller
     {
         Activity::markMissedPastActivities();
 
-        $query = Activity::with(['delegue', 'contact', 'account', 'products'])
+        $query = Activity::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)
+            ->with(['delegue', 'contact', 'account', 'products'])
+            ->when($request->user_id, fn($q, $v) => $q->where('user_id', $v))
             ->when($request->activity_type, fn($q, $v) => $q->where('activity_type', $v))
             ->when($request->statut, fn($q, $v) => $q->where('statut', $v))
+            ->when($request->report_status, fn($q, $v) => $q->where('report_status', $v))
             ->when($request->date_debut, fn($q, $v) => $q->whereDate('date_activite', '>=', $v))
             ->when($request->date_fin, fn($q, $v) => $q->whereDate('date_activite', '<=', $v))
             ->when($request->contact_id, fn($q, $v) => $q->where('contact_id', $v))
@@ -45,7 +48,8 @@ class ActivityController extends Controller
             ->when($request->tour_plan_id, fn($q, $v) => $q->where('tour_plan_id', $v))
             ->orderByDesc('date_activite');
 
-        return ActivityResource::collection($query->paginate(25));
+        $perPage = (int) $request->query('per_page', 200);
+        return ActivityResource::collection($query->paginate($perPage));
     }
 
     #[OA\Post(
@@ -92,25 +96,34 @@ class ActivityController extends Controller
     public function store(StoreActivityRequest $request)
     {
         $data = $request->validated();
-        $products = $data['products'] ?? [];
-        unset($data['products']);
+        $samples = $data['samples'] ?? [];
+        unset($data['samples']);
+
+        // Convertir 'soumis_definitif' en 'realisee' pour la logique interne (optionnel, mais utile)
+        if (isset($data['statut']) && $data['statut'] === 'soumis_definitif') {
+            $data['statut'] = 'realisee';
+        }
 
         $activity = Activity::create(array_merge($data, ['user_id' => auth()->id()]));
 
-        // Attacher les produits présentés/distribués
-        if (!empty($products)) {
-            $pivotData = collect($products)->mapWithKeys(fn($p) => [
-                $p['product_id'] => [
-                    'quantity'          => $p['quantity'] ?? 0,
-                    'customer_interest' => $p['customer_interest'] ?? null,
-                    'remarques'         => $p['remarques'] ?? null,
-                ]
-            ])->all();
-            $activity->products()->sync($pivotData);
+        // Attacher les échantillons (SampleMovement)
+        if (!empty($samples)) {
+            foreach ($samples as $sample) {
+                \App\Models\SampleMovement::create([
+                    'product_id' => $sample['product_id'],
+                    'user_id' => auth()->id(),
+                    'contact_id' => $data['contact_id'] ?? null,
+                    'activity_id' => $activity->id,
+                    'movement_type' => 'out',
+                    'quantity' => reset($sample['quantite']) ?? $sample['quantite'], // in case it's parsed as array somehow
+                    'lot_number' => $sample['num_lot'] ?? null,
+                    'expiry_date' => $sample['date_peremption'] ?? null,
+                ]);
+            }
         }
 
-        // Verrouiller automatiquement si statut = realisee
-        if ($activity->statut === 'realisee') {
+        // Verrouiller automatiquement si statut = realisee ou soumis_definitif
+        if (in_array($activity->statut, ['realisee', 'soumis_definitif'])) {
             $activity->lock();
         }
 
@@ -169,12 +182,18 @@ class ActivityController extends Controller
         ],
         requestBody: new OA\RequestBody(
             required: true,
+            description: 'Utilisez cette route pour le Check-in (statut: en_cours, gps_debut) et le Check-out (statut: realisee, gps_fin)',
             content: new OA\JsonContent(
                 properties: [
+                    new OA\Property(property: 'date_activite', type: 'string', format: 'date', description: 'Ne peut pas être dans le passé'),
                     new OA\Property(property: 'notes', type: 'string'),
                     new OA\Property(property: 'statut', type: 'string', enum: ['planifiee', 'en_cours', 'realisee', 'manquee', 'annulee']),
-                    new OA\Property(property: 'heure_debut', type: 'string'),
-                    new OA\Property(property: 'heure_fin', type: 'string'),
+                    new OA\Property(property: 'heure_debut', type: 'string', example: '09:00'),
+                    new OA\Property(property: 'heure_fin', type: 'string', example: '09:45'),
+                    new OA\Property(property: 'gps_debut_lat', type: 'number', format: 'float', example: 5.3450),
+                    new OA\Property(property: 'gps_debut_lng', type: 'number', format: 'float', example: -3.9820),
+                    new OA\Property(property: 'gps_fin_lat', type: 'number', format: 'float', example: 5.3452),
+                    new OA\Property(property: 'gps_fin_lng', type: 'number', format: 'float', example: -3.9821),
                 ]
             )
         ),
@@ -248,5 +267,53 @@ class ActivityController extends Controller
             'message' => 'Activity validated successfully', 
             'data' => new ActivityResource($activity->load(['delegue', 'contact', 'account', 'products']))
         ]);
+    }
+
+    public function storeDuo(Request $request)
+    {
+        $validated = $request->validate([
+            'user_id'       => 'nullable|string',
+            'delegate_id'   => 'nullable|string',
+            'contact_id'    => 'nullable|string',
+            'account_id'    => 'nullable|string',
+            'date_activite' => 'nullable|string',
+            'date_duo'      => 'nullable|string',
+            'notes'         => 'nullable|string',
+            'objective'     => 'nullable|string',
+            'activity_type' => 'nullable|string',
+        ]);
+
+        $targetUserId = $validated['user_id'] ?? $validated['delegate_id'] ?? auth()->id();
+        $subsidiary = \App\Models\Subsidiary::first();
+        $dateAct = $validated['date_activite'] ?? $validated['date_duo'] ?? now()->toDateString();
+
+        $activity = Activity::create([
+            'subsidiary_id' => $subsidiary?->id,
+            'user_id' => $targetUserId,
+            'contact_id' => $validated['contact_id'] ?? null,
+            'account_id' => $validated['account_id'] ?? null,
+            'date_activite' => $dateAct,
+            'activity_type' => 'visite',
+            'statut' => 'planifiee',
+            'is_duo' => true,
+            'notes' => '[VISITE DUO SUPERVISEUR] ' . ($validated['notes'] ?? $validated['objective'] ?? 'Visite conjointe de coaching avec le superviseur.'),
+        ]);
+
+        // Send Notification to Delegate
+        $delegate = \App\Models\User::find($targetUserId);
+        if ($delegate) {
+            \App\Models\Notification::create([
+                'user_id' => $delegate->id,
+                'title' => 'Visite en Duo Programmée',
+                'message' => "Votre superviseur a programmé une visite en duo pour le {$dateAct}.",
+                'type' => 'duo',
+                'read' => false,
+            ]);
+        }
+
+        return response()->json([
+            'message' => 'Visite en Duo programmée avec succès',
+            'data' => new ActivityResource($activity->load(['delegue', 'contact', 'account']))
+        ], 201);
     }
 }

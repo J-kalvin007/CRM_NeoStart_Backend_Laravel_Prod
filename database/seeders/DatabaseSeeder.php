@@ -45,11 +45,12 @@ class DatabaseSeeder extends Seeder
 
         // 3. Assigner les permissions de scope aux rôles réels
         $rolesConfig = [
-            'super-admin'            => ['scope:global'],
-            'directeur-commercial'   => ['scope:global'],
-            'directeur-marketing'    => ['scope:global'],
-            'superviseur'            => ['scope:team'],
-            'delegue-medical'        => ['scope:team'],
+            'superadmin' => ['scope:global'],
+            'directeur_regional' => ['scope:country'],
+            'directeur_commercial' => ['scope:subsidiary'],
+            'directeur_marketing' => ['scope:subsidiary'],
+            'superviseur' => ['scope:subsidiary'],
+            'delegue_medical' => ['scope:team']
         ];
 
         foreach ($rolesConfig as $roleName => $perms) {
@@ -88,9 +89,7 @@ class DatabaseSeeder extends Seeder
             'zone_id' => $zone->id
         ]);
 
-        $team = Team::firstOrCreate(['name' => 'Équipe Paris Centre'], [
-            'sector_id' => $sector->id
-        ]);
+        $team = Team::firstOrCreate(['name' => 'Équipe Paris Centre']);
 
         // 3. Create Super Admin
         $admin = User::firstOrCreate(['email' => 'admin@crm.local'], [
@@ -106,15 +105,37 @@ class DatabaseSeeder extends Seeder
             'status' => true
         ]);
 
-        if (!$admin->hasRole('super-admin')) {
-            // Révoquer les anciens rôles éventuels et assigner le bon slug
-            $admin->syncRoles(['super-admin']);
+        if (!$admin->hasRole('superadmin')) {
+            $admin->assignRole('superadmin');
         }
 
         $this->call([
-            CRMDataSeeder::class,
+            SpecialitySeeder::class,
+            SegmentationSeeder::class,
+            PotentialSeeder::class,
+            InfluenceSeeder::class,
+            GalenicFormSeeder::class,
+            ActivityTypeSeeder::class,
+            ActivityResultSeeder::class,
+            EventFormatSeeder::class,
+            RoleAndPermissionSeeder::class,
             SettingSeeder::class,
             PharmaSeeder::class,
+            UserSeeder::class,
+            AccountSeeder::class,
+            ContactSeeder::class,
+            ProductSeeder::class,
+            ActivitySeeder::class,
+            StockSeeder::class,
+            EventSeeder::class,
+            ExpenseSeeder::class,
+            CampaignSeeder::class,
+            NotificationSeeder::class,
+            DocumentSeeder::class,
+            DigitalSupportSeeder::class,
+            PharmacovigilanceSeeder::class,
+            ConversationMessageSeeder::class,
+            OrderSeeder::class,
         ]);
     }
 }

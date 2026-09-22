@@ -24,14 +24,9 @@ class UpdateUserRequest extends FormRequest
             'roles.*' => ['string', 'exists:roles,name'],
             'permissions' => ['nullable', 'array'],
             'permissions.*' => ['string', 'exists:permissions,name'],
-            'team_id' => ['nullable', 'uuid', 'exists:teams,id'],
-            'manager_id' => ['nullable', 'uuid', 'exists:users,id'],
-            'country_id' => ['nullable', 'uuid'],
-            'subsidiary_id' => ['nullable', 'uuid'],
-            'region_id' => ['nullable', 'uuid'],
-            'territory_id' => ['nullable', 'uuid'],
-            'zone_id' => ['nullable', 'uuid'],
-            'sector_id' => ['nullable', 'uuid'],
+            'scopes' => ['nullable', 'array'],
+            'scopes.*' => ['uuid', 'exists:organizational_units,id'],
+            'otp_enabled' => ['nullable', 'boolean'],
         ];
     }
 }

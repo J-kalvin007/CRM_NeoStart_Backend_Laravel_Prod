@@ -35,15 +35,37 @@ class ContactController extends Controller
     )]
     public function index(Request $request)
     {
-        $query = Contact::with(['account', 'categories', 'contactType'])
-            ->when($request->specialite, fn($q, $v) => $q->where('specialite', 'like', "%$v%"))
+        $query = Contact::with(['account', 'categories', 'speciality', 'contactType', 'potential', 'influence', 'segmentation'])
+            ->when($request->specialite ?? $request->speciality, function($q, $v) {
+                if (!$v || $v === 'Tous') return;
+                $q->where(function($sub) use ($v) {
+                    $sub->whereHas('speciality', fn($sq) => $sq->where('nom', 'like', "%$v%"))
+                        ->orWhere('meta->specialite', 'like', "%$v%")
+                        ->orWhere('titre', 'like', "%$v%");
+                });
+            })
+            ->when($request->facility_type ?? $request->account_type ?? $request->etablissement, function($q, $v) {
+                if (!$v || $v === 'Tous') return;
+                $q->where(function($sub) use ($v) {
+                    $sub->whereHas('account', function($aq) use ($v) {
+                        $aq->where('type', 'like', "%$v%")
+                           ->orWhere('nom', 'like', "%$v%");
+                    })->orWhere('meta->etablissement', 'like', "%$v%");
+                });
+            })
+            ->when($request->statut ?? $request->status, function($q, $v) {
+                if (!$v || $v === 'Tous') return;
+                $q->where('statut', 'like', "%$v%");
+            })
             ->when($request->has('is_kol'), fn($q) => $q->where('is_kol', $request->boolean('is_kol')))
             ->when($request->account_id, fn($q, $v) => $q->where('account_id', $v))
-            ->when($request->statut, fn($q, $v) => $q->where('statut', $v))
             ->when($request->search, fn($q, $v) => $q->where(function ($q) use ($v) {
                 $q->where('nom', 'like', "%$v%")
                   ->orWhere('prenom', 'like', "%$v%")
-                  ->orWhere('specialite', 'like', "%$v%");
+                  ->orWhere('titre', 'like', "%$v%")
+                  ->orWhere('meta->specialite', 'like', "%$v%")
+                  ->orWhereHas('speciality', fn($sq) => $sq->where('nom', 'like', "%$v%"))
+                  ->orWhereHas('account', fn($aq) => $aq->where('nom', 'like', "%$v%"));
             }));
 
         $user = auth()->user();
@@ -51,7 +73,8 @@ class ContactController extends Controller
             $query->whereIn('statut', ['actif', 'valide']);
         }
 
-        return ContactResource::collection($query->paginate(25));
+        $perPage = $request->get('per_page', 100);
+        return ContactResource::collection($query->paginate($perPage));
     }
 
     #[OA\Post(
@@ -147,6 +170,13 @@ class ContactController extends Controller
             $validated['statut'] = 'valide';
         }
 
+        if (!empty($validated['specialite'])) {
+            $meta = $validated['meta'] ?? [];
+            $meta['specialite'] = $validated['specialite'];
+            $validated['meta'] = $meta;
+            unset($validated['specialite']);
+        }
+
         // Validation dynamique
         if (!empty($validated['contact_type_id'])) {
             $type = ContactType::find($validated['contact_type_id']);
@@ -161,10 +191,36 @@ class ContactController extends Controller
         }
         $duplicateService->abortIfDuplicateContact($countryId, $validated);
 
+        $user = auth()->user();
+        $isDelegue = $user && $user->hasRole('delegue_medical');
+        $statutValidation = $isDelegue ? 'en_attente' : 'valide';
+
         $contact = Contact::create(array_merge(
             $validated,
-            ['user_id' => auth()->id()]
+            [
+                'user_id' => $user->id ?? null,
+                'statut_validation' => $statutValidation,
+            ]
         ));
+
+        if ($isDelegue) {
+            $supervisors = \App\Models\User::role('superviseur')->where('team_id', $user->team_id)->get();
+            if ($supervisors->isNotEmpty()) {
+                \Illuminate\Support\Facades\Notification::send($supervisors, new \App\Notifications\PendingValidationNotification($contact, $user));
+            }
+            $manager = $user?->manager ?? \App\Models\User::where('email', 'cmoucharif@gmail.com')->first() ?? \App\Models\User::whereHas('roles', fn($q) => $q->whereIn('name', ['superviseur', 'supervisor', 'manager', 'Manager']))->first();
+            if ($manager) {
+                NotificationController::sendNotification(
+                    $manager,
+                    'Nouvelle demande de validation prescripteur',
+                    "Le délégué {$user->name} a créé le prescripteur {$contact->titre} {$contact->prenom} {$contact->nom} en attente de validation.",
+                    'validation',
+                    'manager',
+                    ['contact_id' => (string) $contact->id]
+                );
+            }
+        }
+
         return new ContactResource($contact->load(['account', 'categories']));
     }
 
@@ -264,5 +320,67 @@ class ContactController extends Controller
     {
         Contact::findOrFail($id)->delete();
         return response()->json(null, 204);
+    }
+
+    #[OA\Post(
+        path: '/api/v1/contacts/arbitrage',
+        summary: 'Arbitrage du portefeuille (Jauge 100 max)',
+        security: [['bearerAuth' => []]],
+        tags: ['Contacts'],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['delegate_id', 'new_contact_id', 'removed_contact_id'],
+                properties: [
+                    new OA\Property(property: 'delegate_id', type: 'string', format: 'uuid'),
+                    new OA\Property(property: 'new_contact_id', type: 'string', format: 'uuid'),
+                    new OA\Property(property: 'removed_contact_id', type: 'string', format: 'uuid'),
+                    new OA\Property(property: 'reason', type: 'string'),
+                    new OA\Property(property: 'action', type: 'string'),
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Arbitrage effectué avec succès'),
+        ]
+    )]
+    public function arbitrage(Request $request)
+    {
+        $validated = $request->validate([
+            'delegate_id' => 'required|uuid|exists:users,id',
+            'new_contact_id' => 'required|uuid|exists:contacts,id',
+            'removed_contact_id' => 'required|uuid|exists:contacts,id',
+            'reason' => 'nullable|string',
+            'action' => 'nullable|string',
+        ]);
+
+        $removedContact = Contact::findOrFail($validated['removed_contact_id']);
+        $newContact = Contact::findOrFail($validated['new_contact_id']);
+
+        // Réaffecter l'ancien prescripteur au bassin régional (on lui enlève son délégué)
+        $removedContact->update([
+            'user_id' => null, 
+            // On pourrait ajouter un champ history ou reason si le modèle le permet
+        ]);
+
+        // Assigner le nouveau prescripteur au délégué
+        $newContact->update([
+            'user_id' => $validated['delegate_id'],
+            'statut_validation' => 'valide', // ou on garde 'en_attente'
+        ]);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Arbitrage effectué. Prescripteur réaffecté au bassin régional sans perte d\'historique.',
+            'data' => [
+                'delegate_id' => $validated['delegate_id'],
+                'active_portfolio_count' => Contact::where('user_id', $validated['delegate_id'])->count(),
+                'reallocated_contact' => [
+                    'id' => $removedContact->id,
+                    'previous_delegate' => $validated['delegate_id'],
+                    'unassigned_at' => now()->toIso8601String(),
+                ]
+            ]
+        ], 200);
     }
 }

@@ -1,0 +1,14 @@
+{
+  "project": "CRM SKYNITY / MEDCRM PRO",
+  "company_context": "TOGO-PHARMA",
+  "version": "v1",
+  "base_url": "http://localhost:8000/api/v1",
+  "modules": [
+    "Authentication & Synchronization (auth_and_sync.json)",
+    "Activities & Visits (activities_and_visits.json)",
+    "Coaching & Supervisor Duos (coaching_and_duos.json)",
+    "Contacts & Portfolio Arbitrage (contacts_and_arbitrage.json)",
+    "Sales & Wholesalers (sales_and_wholesalers.json)",
+    "Requests & Escalation Workflow (requests_and_escalation.json)"
+  ]
+}

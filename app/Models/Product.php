@@ -47,6 +47,7 @@ class Product extends Model
     }
     public function sampleMovements() { return $this->hasMany(SampleMovement::class); }
     public function objectifs()       { return $this->hasMany(Objectif::class); }
+    public function objections()      { return $this->hasMany(Objection::class); }
 
     public function scopeActif($query)        { return $query->where('statut', 'actif'); }
     public function scopeEnStock($query)      { return $query->where('stock_actuel', '>', 0); }

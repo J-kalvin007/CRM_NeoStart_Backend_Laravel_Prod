@@ -28,6 +28,7 @@ class ActivityResource extends JsonResource
             'report_content' => $this->report_content,
             'validation_date'=> $this->validation_date,
             'rejection_reason'=> $this->rejection_reason,
+            'signature'      => $this->signature,
             'subsidiary_id'  => $this->subsidiary_id,
             'user_id'        => $this->user_id,
             'delegate_name'  => $this->delegue?->name ?? 'Délégué Médical',
@@ -38,23 +39,12 @@ class ActivityResource extends JsonResource
                 'name'  => $this->delegue->name,
                 'email' => $this->delegue->email,
             ]),
-            'contact'        => $this->whenLoaded('contact', fn() => [
-                'id'         => $this->contact->id,
-                'nom_complet'=> trim("{$this->contact->titre} {$this->contact->prenom} {$this->contact->nom}"),
-                'titre'      => $this->contact->titre,
-                'nom'        => $this->contact->nom,
-                'prenom'     => $this->contact->prenom,
-                'potentiel'  => $this->contact->potentiel,
-                'meta'       => $this->contact->meta,
-                'specialite' => $this->contact->specialite,
-            ]),
-            'account'        => $this->whenLoaded('account', fn() => [
-                'id'  => $this->account->id,
-                'nom' => $this->account->nom,
-            ]),
+            'contact'        => new ContactResource($this->whenLoaded('contact')),
+            'account'        => new AccountResource($this->whenLoaded('account')),
             'tour_plan'      => $this->whenLoaded('tourPlan', fn() => [
-                'id'  => $this->tourPlan->id,
-                'nom' => $this->tourPlan->nom,
+                'id'     => $this->tourPlan->id,
+                'nom'    => $this->tourPlan->nom,
+                'statut' => $this->tourPlan->statut,
             ]),
             'documents'      => $this->whenLoaded('documents', function() {
                 return $this->documents->map(function($doc) {

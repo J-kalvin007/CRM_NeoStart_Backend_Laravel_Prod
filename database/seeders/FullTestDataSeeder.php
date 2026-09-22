@@ -64,7 +64,8 @@ class FullTestDataSeeder extends Seeder
             'product_type_id' => $drugType->id,
             'subsidiary_id' => $subsidiary->id,
             'nom' => 'CardioMax',
-            'prix_unitaire' => 12.50,
+            'pght' => 12.50,
+            'ppv' => 15.00,
             'devise' => 'EUR',
             'stock_actuel' => 1000,
             'statut' => 'actif'

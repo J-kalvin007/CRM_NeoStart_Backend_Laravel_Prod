@@ -2,26 +2,17 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Concerns\HasUuids;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
-use App\Models\Traits\HasPerimeter;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use App\Models\Traits\HasActivityLogs;
 
 class GalenicForm extends Model
 {
-    use HasFactory, HasUuids, SoftDeletes, HasPerimeter;
+    use HasUuids, HasActivityLogs;
 
-    protected $fillable = [
-        'subsidiary_id',
-        'code',
-        'nom',
-        'description',
-        'statut'
+    protected $fillable = ['name', 'code', 'description', 'is_active'];
+
+    protected $casts = [
+        'is_active' => 'boolean',
     ];
-
-    public function subsidiary()
-    {
-        return $this->belongsTo(Subsidiary::class);
-    }
 }

@@ -1,0 +1,86 @@
+{
+  "module": "Coaching & Supervisor Duos",
+  "version": "v1",
+  "base_url": "http://localhost:8000/api/v1",
+  "endpoints": {
+    "plan_duo": {
+      "method": "POST",
+      "path": "/coaching-sessions",
+      "headers": {
+        "Authorization": "Bearer {token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      "request_payload": {
+        "delegate_id": "user_sena_kpodar",
+        "date_duo": "2026-09-20",
+        "zone": "Secteur Lomé Est",
+        "motif": "Accompagnement terrain et observation de l'argumentaire Amoxil",
+        "objectifs_prevus": [
+          "Effectuer 5 visites conjointes",
+          "Présenter Amoxil 500mg à 3 cardiologues",
+          "Obtenir 2 engagements de prescription"
+        ]
+      },
+      "validation_rules": {
+        "delegate_id": "required|uuid|exists:users,id",
+        "date_duo": "required|date_format:Y-m-d|after_or_equal:today",
+        "zone": "required|string|max:255",
+        "motif": "required|string|max:500",
+        "objectifs_prevus": "required|array|min:1"
+      },
+      "response_201": {
+        "status": "success",
+        "message": "Duo planifié avec succès.",
+        "data": {
+          "id": "duo_2026_0920_001",
+          "statut": "planifie",
+          "duos_completed_this_month": 1,
+          "duos_required_per_month": 2
+        }
+      }
+    },
+    "complete_duo": {
+      "method": "PUT",
+      "path": "/coaching-sessions/{id}/complete",
+      "headers": {
+        "Authorization": "Bearer {token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      "request_payload": {
+        "delegate_id": "user_sena_kpodar",
+        "date_duo": "2026-09-20",
+        "zone": "Secteur Lomé Est",
+        "motif": "Accompagnement terrain",
+        "objectifs_prevus": [
+          "Effectuer 5 visites conjointes",
+          "Présenter Amoxil 500mg à 3 cardiologues"
+        ],
+        "activites_realisees": "4 visites effectuées au CHU Sylvanus Olympio",
+        "resultats_constates": [
+          "4 visites réalisées sur 5 prévues",
+          "2 présentations Amoxil effectuées"
+        ],
+        "taux_atteinte_pct": 82.0,
+        "commentaires_superviseur": "Sena maîtrise bien le discours produit. Poursuivre le travail sur les objections prix.",
+        "plan_action_recommande": "Formation de 30 min sur la fiche d'argumentaire prix d'Amoxil."
+      },
+      "validation_rules": {
+        "activites_realisees": "required|string",
+        "resultats_constates": "required|array|min:1",
+        "taux_atteinte_pct": "required|numeric|min:0|max:100",
+        "commentaires_superviseur": "required|string"
+      },
+      "response_200": {
+        "status": "success",
+        "message": "Rapport de duo clôturé et enregistré.",
+        "data": {
+          "id": "duo_2026_0920_001",
+          "statut": "cloture",
+          "taux_atteinte_pct": 82.0
+        }
+      }
+    }
+  }
+}

@@ -142,10 +142,35 @@ class AccountController extends Controller
         // Détection de doublons (Bloque la requête si doublon)
         $duplicateService->abortIfDuplicateAccount($validated['subsidiary_id'], $validated);
 
+        $user = auth()->user();
+        $isDelegue = $user && $user->hasRole('delegue_medical');
+        $statutValidation = $isDelegue ? 'en_attente' : 'valide';
+
         $account = Account::create(array_merge(
             $validated,
-            ['user_id' => auth()->id()]
+            [
+                'user_id' => $user->id ?? null,
+                'statut_validation' => $statutValidation,
+            ]
         ));
+
+        if ($isDelegue) {
+            $supervisors = \App\Models\User::role('superviseur')->where('team_id', $user->team_id)->get();
+            if ($supervisors->isNotEmpty()) {
+                \Illuminate\Support\Facades\Notification::send($supervisors, new \App\Notifications\PendingValidationNotification($account, $user));
+            }
+            $manager = $user?->manager ?? \App\Models\User::where('email', 'cmoucharif@gmail.com')->first() ?? \App\Models\User::whereHas('roles', fn($q) => $q->whereIn('name', ['superviseur', 'supervisor', 'manager', 'Manager']))->first();
+            if ($manager) {
+                NotificationController::sendNotification(
+                    $manager,
+                    'Nouvelle demande de validation établissement',
+                    "Le délégué {$user->name} a créé l'établissement {$account->nom} en attente de validation.",
+                    'validation',
+                    'manager',
+                    ['account_id' => (string) $account->id]
+                );
+            }
+        }
 
         return new AccountResource($account->load(['subsidiary', 'categories']));
     }

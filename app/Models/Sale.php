@@ -22,6 +22,15 @@ class Sale extends Model
         'amount',
         'status',
         'sale_date',
+        'mois_concerne',
+        'commentaires',
+        'products_json',
+        'local_uuid',
+    ];
+
+    protected $casts = [
+        'products_json' => 'array',
+        'sale_date' => 'date',
     ];
 
     public function user()

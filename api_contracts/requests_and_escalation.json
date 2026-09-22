@@ -1,0 +1,78 @@
+{
+  "module": "Delegate Requests & Escalation Workflow",
+  "version": "v1",
+  "base_url": "http://localhost:8000/api/v1",
+  "endpoints": {
+    "create_request": {
+      "method": "POST",
+      "path": "/requests",
+      "headers": {
+        "Authorization": "Bearer {token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      "request_payload": {
+        "delegate_id": "user_sena_kpodar",
+        "type_demande": "echantillons_supplementaires",
+        "objet": "Augmentation dotation Doliprane 1g pour la zone Bè",
+        "description": "Forte demande pédiatrique et épidémie de grippe saisonnière sur Lomé Est.",
+        "justification": "Il ne reste que 20 boîtes en stock local.",
+        "statut": "en_attente_superviseur"
+      },
+      "validation_rules": {
+        "type_demande": "required|string|in:budget,echantillons_supplementaires,materiel,formation,conge",
+        "objet": "required|string|max:255",
+        "description": "required|string|max:1000",
+        "justification": "required|string|max:1000"
+      },
+      "response_201": {
+        "status": "success",
+        "message": "Demande soumise au Superviseur pour contrôle.",
+        "data": {
+          "id": "req_2026_001",
+          "statut": "en_attente_superviseur"
+        }
+      }
+    },
+    "supervisor_approve_request": {
+      "method": "POST",
+      "path": "/requests/{id}/approve-supervisor",
+      "headers": {
+        "Authorization": "Bearer {token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      "request_payload": {
+        "supervisor_comment": "Demande vérifiée et justifiée par la consommation du stock local."
+      },
+      "response_200": {
+        "status": "success",
+        "message": "Demande approuvée par le Superviseur et transmise au Directeur Commercial.",
+        "data": {
+          "id": "req_2026_001",
+          "statut": "transmis_directeur_commercial"
+        }
+      }
+    },
+    "supervisor_reject_request": {
+      "method": "POST",
+      "path": "/requests/{id}/reject-supervisor",
+      "headers": {
+        "Authorization": "Bearer {token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      "request_payload": {
+        "rejection_reason": "Stock local suffisant (300 boîtes répertoriées)."
+      },
+      "response_200": {
+        "status": "success",
+        "message": "Demande rejetée par le Superviseur.",
+        "data": {
+          "id": "req_2026_001",
+          "statut": "rejete_superviseur"
+        }
+      }
+    }
+  }
+}

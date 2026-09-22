@@ -53,6 +53,9 @@ class ObjectifController extends Controller
     )]
     public function store(StoreObjectifRequest $request)
     {
+        if (!auth()->user()->hasRole('Manager')) {
+            return response()->json(['message' => 'Non autorisé. Seul un manager peut créer des objectifs.'], 403);
+        }
         $objectif = Objectif::create($request->validated());
         $objectif->recalculerTaux();
         return new ObjectifResource($objectif->load(['user', 'team', 'product', 'indicator']));
@@ -77,6 +80,9 @@ class ObjectifController extends Controller
     )]
     public function update(UpdateObjectifRequest $request, string $id)
     {
+        if (!auth()->user()->hasRole('Manager')) {
+            return response()->json(['message' => 'Non autorisé. Seul un manager peut modifier des objectifs.'], 403);
+        }
         $objectif = Objectif::findOrFail($id);
         $objectif->update($request->validated());
         $objectif->recalculerTaux();
@@ -89,7 +95,101 @@ class ObjectifController extends Controller
     )]
     public function destroy(string $id)
     {
+        if (!auth()->user()->hasRole('Manager')) {
+            return response()->json(['message' => 'Non autorisé.'], 403);
+        }
         Objectif::findOrFail($id)->delete();
         return response()->json(null, 204);
+    }
+
+    #[OA\Get(
+        path: '/api/v1/me/objectifs-summary',
+        summary: 'Résumé des objectifs du mois en cours avec calcul des primes',
+        security: [['bearerAuth' => []]],
+        tags: ['Objectifs'],
+        responses: [
+            new OA\Response(response: 200, description: 'Résumé des objectifs')
+        ]
+    )]
+    public function summary()
+    {
+        $user = auth()->user();
+        $now = now();
+        $objectifs = Objectif::where('user_id', $user->id)
+            ->whereMonth('date_debut', '<=', $now->month)
+            ->whereMonth('date_fin', '>=', $now->month)
+            ->whereYear('date_debut', '<=', $now->year)
+            ->whereYear('date_fin', '>=', $now->year)
+            ->get();
+
+        $summary = [];
+        $totalTaux = 0;
+        $count = 0;
+
+        foreach ($objectifs as $obj) {
+            $realise = 0;
+            if ($obj->type_objectif === 'nombre_visites') {
+                $realise = \App\Models\Activity::where('user_id', $user->id)
+                    ->where('activity_type', 'visite')
+                    ->where('statut', 'realisee')
+                    ->whereMonth('date_activite', $now->month)
+                    ->count();
+            } elseif ($obj->type_objectif === 'couverture_categorie_a') {
+                // Mock logic for catégorie A
+                $realise = \App\Models\Activity::where('user_id', $user->id)
+                    ->where('activity_type', 'visite')
+                    ->where('statut', 'realisee')
+                    ->whereMonth('date_activite', $now->month)
+                    ->whereHas('contact', function ($q) {
+                        // Assuming category exists, maybe in 'meta' or directly
+                        $q->where('meta->categorie', 'A');
+                    })
+                    ->distinct('contact_id')
+                    ->count('contact_id');
+            } elseif ($obj->type_objectif === 'produit_prioritaire') {
+                $realise = \App\Models\Activity::where('user_id', $user->id)
+                    ->where('activity_type', 'visite')
+                    ->where('statut', 'realisee')
+                    ->whereMonth('date_activite', $now->month)
+                    ->whereHas('products', function ($q) use ($obj) {
+                        $q->where('product_id', $obj->product_id);
+                    })
+                    ->count();
+            } elseif ($obj->type_objectif === 'ca_ventes') {
+                $realise = \App\Models\Order::where('user_id', $user->id)
+                    ->whereIn('status', ['confirmed', 'invoiced', 'validee', 'livree'])
+                    ->whereMonth('order_date', $now->month)
+                    ->sum('total_amount');
+            }
+
+            // Mettre à jour l'objectif avec la valeur calculée
+            $obj->valeur_realisee = $realise;
+            $obj->recalculerTaux();
+            $obj->save();
+
+            $taux = $obj->valeur_cible > 0 ? ($realise / $obj->valeur_cible) * 100 : 0;
+            $totalTaux += $taux;
+            $count++;
+
+            $summary[] = [
+                'id' => $obj->id,
+                'type' => $obj->type_objectif,
+                'cible' => $obj->valeur_cible,
+                'realise' => $realise,
+                'taux_atteinte' => round(min(100, $taux), 2),
+            ];
+        }
+
+        // Calcul simple de la prime (ex: prime max = 500 € par mois)
+        $primeMax = 500;
+        $tauxMoyen = $count > 0 ? ($totalTaux / $count) : 0;
+        $primeEstimee = round(($tauxMoyen / 100) * $primeMax, 2);
+
+        return response()->json([
+            'objectifs' => $summary,
+            'taux_moyen' => round(min(100, $tauxMoyen), 2),
+            'prime_estimee' => $primeEstimee,
+            'devise' => '€'
+        ]);
     }
 }

@@ -21,93 +21,124 @@ class PerimeterScope implements Scope
 
         $user = Auth::user();
         $table = $model->getTable();
-
-        // 1. Holding / Global admin bypasses all filters
-        if ($user->can('scope:global')) {
-            return;
-        }
-
-        // 2. Déterminer le niveau de restriction de l'utilisateur (du plus précis au plus large)
-        if ($user->team_id) {
-            $this->applyHierarchyFilter($builder, $table, 'team_id', $user->team_id);
-        } elseif ($user->sector_id) {
-            $this->applyHierarchyFilter($builder, $table, 'sector_id', $user->sector_id);
-        } elseif ($user->zone_id) {
-            $this->applyHierarchyFilter($builder, $table, 'zone_id', $user->zone_id);
-        } elseif ($user->territory_id) {
-            $this->applyHierarchyFilter($builder, $table, 'territory_id', $user->territory_id);
-        } elseif ($user->region_id) {
-            $this->applyHierarchyFilter($builder, $table, 'region_id', $user->region_id);
-        } elseif ($user->subsidiary_id) {
-            $this->applyHierarchyFilter($builder, $table, 'subsidiary_id', $user->subsidiary_id);
-        } elseif ($user->country_id) {
-            $this->applyHierarchyFilter($builder, $table, 'country_id', $user->country_id);
-        }
-    }
-
-    /**
-     * Filtre dynamique basé sur la hiérarchie organisationnelle.
-     */
-    protected function applyHierarchyFilter(Builder $builder, string $table, string $levelColumn, string $levelId): void
-    {
-        // Tables structurelles simples
-        if ($table === 'countries' && $levelColumn === 'country_id') {
-            $builder->where('id', $levelId);
-            return;
-        }
-        if ($table === 'subsidiaries' && in_array($levelColumn, ['country_id', 'subsidiary_id'])) {
-            $column = $levelColumn === 'subsidiary_id' ? 'id' : $levelColumn;
-            $builder->where($column, $levelId);
-            return;
-        }
-
-        // Pour les tables opérationnelles (liées à un user_id)
         $operationalTables = ['contacts', 'activities', 'tour_plans', 'sample_movements', 'objectifs', 'accounts', 'kol_profiles'];
+
+        // 1. Holding / Global admin & superadmin bypass isolation
+        if ($user->can('scope:global') || $user->hasAnyRole(['superadmin', 'admin'])) {
+            return;
+        }
+
+        // 2. Superviseurs & Managers: Récupèrent uniquement les délégués faisant partie de leur équipe (ou sous leur responsabilité)
+        if ($user->hasAnyRole(['superviseur', 'directeur_regional', 'directeur_commercial', 'directeur_marketing'])) {
+            if ($table === 'users') {
+                $builder->where(function($q) use ($user) {
+                    if ($user->team_id) {
+                        $q->where('team_id', $user->team_id)
+                          ->orWhere('manager_id', $user->id)
+                          ->orWhere('id', $user->id);
+                    } else {
+                        $q->where('manager_id', $user->id)->orWhere('id', $user->id);
+                    }
+                });
+            } elseif (in_array($table, $operationalTables)) {
+                $builder->whereIn($table . '.user_id', function($sub) use ($user) {
+                    $sub->select('id')->from('users');
+                    if ($user->team_id) {
+                        $sub->where('team_id', $user->team_id)
+                            ->orWhere('manager_id', $user->id)
+                            ->orWhere('id', $user->id);
+                    } else {
+                        $sub->where('manager_id', $user->id)->orWhere('id', $user->id);
+                    }
+                });
+            }
+            return;
+        }
+
+        // 2. Récupérer les scopes (périmètres) directs de l'utilisateur
+        $userScopeIds = DB::table('user_scopes')
+            ->where('user_id', $user->id)
+            ->pluck('organizational_unit_id')
+            ->toArray();
+
+        // Si l'utilisateur n'a aucun périmètre spécifique configuré, il accède à ses propres enregistrements (user_id = user->id)
+        if (empty($userScopeIds)) {
+            if ($table === 'users') {
+                $builder->where('id', $user->id);
+            } elseif (in_array($table, $operationalTables)) {
+                $builder->where($table . '.user_id', $user->id);
+            } elseif (in_array($table, ['products', 'categories', 'product_types', 'specialities', 'galenic_forms'])) {
+                // Les catalogues référentiels sont accessibles à tous les utilisateurs authentifiés
+                return;
+            } else {
+                $builder->whereRaw('1 = 0');
+            }
+            return;
+        }
+
+        // 3. Récupérer l'arbre de tous les descendants
+        $allAccessibleUnitIds = $this->getDescendantUnitIds($userScopeIds);
+
+        // 4. Filtrer la table `organizational_units` elle-même
+        if ($table === 'organizational_units') {
+            $builder->whereIn('id', $allAccessibleUnitIds);
+            return;
+        }
+
+        // 5. Filtrer les tables opérationnelles
+        $operationalTables = ['contacts', 'activities', 'tour_plans', 'sample_movements', 'objectifs', 'accounts', 'kol_profiles'];
+        
         if (in_array($table, $operationalTables) || $table === 'users') {
             $columnToFilter = $table === 'users' ? 'id' : 'user_id';
             
-            // On récupère tous les users qui tombent sous ce niveau hiérarchique
-            $builder->whereIn($table . '.' . $columnToFilter, function ($query) use ($levelColumn, $levelId) {
-                $query->select('id')->from('users');
-                
-                // Si l'utilisateur est restreint par un niveau supérieur, il voit les users en dessous
-                if ($levelColumn === 'team_id') {
-                    $query->where('team_id', $levelId);
-                } elseif ($levelColumn === 'sector_id') {
-                    $query->where('sector_id', $levelId)->orWhereIn('team_id', function ($q) use ($levelId) {
-                        $q->select('id')->from('teams')->where('sector_id', $levelId);
-                    });
-                } else {
-                    // Pour simplifier et optimiser, si l'architecture de données de l'utilisateur est stricte, 
-                    // il suffit de filtrer directement sur la colonne correspondante dans users.
-                    $query->where($levelColumn, $levelId);
+            $builder->where(function ($sub) use ($table, $columnToFilter, $allAccessibleUnitIds, $user) {
+                $sub->whereIn($table . '.' . $columnToFilter, function ($query) use ($allAccessibleUnitIds) {
+                    $query->select('user_id')
+                          ->from('user_scopes')
+                          ->whereIn('organizational_unit_id', $allAccessibleUnitIds);
+                });
+                if ($columnToFilter === 'user_id') {
+                    $sub->orWhere($table . '.user_id', $user->id);
                 }
             });
             return;
         }
 
-        // Pour les produits, restreints à la filiale
+        // 6. Pour les produits, restreints par type de filiale ou pays (logique métier spécifique)
         if ($table === 'products') {
-            // On trouve la filiale correspondante au niveau actuel
-            $subsidiaryId = $this->getSubsidiaryIdFromLevel($levelColumn, $levelId);
-            if ($subsidiaryId) {
-                $builder->where($table . '.subsidiary_id', $subsidiaryId);
-            }
+            // Logique simplifiée pour l'exemple : on pourrait chercher si l'utilisateur a accès au parent "filiale"
+            // Pour l'instant, laissons passer ou implémentons une logique spécifique.
             return;
         }
     }
 
     /**
-     * Remonte la hiérarchie pour trouver l'ID de la filiale.
+     * Remonte la hiérarchie pour trouver tous les enfants de manière récursive (sans CTE pour compatibilité).
      */
-    protected function getSubsidiaryIdFromLevel(string $levelColumn, string $levelId): ?string
+    protected function getDescendantUnitIds(array $parentIds): array
     {
-        if ($levelColumn === 'subsidiary_id') return $levelId;
-        if ($levelColumn === 'country_id') return null; // Les produits appartiennent à une filiale
+        if (empty($parentIds)) {
+            return [];
+        }
 
-        // Dans une implémentation complète, on ferait des jointures depuis le niveau bas vers subsidiary.
-        // Pour des raisons de performance, l'ID de subsidiary est souvent dénormalisé sur les entités métier,
-        // ou on peut le requêter une seule fois et le cacher.
-        return DB::table('users')->where($levelColumn, $levelId)->value('subsidiary_id');
+        $allIds = $parentIds;
+        $currentParentIds = $parentIds;
+
+        // Boucle pour descendre l'arbre niveau par niveau
+        while (true) {
+            $childrenIds = DB::table('organizational_units')
+                ->whereIn('parent_id', $currentParentIds)
+                ->pluck('id')
+                ->toArray();
+
+            if (empty($childrenIds)) {
+                break;
+            }
+
+            $allIds = array_merge($allIds, $childrenIds);
+            $currentParentIds = $childrenIds; // Prochaine itération avec ces enfants
+        }
+
+        return array_unique($allIds);
     }
 }

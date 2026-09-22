@@ -24,9 +24,9 @@ class StoreExpenseRequest extends FormRequest
     {
         return [
             'title' => 'required|string|max:255',
-            'type' => 'required|in:travel,meal,accommodation,material,other',
+            'type' => 'required|string',
             'amount' => 'required|numeric|min:0',
-            'currency' => 'nullable|string|size:3',
+            'currency' => 'nullable|string|max:4',
             'expense_date' => 'required|date',
             'expensable_id' => 'nullable|uuid',
             'expensable_type' => 'nullable|string',

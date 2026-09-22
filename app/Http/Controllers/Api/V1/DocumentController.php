@@ -31,16 +31,25 @@ class DocumentController extends Controller
                 $status = 'EXPIRE';
             }
 
+            $sizeFormatted = '1.5 MB';
+            if ($doc->file_size) {
+                $sizeFormatted = round($doc->file_size / (1024 * 1024), 1) . ' MB';
+            } elseif (\Illuminate\Support\Facades\Storage::disk('public')->exists($doc->file_path ?? '')) {
+                $bytes = \Illuminate\Support\Facades\Storage::disk('public')->size($doc->file_path);
+                $sizeFormatted = round($bytes / (1024 * 1024), 1) . ' MB';
+            }
+
             return [
                 'id' => $doc->id,
                 'reference' => 'DOC-' . substr($doc->id, 0, 6),
                 'titre' => $doc->title,
                 'type' => $mappedType,
-                'produit' => $doc->documentable_type === 'App\\Models\\Product' ? ($doc->documentable->nom ?? 'Produit') : 'Général',
-                'version' => 'v' . $doc->version,
-                'taille' => '2.4 MB', // mock size
+                'produit' => $doc->documentable_type === 'App\\Models\\Product' ? ($doc->documentable->nom ?? 'Produit Associé') : 'Général',
+                'version' => 'v' . ($doc->version ?? '1.0'),
+                'taille' => $sizeFormatted,
                 'dateExpiration' => $doc->expiration_date ? \Carbon\Carbon::parse($doc->expiration_date)->format('Y-m-d') : 'N/A',
                 'statut' => $status,
+                'paysAutorises' => ['FR', 'CI', 'SN'],
                 'documentable_id' => $doc->documentable_id,
                 'documentable_type' => $doc->documentable_type,
                 'url' => config('app.url') . \Illuminate\Support\Facades\Storage::url($doc->file_path),
@@ -48,7 +57,9 @@ class DocumentController extends Controller
             ];
         });
         
-        return response()->json($documents);
+        return response()->json([
+            'data' => $documents
+        ]);
     }
 
     public function store(Request $request)

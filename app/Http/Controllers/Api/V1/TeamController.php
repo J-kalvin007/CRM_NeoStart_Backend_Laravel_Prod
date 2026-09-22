@@ -33,9 +33,8 @@ class TeamController extends Controller
         requestBody: new OA\RequestBody(
             required: true,
             content: new OA\JsonContent(
-                required: ['sector_id', 'name'],
+                required: ['name'],
                 properties: [
-                    new OA\Property(property: 'sector_id', type: 'string', format: 'uuid'),
                     new OA\Property(property: 'name', type: 'string'),
                     new OA\Property(property: 'manager_id', type: 'string', format: 'uuid', nullable: true)
                 ]
@@ -82,7 +81,6 @@ class TeamController extends Controller
             required: true,
             content: new OA\JsonContent(
                 properties: [
-                    new OA\Property(property: 'sector_id', type: 'string', format: 'uuid'),
                     new OA\Property(property: 'name', type: 'string'),
                     new OA\Property(property: 'manager_id', type: 'string', format: 'uuid', nullable: true)
                 ]
