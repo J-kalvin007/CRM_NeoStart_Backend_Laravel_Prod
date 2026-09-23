@@ -209,10 +209,10 @@ class ActivityController extends Controller
         $validatedData = $request->validated();
         $targetStatus = $validatedData['statut'] ?? null;
 
-        // Contrôle de sécurité 1: Démarrer la visite (en_cours) nécessite que la visite soit validée
-        if ($targetStatus === 'en_cours' && !in_array(strtolower($activity->statut), ['validee', 'validated', 'en_cours', 'realisee'])) {
+        // Contrôle de sécurité 1: Démarrer la visite (en_cours) nécessite que la visite ne soit pas annulée ou refusée
+        if ($targetStatus === 'en_cours' && !in_array(strtolower($activity->statut), ['planifiee', 'planifiée', 'validee', 'validée', 'validated', 'en_attente_validation', 'en_cours', 'realisee'])) {
             return response()->json([
-                'message' => 'Démarrage impossible : Cette visite n\'a pas encore été validée par votre responsable.'
+                'message' => 'Démarrage impossible : Cette visite a été annulée ou refusée.'
             ], 403);
         }
 

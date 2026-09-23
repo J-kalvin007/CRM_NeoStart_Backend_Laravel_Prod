@@ -75,7 +75,16 @@ class ValidationController extends Controller
 
         $pendingActivities = \App\Models\Activity::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)
             ->with(['contact', 'account', 'delegue', 'user'])
-            ->whereIn('report_status', ['submitted', 'soumis'])
+            ->where(function ($q) {
+                $q->whereIn('report_status', ['submitted', 'soumis', 'en_attente'])
+                  ->orWhere(function ($q2) {
+                      $q2->whereIn('statut', ['realisee', 'effectuee'])
+                         ->where(function ($q3) {
+                             $q3->whereNull('report_status')
+                                ->orWhereNotIn('report_status', ['validated', 'approved']);
+                         });
+                  });
+            })
             ->get()
             ->map(function ($act) {
                 $contactName = $act->contact?->name ?? $act->contact_name ?? 'Dr. Praticien';
