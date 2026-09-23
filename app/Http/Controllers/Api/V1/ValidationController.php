@@ -89,10 +89,9 @@ class ValidationController extends Controller
             ->map(function ($act) {
                 $contactName = $act->contact?->name ?? $act->contact_name ?? 'Dr. Praticien';
                 $accountName = $act->account?->name ?? $act->establishment ?? 'Établissement';
-                $isReport = in_array(strtolower($act->report_status ?? ''), ['submitted', 'soumis']);
                 return [
                     'id' => (string) $act->id,
-                    'type' => $isReport ? 'activity_report' : 'visit',
+                    'type' => 'activity_report',
                     'activity_type' => $act->activity_type,
                     'date_activite' => $act->date_activite?->toDateString(),
                     'heure_debut' => $act->heure_debut,
