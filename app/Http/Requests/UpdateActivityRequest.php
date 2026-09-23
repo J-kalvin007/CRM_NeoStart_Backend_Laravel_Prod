@@ -37,6 +37,7 @@ class UpdateActivityRequest extends FormRequest
             'gps_fin_lat'    => 'nullable|numeric|between:-90,90',
             'gps_fin_lng'    => 'nullable|numeric|between:-180,180',
             'signature'      => 'nullable|string',
+            'motif'          => 'nullable|string',
         ];
     }
 }

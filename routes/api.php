@@ -200,6 +200,7 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('tour-plans', TourPlanController::class);
         Route::post('activities/duo', [ActivityController::class, 'storeDuo']);
         Route::post('activities/{activity}/validate', [ActivityController::class, 'validateActivity']);
+        Route::post('activities/{activity}/reschedule', [ActivityController::class, 'reschedule']);
         Route::apiResource('activities', ActivityController::class);
         Route::post('activities/{activity}/clm-analytics', [ClmAnalyticController::class, 'store']);
         Route::post('activities/{activity}/objections', [ObjectionController::class, 'storeForActivity']);

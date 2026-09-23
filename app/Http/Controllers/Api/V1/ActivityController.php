@@ -305,6 +305,53 @@ class ActivityController extends Controller
         ]);
     }
 
+    public function reschedule(Request $request, string $id)
+    {
+        $activity = Activity::findOrFail($id);
+
+        if ($activity->is_locked) {
+            return response()->json(['message' => 'Cette activité est verrouillée et ne peut pas être reprogrammée.'], 403);
+        }
+
+        $validated = $request->validate([
+            'date_activite' => 'required|date',
+            'heure_debut'   => 'nullable|string',
+            'heure_fin'     => 'nullable|string',
+            'motif'         => 'required|string', // Justificatif obligatoire
+        ]);
+
+        $prevStatus = $activity->statut;
+        $isAlreadyValidated = in_array(strtolower($prevStatus), ['validee', 'validated']) ||
+            ($activity->tourPlan && in_array(strtolower($activity->tourPlan->statut), ['valide', 'validated', 'approuve']));
+
+        // Si le planning global avait déjà été validé, conserver le statut validé
+        $newStatus = $isAlreadyValidated ? 'validee' : ($prevStatus === 'manquee' ? 'planifiee' : $prevStatus);
+
+        $justification = "[REPROGRAMMÉE]: " . $validated['motif'];
+        $notes = $activity->notes ? $activity->notes . "\n" . $justification : $justification;
+
+        $updateData = [
+            'date_activite' => $validated['date_activite'],
+            'notes' => $notes,
+            'motif' => $validated['motif'],
+            'statut' => $newStatus,
+        ];
+
+        if (!empty($validated['heure_debut'])) {
+            $updateData['heure_debut'] = $validated['heure_debut'];
+        }
+        if (!empty($validated['heure_fin'])) {
+            $updateData['heure_fin'] = $validated['heure_fin'];
+        }
+
+        $activity->update($updateData);
+
+        return response()->json([
+            'message' => 'Visite reprogrammée avec succès sans nécessiter de nouvelle validation manager.',
+            'data' => new ActivityResource($activity->load(['delegue', 'contact', 'account', 'products']))
+        ]);
+    }
+
     public function storeDuo(Request $request)
     {
         $validated = $request->validate([

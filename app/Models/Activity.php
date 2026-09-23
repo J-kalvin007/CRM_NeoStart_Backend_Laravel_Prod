@@ -142,29 +142,11 @@ class Activity extends Model
     public static function markMissedPastActivities(): void
     {
         $today = now()->toDateString();
-        $currentTime = now()->format('H:i:s');
 
-        // 1. Visites sur des dates antérieures non réalisées
+        // Visites sur des dates antérieures révolues non réalisées
         static::whereDate('date_activite', '<', $today)
             ->whereNotIn('statut', ['realisee', 'effectuee', 'manquee', 'annulee'])
             ->update(['statut' => 'manquee']);
-
-        // 2. Visites d'aujourd'hui dont l'heure prévue (+ 60 minutes) est dépassée
-        $todayActivities = static::whereDate('date_activite', $today)
-            ->whereNotIn('statut', ['realisee', 'effectuee', 'manquee', 'annulee'])
-            ->get();
-
-        foreach ($todayActivities as $act) {
-            $timeStr = $act->heure_fin ?: $act->heure_debut;
-            if ($timeStr) {
-                try {
-                    $scheduledTime = \Carbon\Carbon::parse($today . ' ' . $timeStr)->addMinutes(60)->format('H:i:s');
-                    if ($currentTime > $scheduledTime) {
-                        $act->update(['statut' => 'manquee']);
-                    }
-                } catch (\Exception $e) {}
-            }
-        }
     }
 
     /**
