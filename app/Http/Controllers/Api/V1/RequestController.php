@@ -49,6 +49,20 @@ class RequestController extends Controller
 
         $delegateRequest = DelegateRequest::create($data);
 
+        // Notify supervisor / manager
+        $user = Auth::user();
+        $manager = $user?->manager ?? \App\Models\User::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)->where('id', '!=', $user->id)->first();
+        if ($manager) {
+            NotificationController::sendNotification(
+                $manager,
+                'Nouvelle demande soumise',
+                "Le délégué {$user->name} a soumis une demande ({$delegateRequest->request_type}).",
+                'request',
+                'superviseur',
+                ['request_id' => $delegateRequest->id]
+            );
+        }
+
         return response()->json([
             'status' => 'success',
             'message' => 'Demande soumise avec succès.',

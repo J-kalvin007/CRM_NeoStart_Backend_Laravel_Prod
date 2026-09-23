@@ -71,18 +71,21 @@ class CoachingController extends Controller
         $validated['supervisor_id'] = Auth::id();
         $validated['objectifs_prevus_json'] = $validated['objectifs_prevus'];
         unset($validated['objectifs_prevus']);
-        $validated['status'] = 'planifie';
+        $validated['status'] = 'active';
 
         $session = CoachingSession::create($validated);
 
-        $delegate = User::find($session->delegate_id);
-        app(NotificationService::class)->send(
-            $delegate,
-            'Visite en Duo programmée',
-            'Votre manager a planifié une visite conjointe avec vous.',
-            'duo_visit',
-            ['session_id' => $session->id]
-        );
+        $delegate = User::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)->find($session->delegate_id);
+        if ($delegate) {
+            NotificationController::sendNotification(
+                $delegate,
+                'Visite en Duo programmée',
+                'Votre manager a planifié une visite conjointe avec vous.',
+                'coaching',
+                'delegue',
+                ['session_id' => $session->id]
+            );
+        }
 
         return response()->json([
             'status' => 'success',

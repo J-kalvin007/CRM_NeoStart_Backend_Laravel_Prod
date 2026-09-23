@@ -159,6 +159,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/notifications', [NotificationController::class, 'store']);
         Route::post('/notifications/mark-all-as-read', [NotificationController::class, 'markAllAsRead']);
         Route::post('/notifications/{id}/mark-as-read', [NotificationController::class, 'markAsRead']);
+        Route::delete('/notifications/{id}', [NotificationController::class, 'destroy']);
 
         // ── Superviseur ──────────────────────────────────────────
         Route::get('/supervisor/dashboard', [SupervisorDashboardController::class, 'dashboard']);

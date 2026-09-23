@@ -67,10 +67,10 @@ class TourPlanController extends Controller
         if ($user?->manager) {
             $managers->push($user->manager);
         }
-        $otherManagers = User::whereHas('roles', fn($q) => $q->whereIn('name', ['superviseur', 'supervisor', 'manager', 'Manager', 'super_admin']))->get();
+        $otherManagers = User::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)->whereHas('roles', fn($q) => $q->whereIn('name', ['superviseur', 'supervisor', 'manager', 'Manager', 'super_admin']))->get();
         $managers = $managers->concat($otherManagers)->unique('id');
         if ($managers->isEmpty()) {
-            $fallback = User::where('email', 'cmoucharif@gmail.com')->first();
+            $fallback = User::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)->where('id', '!=', $user->id)->first();
             if ($fallback) $managers->push($fallback);
         }
 

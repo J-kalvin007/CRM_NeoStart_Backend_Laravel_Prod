@@ -66,7 +66,13 @@ class NotificationController extends Controller
             return;
         }
 
-        $userList = is_iterable($users) ? $users : [$users];
+        if ($users instanceof \Illuminate\Support\Collection) {
+            $userList = $users;
+        } elseif (is_array($users)) {
+            $userList = $users;
+        } else {
+            $userList = [$users];
+        }
 
         foreach ($userList as $user) {
             if (!$user || empty($user->id)) {
@@ -92,18 +98,18 @@ class NotificationController extends Controller
                 ]);
             } catch (\Throwable $e) {
                 Log::error("Erreur enregistrement notification DB: " . $e->getMessage());
+                throw $e;
             }
 
             // 2. Envoi d'Email au destinataire
             if (!empty($user->email)) {
                 try {
-                    Mail::raw(
-                        "Bonjour {$user->name},\n\n{$message}\n\nConsultez l'application SKYNITY pour le suivi complet.\n\nCordialement,\nL'équipe SKYNITY CRM",
-                        function ($mail) use ($user, $title) {
-                            $mail->to($user->email)
-                                 ->subject("[SKYNITY] " . $title);
-                        }
-                    );
+                    Mail::to($user->email)->send(new \App\Mail\SkynityNotificationMail(
+                        $user,
+                        $title,
+                        $message,
+                        $extra['action_url'] ?? null
+                    ));
                 } catch (\Throwable $e) {
                     Log::warning("Alerte envoi email notification ({$user->email}): " . $e->getMessage());
                 }
@@ -221,6 +227,25 @@ class NotificationController extends Controller
             ->where('notifiable_id', $request->user()->id)
             ->whereNull('read_at')
             ->update(['read_at' => now(), 'updated_at' => now()]);
+
+        return response()->json(null, 204);
+    }
+
+    #[OA\Delete(
+        path: '/api/v1/notifications/{id}',
+        summary: 'Supprimer une notification',
+        security: [['bearerAuth' => []]],
+        tags: ['Notifications'],
+        responses: [
+            new OA\Response(response: 204, description: 'Notification supprimée')
+        ]
+    )]
+    public function destroy(Request $request, string $id)
+    {
+        DB::table('notifications')
+            ->where('id', $id)
+            ->where('notifiable_id', $request->user()->id)
+            ->delete();
 
         return response()->json(null, 204);
     }

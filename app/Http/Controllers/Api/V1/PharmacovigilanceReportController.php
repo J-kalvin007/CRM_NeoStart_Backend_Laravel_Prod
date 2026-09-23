@@ -70,15 +70,16 @@ class PharmacovigilanceReportController extends Controller
         $report = PharmacovigilanceReport::create($validated);
 
         // Déclencher une alerte immédiate vers le superviseur (et/ou direction médicale)
-        $manager = User::where('id', auth()->user()->team->manager_id ?? null)->first();
+        $manager = User::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)->where('id', auth()->user()->team->manager_id ?? null)->first() 
+            ?? User::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)->where('id', '!=', auth()->id())->first();
         if ($manager) {
-            app(NotificationService::class)->send(
+            NotificationController::sendNotification(
                 $manager,
                 'Alerte Pharmacovigilance',
-                "Un signalement a été soumis par " . auth()->user()->name,
+                "Un signalement de pharmacovigilance (gravité : {$report->severity}) a été soumis par " . auth()->user()->name,
                 'pharmacovigilance',
-                ['report_id' => $report->id],
-                'URGENT'
+                'superviseur',
+                ['report_id' => $report->id]
             );
         }
 

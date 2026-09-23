@@ -21,7 +21,7 @@ class PerimeterScope implements Scope
 
         $user = Auth::user();
         $table = $model->getTable();
-        $operationalTables = ['contacts', 'activities', 'tour_plans', 'sample_movements', 'objectifs', 'accounts', 'kol_profiles'];
+        $operationalTables = ['contacts', 'activities', 'tour_plans', 'sample_movements', 'objectifs', 'accounts', 'kol_profiles', 'expenses'];
 
         // 1. Holding / Global admin & superadmin bypass isolation
         if ($user->can('scope:global') || $user->hasAnyRole(['superadmin', 'admin'])) {
@@ -64,10 +64,21 @@ class PerimeterScope implements Scope
         // Si l'utilisateur n'a aucun périmètre spécifique configuré, il accède à ses propres enregistrements (user_id = user->id)
         if (empty($userScopeIds)) {
             if ($table === 'users') {
-                $builder->where('id', $user->id);
+                $builder->where(function($q) use ($user) {
+                    $q->where('id', $user->id);
+                    if (!empty($user->manager_id)) {
+                        $q->orWhere('id', $user->manager_id);
+                    }
+                    $q->orWhere('manager_id', $user->id);
+                });
             } elseif (in_array($table, $operationalTables)) {
-                $builder->where($table . '.user_id', $user->id);
-            } elseif (in_array($table, ['products', 'categories', 'product_types', 'specialities', 'galenic_forms'])) {
+                $builder->where(function($q) use ($table, $user) {
+                    $q->where($table . '.user_id', $user->id);
+                    $q->orWhereIn($table . '.user_id', function($sub) use ($user) {
+                        $sub->select('id')->from('users')->where('manager_id', $user->id);
+                    });
+                });
+            } elseif (in_array($table, ['products', 'categories', 'product_types', 'specialities', 'galenic_forms', 'teams'])) {
                 // Les catalogues référentiels sont accessibles à tous les utilisateurs authentifiés
                 return;
             } else {
@@ -86,7 +97,7 @@ class PerimeterScope implements Scope
         }
 
         // 5. Filtrer les tables opérationnelles
-        $operationalTables = ['contacts', 'activities', 'tour_plans', 'sample_movements', 'objectifs', 'accounts', 'kol_profiles'];
+        $operationalTables = ['contacts', 'activities', 'tour_plans', 'sample_movements', 'objectifs', 'accounts', 'kol_profiles', 'expenses'];
         
         if (in_array($table, $operationalTables) || $table === 'users') {
             $columnToFilter = $table === 'users' ? 'id' : 'user_id';

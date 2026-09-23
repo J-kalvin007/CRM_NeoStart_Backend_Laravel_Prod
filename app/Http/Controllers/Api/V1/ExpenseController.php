@@ -187,13 +187,14 @@ class ExpenseController extends Controller
 
         // Notification manager
         $user = Auth::user();
-        $manager = $user?->manager ?? \App\Models\User::whereHas('roles', fn($q) => $q->whereIn('name', ['superviseur', 'supervisor', 'manager', 'Manager', 'Superviseur', 'dir-commercial']))->first();
+        $manager = $user?->manager ?? \App\Models\User::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)->where('id', '!=', $user->id)->first();
         if ($manager && $user) {
-            app(\App\Services\NotificationService::class)->send(
+            NotificationController::sendNotification(
                 $manager,
                 'Nouvelle note de frais soumise',
                 "Le délégué {$user->name} a soumis une note de frais de {$expense->amount} {$expense->currency}.",
                 'expense',
+                'superviseur',
                 ['expense_id' => $expense->id]
             );
         }
@@ -274,11 +275,12 @@ class ExpenseController extends Controller
             if ($v['status'] === 'rejected' && !empty($v['rejection_reason'])) {
                 $msg .= " Motif : " . $v['rejection_reason'];
             }
-            app(\App\Services\NotificationService::class)->send(
+            NotificationController::sendNotification(
                 $expense->user,
                 'Note de frais ' . ucfirst($statusLabel),
                 $msg,
                 'expense',
+                'delegue',
                 ['expense_id' => $expense->id]
             );
         }

@@ -63,7 +63,6 @@ class TeamApiResourceTest extends TestCase
 
         Team::create([
             'name' => 'Équipe Nord',
-            'sector_id' => $sector->id,
             'manager_id' => $admin->id,
         ]);
 
@@ -71,7 +70,6 @@ class TeamApiResourceTest extends TestCase
 
         $response->assertOk();
         $response->assertJsonFragment(['name' => 'Équipe Nord']);
-        $response->assertJsonPath('data.0.sector_id', $sector->id);
         $response->assertJsonPath('data.0.manager_id', $admin->id);
     }
 
@@ -96,39 +94,13 @@ class TeamApiResourceTest extends TestCase
             'status' => true,
         ]);
 
-        $region = Region::create([
-            'subsidiary_id' => $subsidiary->id,
-            'name' => 'Île-de-France',
-        ]);
-
-        $territory = Territory::create([
-            'region_id' => $region->id,
-            'name' => 'Paris',
-        ]);
-
-        $zone = Zone::create([
-            'territory_id' => $territory->id,
-            'name' => 'Paris Sud',
-            'code' => 'Z-Paris-Sud',
-            'is_active' => true,
-        ]);
-
-        $sector = Sector::create([
-            'zone_id' => $zone->id,
-            'name' => 'Secteur Sud',
-            'code' => 'SEC-002',
-            'is_active' => true,
-        ]);
-
         $team = Team::create([
             'name' => 'Équipe Sud',
-            'sector_id' => $sector->id,
             'manager_id' => $admin->id,
         ]);
 
         $response = $this->actingAs($admin, 'sanctum')->putJson('/api/v1/teams/' . $team->id, [
             'name' => 'Équipe Sud',
-            'sector_id' => $sector->id,
             'manager_id' => $manager->id,
         ]);
 
