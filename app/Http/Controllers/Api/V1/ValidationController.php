@@ -120,10 +120,31 @@ class ValidationController extends Controller
                 ];
             });
 
+        $pendingExpenses = \App\Models\Expense::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)
+            ->with(['user'])
+            ->whereIn('status', ['submitted', 'en_attente'])
+            ->get()
+            ->map(function ($exp) {
+                return [
+                    'id' => (string) $exp->id,
+                    'type' => 'expense',
+                    'nom' => $exp->title,
+                    'title' => $exp->title,
+                    'category' => $exp->type,
+                    'amount' => $exp->amount,
+                    'currency' => $exp->currency ?? 'FCFA',
+                    'expense_date' => $exp->expense_date?->toDateString(),
+                    'created_by' => $exp->user ? ($exp->user->name ?: $exp->user->email) : 'Délégué Médical',
+                    'user' => $exp->user ? ['id' => (string) $exp->user->id, 'name' => $exp->user->name, 'email' => $exp->user->email] : null,
+                    'created_at' => $exp->created_at,
+                ];
+            });
+
         $pending = $pendingContacts
             ->concat($pendingAccounts)
             ->concat($pendingActivities)
             ->concat($pendingTourPlans)
+            ->concat($pendingExpenses)
             ->sortByDesc('created_at')
             ->values();
 
@@ -194,6 +215,29 @@ class ValidationController extends Controller
             }
 
             return response()->json(['message' => 'Plan de tournée validé avec succès', 'data' => $plan]);
+        }
+
+        if ($type === 'expense') {
+            $expense = \App\Models\Expense::findOrFail($id);
+            $expense->update([
+                'status' => 'approved',
+                'approved_by' => auth()->id(),
+                'approved_at' => now(),
+            ]);
+
+            $recipient = $expense->user;
+            if ($recipient) {
+                NotificationController::sendNotification(
+                    $recipient,
+                    'Note de frais validée',
+                    "Votre note de frais '{$expense->title}' ({$expense->amount} {$expense->currency}) a été approuvée.",
+                    'expense',
+                    'delegate',
+                    ['id' => (string) $expense->id, 'type' => 'expense']
+                );
+            }
+
+            return response()->json(['message' => 'Note de frais approuvée avec succès', 'data' => $expense]);
         }
 
         $model = $this->getModel($type, $id);
@@ -290,6 +334,29 @@ class ValidationController extends Controller
             }
 
             return response()->json(['message' => 'Plan de tournée rejeté avec succès', 'data' => $plan]);
+        }
+
+        if ($type === 'expense') {
+            $expense = \App\Models\Expense::findOrFail($id);
+            $expense->update([
+                'status' => 'rejected',
+                'rejection_reason' => $reason ?? 'Non conforme',
+                'approved_by' => auth()->id(),
+            ]);
+
+            $recipient = $expense->user;
+            if ($recipient) {
+                NotificationController::sendNotification(
+                    $recipient,
+                    'Note de frais refusée',
+                    "Votre note de frais '{$expense->title}' n'a pas été validée par votre superviseur." . ($reason ? " Motif : {$reason}" : ""),
+                    'expense',
+                    'delegate',
+                    ['id' => (string) $expense->id, 'type' => 'expense']
+                );
+            }
+
+            return response()->json(['message' => 'Note de frais refusée avec succès', 'data' => $expense]);
         }
 
         $model = $this->getModel($type, $id);
