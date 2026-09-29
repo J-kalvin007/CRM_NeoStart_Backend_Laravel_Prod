@@ -12,7 +12,8 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        //
+        // Middleware de filtrage dynamique du périmètre organisationnel (header X-Organizational-Unit-Id)
+        $middleware->appendToGroup('api', \App\Http\Middleware\PerimeterScopeMiddleware::class);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         $exceptions->shouldRenderJsonWhen(function (\Illuminate\Http\Request $request, \Throwable $e) {

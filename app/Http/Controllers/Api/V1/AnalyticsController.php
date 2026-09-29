@@ -75,6 +75,22 @@ class AnalyticsController extends Controller
             $q->whereHas('potential', fn($sq) => $sq->where('code', 'LOW'))->orWhereNull('potential_id');
         })->count();
 
+        // Calculate sales by subsidiary
+        $salesBySubQuery = Sale::query();
+        if ($period !== 'ALL') {
+            $salesBySubQuery->whereYear('created_at', $period);
+        }
+        $salesGroups = $salesBySubQuery->select('subsidiary_id', DB::raw('sum(amount) as total'))
+            ->groupBy('subsidiary_id')
+            ->get();
+        
+        $sales_by_subsidiary = [];
+        foreach ($salesGroups as $sg) {
+            if ($sg->subsidiary_id) {
+                $sales_by_subsidiary[$sg->subsidiary_id] = (float) $sg->total;
+            }
+        }
+
         return response()->json([
             'total_sales' => $total_sales,
             'sales_count' => $sales_count,
@@ -85,7 +101,8 @@ class AnalyticsController extends Controller
                 'fort' => $cible_a,
                 'moyen' => $cible_b,
                 'faible' => $cible_c,
-            ]
+            ],
+            'sales_by_subsidiary' => $sales_by_subsidiary
         ]);
     }
     #[OA\Get(

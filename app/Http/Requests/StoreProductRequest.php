@@ -20,7 +20,9 @@ class StoreProductRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'subsidiary_id'   => 'required|uuid|exists:subsidiaries,id',
+            'subsidiary_id'   => 'nullable|uuid|exists:subsidiaries,id',
+            'organizational_unit_ids' => 'nullable|array',
+            'organizational_unit_ids.*' => 'uuid|exists:organizational_units,id',
             'product_type_id' => 'nullable|uuid|exists:product_types,id',
             'nom'             => 'required|string|max:255',
             'code'            => 'nullable|string|max:100|unique:products,code',

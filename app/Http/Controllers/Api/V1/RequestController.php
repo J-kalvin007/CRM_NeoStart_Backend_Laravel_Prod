@@ -69,4 +69,86 @@ class RequestController extends Controller
             'data' => $delegateRequest
         ], 201);
     }
+
+    #[OA\Get(
+        path: '/api/v1/requests',
+        summary: 'Lister les demandes',
+        security: [['bearerAuth' => []]],
+        tags: ['Requests'],
+        responses: [
+            new OA\Response(response: 200, description: 'Liste des demandes')
+        ]
+    )]
+    public function index()
+    {
+        $requests = DelegateRequest::where('user_id', Auth::id())->latest()->get();
+        return response()->json($requests);
+    }
+
+    #[OA\Put(
+        path: '/api/v1/requests/{id}',
+        summary: 'Mettre à jour une demande',
+        security: [['bearerAuth' => []]],
+        tags: ['Requests'],
+        parameters: [
+            new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))
+        ],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                properties: [
+                    new OA\Property(property: 'request_type', type: 'string'),
+                    new OA\Property(property: 'contact_id', type: 'string', format: 'uuid', nullable: true),
+                    new OA\Property(property: 'reason', type: 'string'),
+                    new OA\Property(property: 'priority', type: 'string', enum: ['low', 'normal', 'high']),
+                    new OA\Property(property: 'status', type: 'string'),
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Demande mise à jour')
+        ]
+    )]
+    public function update(Request $request, $id)
+    {
+        $delegateRequest = DelegateRequest::where('user_id', Auth::id())->findOrFail($id);
+
+        $data = $request->validate([
+            'request_type' => 'sometimes|required|string',
+            'contact_id' => 'nullable|uuid|exists:contacts,id',
+            'reason' => 'nullable|string',
+            'priority' => 'sometimes|required|in:low,normal,high',
+            'status' => 'nullable|string',
+        ]);
+
+        $delegateRequest->update($data);
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $delegateRequest
+        ]);
+    }
+
+    #[OA\Delete(
+        path: '/api/v1/requests/{id}',
+        summary: 'Supprimer une demande',
+        security: [['bearerAuth' => []]],
+        tags: ['Requests'],
+        parameters: [
+            new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Demande supprimée')
+        ]
+    )]
+    public function destroy($id)
+    {
+        $delegateRequest = DelegateRequest::where('user_id', Auth::id())->findOrFail($id);
+        $delegateRequest->delete();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Demande supprimée.'
+        ]);
+    }
 }

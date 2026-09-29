@@ -32,6 +32,7 @@ use App\Http\Controllers\Api\V1\ExpenseController;
 use App\Http\Controllers\Api\V1\RoleController;
 use App\Http\Controllers\Api\V1\PermissionController;
 use App\Http\Controllers\Api\V1\ObjectifController;
+use App\Http\Controllers\Api\V1\ObjectifTypeController;
 use App\Http\Controllers\Api\V1\CampaignController;
 use App\Http\Controllers\Api\V1\KolProfileController;
 use App\Http\Controllers\Api\V1\NotificationController;
@@ -45,9 +46,13 @@ use App\Http\Controllers\Api\V1\CoachingController;
 use App\Http\Controllers\Api\V1\ObjectionController;
 use App\Http\Controllers\Api\V1\ValidationController;
 use App\Http\Controllers\Api\V1\SupervisorDashboardController;
+use App\Http\Controllers\Api\V1\RequestController;
 
 use App\Http\Controllers\Api\V1\LaboratoryController;
 use App\Http\Controllers\Api\V1\TherapeuticClassController;
+use App\Http\Controllers\Api\V1\HierarchyConfigController;
+use App\Http\Controllers\Api\V1\DynamicOrganizationalUnitController;
+use App\Http\Controllers\Api\V1\UserScopeController;
 
 Route::get('/login', fn() => response()->json(['message' => 'Non authentifié'], 401))->name('login');
 
@@ -118,6 +123,41 @@ Route::prefix('v1')->group(function () {
             Route::get('flat', [\App\Http\Controllers\Api\V1\OrganizationController::class, 'flat']);
         });
 
+        // ── Dynamic Hierarchy Management ──────────────────────────
+        Route::prefix('hierarchy')->group(function () {
+            // Organization configurations
+            Route::get('configs', [\App\Http\Controllers\Api\V1\HierarchyConfigController::class, 'index']);
+            Route::post('configs', [\App\Http\Controllers\Api\V1\HierarchyConfigController::class, 'store']);
+            Route::get('configs/{id}', [\App\Http\Controllers\Api\V1\HierarchyConfigController::class, 'show']);
+            Route::put('configs/{id}', [\App\Http\Controllers\Api\V1\HierarchyConfigController::class, 'update']);
+            Route::delete('configs/{id}', [\App\Http\Controllers\Api\V1\HierarchyConfigController::class, 'destroy']);
+            Route::post('configs/{id}/clone', [\App\Http\Controllers\Api\V1\HierarchyConfigController::class, 'clone']);
+            Route::get('configs/{id}/tree', [\App\Http\Controllers\Api\V1\HierarchyConfigController::class, 'getTree']);
+
+            // Dynamic organizational units
+            Route::get('units', [\App\Http\Controllers\Api\V1\DynamicOrganizationalUnitController::class, 'index']);
+            Route::post('units', [\App\Http\Controllers\Api\V1\DynamicOrganizationalUnitController::class, 'store']);
+            Route::get('units/{id}', [\App\Http\Controllers\Api\V1\DynamicOrganizationalUnitController::class, 'show']);
+            Route::put('units/{id}', [\App\Http\Controllers\Api\V1\DynamicOrganizationalUnitController::class, 'update']);
+            Route::delete('units/{id}', [\App\Http\Controllers\Api\V1\DynamicOrganizationalUnitController::class, 'destroy']);
+            Route::put('units/{id}/move', [\App\Http\Controllers\Api\V1\DynamicOrganizationalUnitController::class, 'move']);
+            Route::get('configurations', [\App\Http\Controllers\Api\V1\DynamicOrganizationalUnitController::class, 'getConfigurations']);
+            Route::get('configurations/{configId}/levels', [\App\Http\Controllers\Api\V1\DynamicOrganizationalUnitController::class, 'getLevels']);
+
+            // User scopes management
+            Route::get('user-scopes', [\App\Http\Controllers\Api\V1\UserScopeController::class, 'index']);
+            Route::post('user-scopes', [\App\Http\Controllers\Api\V1\UserScopeController::class, 'store']);
+            Route::put('user-scopes/{id}', [\App\Http\Controllers\Api\V1\UserScopeController::class, 'update']);
+            Route::delete('user-scopes/{id}', [\App\Http\Controllers\Api\V1\UserScopeController::class, 'destroy']);
+            Route::put('user-scopes/{id}/set-primary', [\App\Http\Controllers\Api\V1\UserScopeController::class, 'setPrimary']);
+            
+            // User perimeter information
+            Route::get('accessible-units', [\App\Http\Controllers\Api\V1\UserScopeController::class, 'getAccessibleUnits']);
+            Route::get('accessible-users', [\App\Http\Controllers\Api\V1\UserScopeController::class, 'getAccessibleUsers']);
+            Route::get('manageable-units', [\App\Http\Controllers\Api\V1\UserScopeController::class, 'getManageableUnits']);
+            Route::get('units/{unitId}/hierarchy-path', [\App\Http\Controllers\Api\V1\UserScopeController::class, 'getHierarchyPath']);
+        });
+
         Route::prefix('config')->group(function () {
             Route::get('account-types', [ConfigurationController::class, 'accountTypeIndex']);
             Route::post('account-types', [ConfigurationController::class, 'accountTypeStore']);
@@ -185,7 +225,18 @@ Route::prefix('v1')->group(function () {
 
         Route::post('contacts/check-duplicates', [ContactController::class, 'checkDuplicates']);
         Route::post('contacts/arbitrage', [ContactController::class, 'arbitrage']);
+        Route::post('contacts/import', [\App\Http\Controllers\Api\V1\ContactImportController::class, 'import']);
+        Route::get('contacts/import/template', [\App\Http\Controllers\Api\V1\ContactImportController::class, 'downloadTemplate']);
+        Route::delete('contacts/bulk-delete', [ContactController::class, 'bulkDelete']);
         Route::apiResource('contacts', ContactController::class);
+
+        // ── Import Établissements ──────────────────────────────────────────
+        Route::post('accounts/import', [\App\Http\Controllers\Api\V1\AccountImportController::class, 'import']);
+        Route::get('accounts/import/template', [\App\Http\Controllers\Api\V1\AccountImportController::class, 'downloadTemplate']);
+        
+        // ── Import Produits ────────────────────────────────────────────────
+        Route::post('products/import', [\App\Http\Controllers\Api\V1\ProductImportController::class, 'import']);
+        Route::get('products/import/template', [\App\Http\Controllers\Api\V1\ProductImportController::class, 'downloadTemplate']);
 
         Route::apiResource('categories', CategoryController::class);
 
@@ -268,7 +319,9 @@ Route::prefix('v1')->group(function () {
 
         // ── Objectifs & Performance ────────────────────────────
         Route::get('me/objectifs-summary', [ObjectifController::class, 'summary']);
+        Route::get('objectifs/{objectif}/history', [ObjectifController::class, 'history']);
         Route::apiResource('objectifs', ObjectifController::class);
+        Route::apiResource('objectif-types', ObjectifTypeController::class);
         Route::get('indicators', [\App\Http\Controllers\Api\V1\IndicatorController::class, 'index']);
 
         // ── Congés (Leaves) ────────────────────────────────────
@@ -277,7 +330,7 @@ Route::prefix('v1')->group(function () {
         Route::patch('leaves/{id}/status', [LeaveController::class, 'updateStatus']);
 
         // ── Demandes & Escalade ────────────────────────────────
-        Route::post('requests', [\App\Http\Controllers\Api\V1\RequestController::class, 'store']);
+        Route::apiResource('requests', \App\Http\Controllers\Api\V1\RequestController::class)->except(['show']);
 
         // ── Formations (Trainings) ─────────────────────────────
         // Route::get('trainings', [TrainingController::class, 'index']);

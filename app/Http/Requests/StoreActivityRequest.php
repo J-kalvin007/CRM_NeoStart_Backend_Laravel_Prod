@@ -69,6 +69,7 @@ class StoreActivityRequest extends FormRequest
             'statut'         => 'in:planifiee,validee,refusee,en_cours,realisee,manquee,annulee,brouillon,soumis_definitif,en_attente,en attente de validation,soumis',
             'local_uuid'     => 'nullable|string',
             'signature_base64'=> 'nullable|string',
+            'user_id'        => 'nullable|string|exists:users,id',
             
             // Samples
             'samples'              => 'nullable|array',
@@ -76,6 +77,13 @@ class StoreActivityRequest extends FormRequest
             'samples.*.quantite'   => 'required_with:samples|integer|min:1',
             'samples.*.num_lot'    => 'nullable|string',
             'samples.*.date_peremption' => 'nullable|date',
+            
+            // Products
+            'products'              => 'nullable|array',
+            'products.*.product_id' => 'required_with:products|string|exists:products,id',
+            'products.*.quantity'   => 'nullable|integer',
+            'products.*.customer_interest' => 'nullable|string',
+            'products.*.remarques'  => 'nullable|string',
         ];
     }
 }

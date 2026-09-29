@@ -30,8 +30,12 @@ class ProductController extends Controller
     )]
     public function index(Request $request)
     {
-        $query = Product::with(['productType', 'laboratory', 'therapeuticClass', 'galenicForm'])
-            ->when($request->product_type_id, fn($q, $v) => $q->where('product_type_id', $v))
+        $query = Product::with(['productType', 'laboratory', 'therapeuticClass', 'galenicForm']);
+        
+        $user = auth()->user();
+        $query->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class);
+
+        $query = $query->when($request->product_type_id, fn($q, $v) => $q->where('product_type_id', $v))
             ->when($request->statut, fn($q, $v) => $q->where('statut', $v))
             ->when($request->boolean('stock_alerte'), fn($q) => $q->scopeStockAlerte())
             ->when($request->search, fn($q, $v) => $q->where(function ($q) use ($v) {
@@ -80,8 +84,17 @@ class ProductController extends Controller
     )]
     public function store(StoreProductRequest $request)
     {
-        $product = Product::create($request->validated());
-        return new ProductResource($product->load(['productType', 'laboratory', 'therapeuticClass', 'galenicForm']));
+        $validated = $request->validated();
+        $orgUnitIds = $validated['organizational_unit_ids'] ?? [];
+        unset($validated['organizational_unit_ids']);
+
+        $product = Product::create($validated);
+
+        if (!empty($orgUnitIds)) {
+            $product->organizationalUnits()->sync($orgUnitIds);
+        }
+
+        return new ProductResource($product->load(['productType', 'laboratory', 'therapeuticClass', 'galenicForm', 'organizationalUnits']));
     }
 
     #[OA\Get(
@@ -99,7 +112,7 @@ class ProductController extends Controller
     )]
     public function show(string $id)
     {
-        return new ProductResource(Product::with(['productType', 'subsidiary', 'laboratory', 'therapeuticClass', 'galenicForm'])->findOrFail($id));
+        return new ProductResource(Product::with(['productType', 'subsidiary', 'laboratory', 'therapeuticClass', 'galenicForm', 'organizationalUnits'])->findOrFail($id));
     }
 
     #[OA\Put(
@@ -125,6 +138,7 @@ class ProductController extends Controller
                     new OA\Property(property: 'effets_secondaires', type: 'string', nullable: true),
                     new OA\Property(property: 'stock_alerte', type: 'integer'),
                     new OA\Property(property: 'statut', type: 'string', enum: ['brouillon', 'actif', 'archive']),
+                    new OA\Property(property: 'organizational_unit_ids', type: 'array', items: new OA\Items(type: 'string', format: 'uuid'), nullable: true),
                 ]
             )
         ),
@@ -136,8 +150,16 @@ class ProductController extends Controller
     public function update(UpdateProductRequest $request, string $id)
     {
         $product = Product::findOrFail($id);
-        $product->update($request->validated());
-        return new ProductResource($product->load(['productType', 'laboratory', 'therapeuticClass', 'galenicForm']));
+        
+        $validated = $request->validated();
+        if (isset($validated['organizational_unit_ids'])) {
+            $product->organizationalUnits()->sync($validated['organizational_unit_ids']);
+            unset($validated['organizational_unit_ids']);
+        }
+        
+        $product->update($validated);
+        
+        return new ProductResource($product->load(['productType', 'laboratory', 'therapeuticClass', 'galenicForm', 'organizationalUnits']));
     }
 
     #[OA\Delete(

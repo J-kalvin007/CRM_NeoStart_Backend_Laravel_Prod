@@ -12,10 +12,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('teams', function (Blueprint $table) {
-            if (Schema::hasColumn('teams', 'sector_id')) {
-                // Si une foreign key existe, il faut la dropper avant de drop la colonne (selon votre BDD)
-                $table->dropForeign(['sector_id']); // Décommenter si constraint
-                $table->dropColumn('sector_id');
+            if (!Schema::hasColumn('teams', 'sector_id')) {
+                $table->foreignUuid('sector_id')->after('id')->nullable()->constrained('sectors')->cascadeOnDelete();
             }
         });
     }
@@ -26,7 +24,10 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('teams', function (Blueprint $table) {
-            $table->uuid('sector_id')->nullable();
+            if (Schema::hasColumn('teams', 'sector_id')) {
+                $table->dropForeign(['sector_id']);
+                $table->dropColumn('sector_id');
+            }
         });
     }
 };

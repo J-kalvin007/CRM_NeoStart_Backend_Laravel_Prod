@@ -24,7 +24,7 @@ class ObjectifController extends Controller
     )]
     public function index(Request $request)
     {
-        $query = Objectif::with(['user', 'team', 'product', 'indicator'])
+        $query = Objectif::with(['user', 'team', 'product', 'indicator', 'type', 'organizationalUnit'])
             ->when($request->user_id, fn($q, $v) => $q->where('user_id', $v))
             ->when($request->team_id, fn($q, $v) => $q->where('team_id', $v))
             ->when($request->indicator_id, fn($q, $v) => $q->where('indicator_id', $v))
@@ -39,7 +39,9 @@ class ObjectifController extends Controller
             properties: [
                 new OA\Property(property: 'user_id', type: 'integer', nullable: true),
                 new OA\Property(property: 'team_id', type: 'string', format: 'uuid', nullable: true),
-                new OA\Property(property: 'indicator_id', type: 'string', format: 'uuid'),
+                new OA\Property(property: 'organizational_unit_id', type: 'string', format: 'uuid', nullable: true),
+                new OA\Property(property: 'indicator_id', type: 'string', format: 'uuid', nullable: true),
+                new OA\Property(property: 'objectif_type_id', type: 'string', format: 'uuid'),
                 new OA\Property(property: 'valeur_cible', type: 'number', format: 'float', example: 100),
                 new OA\Property(property: 'date_debut', type: 'string', format: 'date'),
                 new OA\Property(property: 'date_fin', type: 'string', format: 'date'),
@@ -53,12 +55,15 @@ class ObjectifController extends Controller
     )]
     public function store(StoreObjectifRequest $request)
     {
-        if (!auth()->user()->hasRole('Manager')) {
-            return response()->json(['message' => 'Non autorisé. Seul un manager peut créer des objectifs.'], 403);
+        // Le délégué médical n'est pas autorisé à créer des objectifs
+        if (auth()->user()->hasRole('delegue-medical')) {
+            return response()->json(['message' => 'Non autorisé. Seul un superviseur ou directeur peut créer des objectifs.'], 403);
         }
-        $objectif = Objectif::create($request->validated());
+        $data = $request->validated();
+        $data['assigned_by_user_id'] = auth()->id();
+        $objectif = Objectif::create($data);
         $objectif->recalculerTaux();
-        return new ObjectifResource($objectif->load(['user', 'team', 'product', 'indicator']));
+        return new ObjectifResource($objectif->load(['user', 'team', 'product', 'indicator', 'type', 'organizationalUnit']));
     }
 
     #[OA\Get(path: '/api/v1/objectifs/{id}', summary: 'Détails d\'un objectif', security: [['bearerAuth' => []]], tags: ['Objectifs'],
@@ -67,7 +72,7 @@ class ObjectifController extends Controller
     )]
     public function show(string $id)
     {
-        return new ObjectifResource(Objectif::with(['user', 'team', 'product', 'indicator'])->findOrFail($id));
+        return new ObjectifResource(Objectif::with(['user', 'team', 'product', 'indicator', 'type', 'organizationalUnit'])->findOrFail($id));
     }
 
     #[OA\Put(path: '/api/v1/objectifs/{id}', summary: 'Mettre à jour un objectif (valeur réalisée)', security: [['bearerAuth' => []]], tags: ['Objectifs'],
@@ -80,13 +85,13 @@ class ObjectifController extends Controller
     )]
     public function update(UpdateObjectifRequest $request, string $id)
     {
-        if (!auth()->user()->hasRole('Manager')) {
-            return response()->json(['message' => 'Non autorisé. Seul un manager peut modifier des objectifs.'], 403);
-        }
+        // Tout le monde peut mettre à jour, mais le délégué médical ne peut théoriquement
+        // mettre à jour que la valeur réalisée (contrôlé par le frontend/form request).
+        // On n'empêche pas l'accès ici pour permettre l'enregistrement de la valeur réalisée.
         $objectif = Objectif::findOrFail($id);
         $objectif->update($request->validated());
         $objectif->recalculerTaux();
-        return new ObjectifResource($objectif->load(['user', 'team', 'product', 'indicator']));
+        return new ObjectifResource($objectif->load(['user', 'team', 'product', 'indicator', 'type', 'organizationalUnit']));
     }
 
     #[OA\Delete(path: '/api/v1/objectifs/{id}', summary: 'Supprimer un objectif', security: [['bearerAuth' => []]], tags: ['Objectifs'],
@@ -95,11 +100,36 @@ class ObjectifController extends Controller
     )]
     public function destroy(string $id)
     {
-        if (!auth()->user()->hasRole('Manager')) {
-            return response()->json(['message' => 'Non autorisé.'], 403);
+        if (auth()->user()->hasRole('delegue-medical')) {
+            return response()->json(['message' => 'Non autorisé. Seul un superviseur ou directeur peut supprimer des objectifs.'], 403);
         }
+
         Objectif::findOrFail($id)->delete();
         return response()->json(null, 204);
+    }
+
+    #[OA\Get(path: '/api/v1/objectifs/{id}/history', summary: "Historique d'évolution d'un objectif", security: [['bearerAuth' => []]], tags: ['Objectifs'],
+        parameters: [new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))],
+        responses: [new OA\Response(response: 200, description: 'Historique des modifications')]
+    )]
+    public function history(string $id)
+    {
+        $objectif = Objectif::findOrFail($id);
+        
+        // On récupère les logs en les chargeant avec l'utilisateur qui a fait l'action
+        $activities = $objectif->activities()->with('causer')->orderBy('created_at', 'desc')->get();
+        
+        $history = $activities->map(function ($activity) {
+            return [
+                'id' => $activity->id,
+                'description' => $activity->description,
+                'properties' => $activity->properties,
+                'causer_name' => $activity->causer ? $activity->causer->name : 'Système',
+                'created_at' => $activity->created_at,
+            ];
+        });
+
+        return response()->json(['data' => $history]);
     }
 
     #[OA\Get(

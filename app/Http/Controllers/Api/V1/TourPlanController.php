@@ -21,7 +21,7 @@ class TourPlanController extends Controller
     public function index(Request $request)
     {
         $user = auth()->user();
-        $query = TourPlan::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)
+        $query = TourPlan::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
             ->with(['delegue', 'validePar', 'activities.contact', 'activities.account'])
             ->when($request->statut, fn($q, $v) => $q->where('statut', $v))
             ->when($request->date_debut, fn($q, $v) => $q->where('date_debut', '>=', $v))
@@ -48,14 +48,14 @@ class TourPlanController extends Controller
 
         $activityIds = $request->input('activity_ids', []);
         if (!empty($activityIds) && is_array($activityIds)) {
-            Activity::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)
+            Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
                 ->whereIn('id', $activityIds)
                 ->update([
                     'tour_plan_id' => $plan->id,
                 ]);
             $plan->update(['nb_activites_planifiees' => count($activityIds)]);
         } else {
-            $linkedCount = Activity::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)
+            $linkedCount = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
                 ->where('user_id', $user->id)
                 ->whereBetween('date_activite', [$plan->date_debut, $plan->date_fin])
                 ->update(['tour_plan_id' => $plan->id]);
@@ -91,7 +91,7 @@ class TourPlanController extends Controller
     )]
     public function show(string $id)
     {
-        return new TourPlanResource(TourPlan::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)->with(['delegue', 'validePar', 'activities.contact', 'activities.account'])->findOrFail($id));
+        return new TourPlanResource(TourPlan::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['delegue', 'validePar', 'activities.contact', 'activities.account'])->findOrFail($id));
     }
 
     #[OA\Put(path: '/api/v1/tour-plans/{id}', summary: 'Mettre à jour un plan de tournée', security: [['bearerAuth' => []]], tags: ['TourPlans'],
@@ -125,7 +125,7 @@ class TourPlanController extends Controller
 
         // Si validé, passer les activités rattachées en statut 'validee'
         if (isset($data['statut']) && $data['statut'] === 'valide') {
-            Activity::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)
+            Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
                 ->where(function ($q) use ($plan) {
                     $q->where('tour_plan_id', $plan->id)
                       ->orWhere(function ($q2) use ($plan) {

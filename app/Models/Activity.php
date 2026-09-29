@@ -113,6 +113,7 @@ class Activity extends Model
     public function products()
     {
         return $this->belongsToMany(Product::class, 'activity_product')
+            ->using(ActivityProduct::class)
             ->withPivot('quantity', 'customer_interest', 'remarques')
             ->withTimestamps();
     }

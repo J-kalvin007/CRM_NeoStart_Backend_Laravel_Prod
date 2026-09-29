@@ -20,7 +20,11 @@ class SpecialityController extends Controller
     )]
     public function index()
     {
-        return response()->json(Speciality::all());
+        return response()->json(
+            Speciality::where('is_active', true)
+                ->orderBy('name')
+                ->get()
+        );
     }
 
     #[OA\Post(

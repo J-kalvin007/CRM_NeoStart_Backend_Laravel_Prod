@@ -9,6 +9,7 @@ use App\Http\Resources\ContactResource;
 use App\Models\Contact;
 use App\Models\ContactType;
 use App\Models\Account;
+use App\Models\Potential;
 use App\Services\DynamicValidationService;
 use App\Services\DuplicateDetectionService;
 use Illuminate\Http\Request;
@@ -35,7 +36,7 @@ class ContactController extends Controller
     )]
     public function index(Request $request)
     {
-        $query = Contact::with(['account', 'categories', 'speciality', 'contactType', 'potential', 'influence', 'segmentation'])
+        $query = Contact::with(['account', 'categories', 'speciality', 'contactType', 'potential', 'influence', 'segmentation', 'delegue'])
             ->when($request->specialite ?? $request->speciality, function($q, $v) {
                 if (!$v || $v === 'Tous') return;
                 $q->where(function($sub) use ($v) {
@@ -73,9 +74,51 @@ class ContactController extends Controller
             $query->whereIn('statut', ['actif', 'valide']);
         }
 
-        $perPage = $request->get('per_page', 100);
+        // Filtrage additionnel par périmètre organisationnel sélectionné (header X-Organizational-Unit-Id)
+        $perimeterUnitId = app()->bound('active_perimeter_unit_id') ? app('active_perimeter_unit_id') : null;
+        $isGlobalAdmin   = $user && ($user->can('scope:global') || $user->hasAnyRole(['superadmin', 'admin']));
+
+        if ($perimeterUnitId && $user && !$isGlobalAdmin) {
+            // Utilisateurs non-admin : filtre strict par UserScope dans le périmètre
+            $allUnitIds = $this->getDescendantUnitIds([$perimeterUnitId]);
+            $userIdsInUnit = \Illuminate\Support\Facades\DB::table('user_scopes')
+                ->whereIn('organizational_unit_id', $allUnitIds)
+                ->where('is_active', true)
+                ->pluck('user_id')
+                ->unique()
+                ->toArray();
+            if (!empty($userIdsInUnit)) {
+                $query->whereIn('contacts.user_id', $userIdsInUnit);
+            }
+        }
+        // Pour le superadmin : le périmètre topbar est informatif seulement
+        // → il voit TOUS les contacts sans restriction supplémentaire
+
+        $perPage = $request->get('per_page', 500);
         return ContactResource::collection($query->paginate($perPage));
     }
+
+    /**
+     * Récupère tous les IDs descendants récursivement
+     */
+    private function getDescendantUnitIds(array $parentIds): array
+    {
+        if (empty($parentIds)) return [];
+        $allIds = $parentIds;
+        $currentParentIds = $parentIds;
+        while (true) {
+            $childrenIds = \Illuminate\Support\Facades\DB::table('organizational_units')
+                ->whereIn('parent_id', $currentParentIds)
+                ->where('is_active', true)
+                ->pluck('id')
+                ->toArray();
+            if (empty($childrenIds)) break;
+            $allIds = array_merge($allIds, $childrenIds);
+            $currentParentIds = $childrenIds;
+        }
+        return array_unique($allIds);
+    }
+
 
     #[OA\Post(
         path: '/api/v1/contacts/check-duplicates',
@@ -111,8 +154,8 @@ class ContactController extends Controller
 
         $countryId = null;
         if ($request->account_id) {
-            $account = Account::with('subsidiary')->find($request->account_id);
-            $countryId = $account?->subsidiary?->country_id;
+            $account = Account::with('organizationalUnit')->find($request->account_id);
+            // $countryId = $account?->organizationalUnit?->country_id; // TODO: Adapt if organizational units have a country mapping
         }
 
         $excludeId = $request->exclude_id ?: null;
@@ -177,6 +220,19 @@ class ContactController extends Controller
             unset($validated['specialite']);
         }
 
+        // Mapper potentiel (string) -> potential_id (UUID FK)
+        if (!empty($validated['potentiel'])) {
+            $codeMap = ['faible' => 'LOW', 'moyen' => 'MED', 'fort' => 'HIGH'];
+            $code = $codeMap[strtolower($validated['potentiel'])] ?? null;
+            if ($code) {
+                $potential = Potential::where('code', $code)->first();
+                if ($potential) {
+                    $validated['potential_id'] = $potential->id;
+                }
+            }
+            unset($validated['potentiel']);
+        }
+
         // Validation dynamique
         if (!empty($validated['contact_type_id'])) {
             $type = ContactType::find($validated['contact_type_id']);
@@ -186,8 +242,8 @@ class ContactController extends Controller
         // Détection de doublons (Bloque la requête si doublon)
         $countryId = null;
         if (!empty($validated['account_id'])) {
-            $account = Account::with('subsidiary')->find($validated['account_id']);
-            $countryId = $account?->subsidiary?->country_id;
+            $account = Account::with('organizationalUnit')->find($validated['account_id']);
+            // $countryId = $account?->organizationalUnit?->country_id;
         }
         $duplicateService->abortIfDuplicateContact($countryId, $validated);
 
@@ -289,12 +345,25 @@ class ContactController extends Controller
         }
         $validated['meta'] = $mergedMeta;
 
+        // Mapper potentiel (string) -> potential_id (UUID FK)
+        if (!empty($validated['potentiel'])) {
+            $codeMap = ['faible' => 'LOW', 'moyen' => 'MED', 'fort' => 'HIGH'];
+            $code = $codeMap[strtolower($validated['potentiel'])] ?? null;
+            if ($code) {
+                $potential = Potential::where('code', $code)->first();
+                if ($potential) {
+                    $validated['potential_id'] = $potential->id;
+                }
+            }
+            unset($validated['potentiel']);
+        }
+
         // Détection de doublons
         $accountId = $validated['account_id'] ?? $contact->account_id;
         $countryId = null;
         if ($accountId) {
-            $account = Account::with('subsidiary')->find($accountId);
-            $countryId = $account?->subsidiary?->country_id;
+            $account = Account::with('organizationalUnit')->find($accountId);
+            // $countryId = $account?->organizationalUnit?->country_id;
         }
         $dataForDuplicateCheck = array_merge($contact->toArray(), $validated);
         $duplicateService->abortIfDuplicateContact($countryId, $dataForDuplicateCheck, $contact->id);
@@ -382,5 +451,46 @@ class ContactController extends Controller
                 ]
             ]
         ], 200);
+    }
+
+    /**
+     * Suppression en masse de contacts (soft-delete)
+     * DELETE /api/v1/contacts/bulk-delete
+     * Body: { "ids": ["uuid1", "uuid2", ...] }
+     */
+    public function bulkDelete(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $request->validate([
+            'ids'   => 'required|array|min:1|max:500',
+            'ids.*' => 'required|uuid|exists:contacts,id',
+        ]);
+
+        $user = auth()->user();
+        $ids  = $request->input('ids');
+
+        // Seuls les admins/superviseurs peuvent supprimer en masse
+        // Les délégués peuvent seulement supprimer leurs propres contacts
+        $query = Contact::withoutGlobalScopes()->whereIn('id', $ids);
+
+        if (!$user->isAdminOrSupervisor()) {
+            $query->where('user_id', $user->id);
+        }
+
+        $contacts = $query->get();
+        $deletedCount = 0;
+
+        foreach ($contacts as $contact) {
+            $contact->delete();
+            $deletedCount++;
+        }
+
+        $skipped = count($ids) - $deletedCount;
+
+        return response()->json([
+            'success' => true,
+            'message' => "{$deletedCount} prescripteur(s) supprimé(s) avec succès.",
+            'deleted' => $deletedCount,
+            'skipped' => $skipped,
+        ]);
     }
 }

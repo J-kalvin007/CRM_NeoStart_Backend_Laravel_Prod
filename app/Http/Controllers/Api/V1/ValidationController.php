@@ -25,7 +25,7 @@ class ValidationController extends Controller
         $user = auth()->user();
         $teamIds = $user && $user->team_id ? [$user->team_id] : [];
 
-        $pendingContacts = Contact::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)
+        $pendingContacts = Contact::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
             ->with(['account', 'user', 'owner'])
             ->where(function ($q) use ($teamIds) {
                 $q->whereIn('statut_validation', ['en_attente', 'pending'])
@@ -49,7 +49,7 @@ class ValidationController extends Controller
                 ];
             });
 
-        $pendingAccounts = Account::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)
+        $pendingAccounts = Account::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
             ->with(['user', 'owner'])
             ->where(function ($q) use ($teamIds) {
                 $q->whereIn('statut_validation', ['en_attente', 'pending'])
@@ -73,7 +73,7 @@ class ValidationController extends Controller
                 ];
             });
 
-        $pendingActivities = \App\Models\Activity::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)
+        $pendingActivities = \App\Models\Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
             ->with(['contact', 'account', 'delegue', 'user'])
             ->where(function ($q) {
                 $q->whereIn('report_status', ['submitted', 'soumis', 'en_attente'])
@@ -105,7 +105,7 @@ class ValidationController extends Controller
                 ];
             });
 
-        $pendingTourPlans = \App\Models\TourPlan::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)
+        $pendingTourPlans = \App\Models\TourPlan::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
             ->with(['user', 'delegue'])
             ->whereIn('statut', ['soumis', 'en_attente_validation', 'en_attente'])
             ->get()

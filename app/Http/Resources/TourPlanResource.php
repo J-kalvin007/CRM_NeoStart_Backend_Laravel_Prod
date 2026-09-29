@@ -19,7 +19,7 @@ class TourPlanResource extends JsonResource
 
         $activities = ($this->relationLoaded('activities') && $this->activities->isNotEmpty())
             ? $this->activities
-            : Activity::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)
+            : Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
                 ->where('user_id', $this->user_id)
                 ->whereBetween('date_activite', [$this->date_debut, $this->date_fin])
                 ->with(['contact', 'account'])

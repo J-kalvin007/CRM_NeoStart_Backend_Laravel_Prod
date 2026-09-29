@@ -160,7 +160,7 @@ class AuthController extends Controller
 
         return response()->json([
             'token' => $token,
-            'user' => $user->load(['roles', 'permissions', 'country', 'subsidiary', 'team'])
+            'user' => $user->load(['roles', 'permissions', 'scopes'])
         ], 200);
     }
 
@@ -233,7 +233,7 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Mot de passe mis à jour avec succès.',
             'token' => $token,
-            'user' => $user->load(['roles', 'permissions', 'country', 'subsidiary', 'team'])
+            'user' => $user->load(['roles', 'permissions', 'scopes'])
         ], 200);
     }
 
@@ -306,7 +306,7 @@ class AuthController extends Controller
 
         return response()->json([
             'token' => $token,
-            'user' => $user->load('roles', 'country', 'subsidiary', 'team')
+            'user' => $user->load(['roles', 'permissions', 'scopes'])
         ]);
     }
 
@@ -368,7 +368,7 @@ class AuthController extends Controller
     )]
     public function me(Request $request)
     {
-        return response()->json($request->user()->load(['roles', 'permissions', 'country', 'subsidiary', 'team']));
+        return response()->json($request->user()->load(['roles', 'permissions', 'scopes']));
     }
 
     /**

@@ -16,6 +16,7 @@ class ProductResource extends JsonResource
             'marque'         => $this->marque,
             'gamme'          => $this->gamme,
             'pght'           => $this->pght,
+            'prix_cession'   => $this->prix_cession,
             'ppv'            => $this->ppv,
             'devise'         => $this->devise,
             'stock_actuel'   => $this->stock_actuel,

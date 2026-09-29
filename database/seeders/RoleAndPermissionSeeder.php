@@ -24,6 +24,7 @@ class RoleAndPermissionSeeder extends Seeder
                 'users.edit',
                 'users.delete',
                 'users.manage-roles',
+                'restriction:single_scope',
             ],
 
             'Rôles & Permissions' => [

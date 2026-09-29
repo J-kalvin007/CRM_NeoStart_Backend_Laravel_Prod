@@ -21,6 +21,9 @@ class Objectif extends Model
         'user_id',
         'team_id',
         'indicator_id',
+        'objectif_type_id',
+        'organizational_unit_id',
+        'assigned_by_user_id',
         'date_debut',
         'date_fin',
         'periode',
@@ -60,6 +63,21 @@ class Objectif extends Model
     public function indicator()
     {
         return $this->belongsTo(Indicator::class);
+    }
+    
+    public function type()
+    {
+        return $this->belongsTo(ObjectifType::class, 'objectif_type_id');
+    }
+
+    public function assignedBy()
+    {
+        return $this->belongsTo(User::class, 'assigned_by_user_id');
+    }
+
+    public function organizationalUnit()
+    {
+        return $this->belongsTo(OrganizationalUnit::class, 'organizational_unit_id');
     }
 
     /* ─── Business Logic ─────────────────────────────────────── */

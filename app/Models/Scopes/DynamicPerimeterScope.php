@@ -1,0 +1,328 @@
+<?php
+
+namespace App\Models\Scopes;
+
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Scope;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use App\Models\User;
+use App\Models\OrganizationalUnit;
+use App\Models\UserScope;
+
+class DynamicPerimeterScope implements Scope
+{
+    /**
+     * Apply the scope to a given Eloquent query builder.
+     */
+    public function apply(Builder $builder, Model $model): void
+    {
+        if (!Auth::hasUser()) {
+            return;
+        }
+
+        $user = Auth::user();
+        $table = $model->getTable();
+        
+        // 1. Global admin & superadmin bypass isolation
+        if ($user->can('scope:global') || $user->hasAnyRole(['superadmin', 'admin'])) {
+            return;
+        }
+
+        // 2. Get user's organizational scopes
+        $userScopes = $this->getUserScopes($user);
+        
+        // 3. If no scopes configured, apply default restrictions
+        if ($userScopes->isEmpty()) {
+            $this->applyDefaultRestrictions($builder, $table, $user);
+            return;
+        }
+
+        // 4. Apply dynamic hierarchy-based filtering
+        $this->applyHierarchyFiltering($builder, $table, $user, $userScopes);
+    }
+
+    /**
+     * Get user's active organizational scopes with hierarchy information
+     */
+    protected function getUserScopes(User $user)
+    {
+        return UserScope::with(['organizationalUnit.levelDefinition', 'organizationalUnit.organizationConfig'])
+            ->where('user_id', $user->id)
+            ->where('is_active', true)
+            ->where(function ($query) {
+                $query->whereNull('expires_at')
+                      ->orWhere('expires_at', '>', now());
+            })
+            ->get();
+    }
+
+    /**
+     * Apply default restrictions when user has no organizational scopes
+     */
+    protected function applyDefaultRestrictions(Builder $builder, string $table, User $user): void
+    {
+        $operationalTables = [
+            'contacts', 'activities', 'tour_plans', 'sample_movements', 'objectifs', 
+            'accounts', 'kol_profiles', 'opportunities', 'orders', 'sales',
+            'expenses', 'events', 'documents', 'tasks', 'indicators'
+        ];
+
+        if ($table === 'users') {
+            $builder->where('id', $user->id);
+        } elseif (in_array($table, $operationalTables)) {
+            $builder->where($table . '.user_id', $user->id);
+        } elseif (in_array($table, ['products', 'categories', 'product_types', 'specialities', 'galenic_forms'])) {
+            // Reference catalogs are accessible to all authenticated users
+            return;
+        } else {
+            // Restrict access to other tables
+            $builder->whereRaw('1 = 0');
+        }
+    }
+
+    /**
+     * Apply hierarchy-based filtering using organizational units
+     */
+    protected function applyHierarchyFiltering(Builder $builder, string $table, User $user, $userScopes): void
+    {
+        // Get all accessible organizational unit IDs (user's units + all descendants)
+        $accessibleUnitIds = $this->getAccessibleUnitIds($userScopes);
+        
+        // Special handling for different table types
+        switch ($table) {
+            case 'organizational_units':
+                $this->filterOrganizationalUnits($builder, $accessibleUnitIds);
+                break;
+                
+            case 'users':
+                $this->filterUsers($builder, $user, $accessibleUnitIds);
+                break;
+                
+            default:
+                $this->filterOperationalTables($builder, $table, $user, $accessibleUnitIds);
+                break;
+        }
+    }
+
+    /**
+     * Get all accessible unit IDs (direct scopes + descendants)
+     */
+    protected function getAccessibleUnitIds($userScopes): array
+    {
+        $directUnitIds = $userScopes->pluck('organizational_unit_id')->toArray();
+        
+        if (empty($directUnitIds)) {
+            return [];
+        }
+
+        return $this->getDescendantUnitIds($directUnitIds);
+    }
+
+    /**
+     * Get all descendant unit IDs recursively
+     */
+    protected function getDescendantUnitIds(array $parentIds): array
+    {
+        if (empty($parentIds)) {
+            return [];
+        }
+
+        $allIds = $parentIds;
+        $currentParentIds = $parentIds;
+
+        // Iterate level by level to get all descendants
+        while (true) {
+            $childrenIds = DB::table('organizational_units')
+                ->whereIn('parent_id', $currentParentIds)
+                ->where('is_active', true)
+                ->pluck('id')
+                ->toArray();
+
+            if (empty($childrenIds)) {
+                break;
+            }
+
+            $allIds = array_merge($allIds, $childrenIds);
+            $currentParentIds = $childrenIds;
+        }
+
+        return array_unique($allIds);
+    }
+
+    /**
+     * Filter organizational_units table
+     */
+    protected function filterOrganizationalUnits(Builder $builder, array $accessibleUnitIds): void
+    {
+        $builder->whereIn('id', $accessibleUnitIds);
+    }
+
+    /**
+     * Filter users table with role-based logic
+     */
+    protected function filterUsers(Builder $builder, User $user, array $accessibleUnitIds): void
+    {
+        // Supervisors and managers can see their team members
+        if ($user->hasAnyRole(['superviseur', 'directeur_regional', 'directeur_commercial', 'directeur_marketing'])) {
+            $builder->where(function($query) use ($user) {
+                $query->where('id', $user->id); // Always include self
+                
+                if ($user->team_id) {
+                    $query->orWhere('team_id', $user->team_id);
+                }
+                
+                $query->orWhere('manager_id', $user->id);
+            });
+            return;
+        }
+
+        // For other roles, filter by organizational perimeter
+        $builder->where(function ($query) use ($user, $accessibleUnitIds) {
+            $query->where('id', $user->id); // Always include self
+            
+            if (!empty($accessibleUnitIds)) {
+                $query->orWhereIn('id', function ($subQuery) use ($accessibleUnitIds) {
+                    $subQuery->select('user_id')
+                             ->from('user_scopes')
+                             ->whereIn('organizational_unit_id', $accessibleUnitIds)
+                             ->where('is_active', true);
+                });
+            }
+        });
+    }
+
+    /**
+     * Filter operational tables (contacts, activities, etc.)
+     */
+    protected function filterOperationalTables(Builder $builder, string $table, User $user, array $accessibleUnitIds): void
+    {
+        $operationalTables = [
+            'contacts', 'activities', 'tour_plans', 'sample_movements', 'objectifs', 
+            'accounts', 'kol_profiles', 'opportunities', 'orders', 'sales',
+            'expenses', 'events', 'documents', 'tasks', 'indicators'
+        ];
+
+        // Reference catalogs are accessible to all
+        $catalogTables = [
+            'categories', 'product_types', 'specialities', 'galenic_forms',
+            'countries', 'regions', 'subsidiaries', 'territories'
+        ];
+
+        if (in_array($table, $catalogTables)) {
+            return; // No filtering for catalogs
+        }
+
+        if ($table === 'products') {
+            // Products are filtered by the perimeters they are linked to
+            $builder->where(function ($query) use ($accessibleUnitIds) {
+                if (!empty($accessibleUnitIds)) {
+                    $query->whereExists(function ($subQuery) use ($accessibleUnitIds) {
+                        $subQuery->select(DB::raw(1))
+                                 ->from('organizational_unit_product')
+                                 ->whereColumn('organizational_unit_product.product_id', 'products.id')
+                                 ->whereIn('organizational_unit_product.organizational_unit_id', $accessibleUnitIds);
+                    });
+                } else {
+                    $query->whereRaw('1 = 0');
+                }
+            });
+            return;
+        }
+
+        if (in_array($table, $operationalTables)) {
+            // Filter by users who have access to the organizational units
+            $builder->where(function ($query) use ($table, $user, $accessibleUnitIds) {
+                $query->where($table . '.user_id', $user->id); // Always include own records
+                
+                // Supervisors and managers can see their team members' records
+                if ($user->hasAnyRole(['superviseur', 'directeur_regional', 'directeur_commercial', 'directeur_marketing'])) {
+                    $query->orWhereIn($table . '.user_id', function ($subQuery) use ($user) {
+                        $subQuery->select('id')
+                                 ->from('users')
+                                 ->where('manager_id', $user->id);
+                        if ($user->team_id) {
+                            $subQuery->orWhere('team_id', $user->team_id);
+                        }
+                    });
+                }
+
+                if (!empty($accessibleUnitIds)) {
+                    $query->orWhereIn($table . '.user_id', function ($subQuery) use ($accessibleUnitIds) {
+                        $subQuery->select('user_id')
+                                 ->from('user_scopes')
+                                 ->whereIn('organizational_unit_id', $accessibleUnitIds)
+                                 ->where('is_active', true);
+                    });
+                }
+            });
+        } else {
+            // For unknown tables, restrict access
+            $builder->whereRaw('1 = 0');
+        }
+    }
+
+    /**
+     * Check if user has access to a specific organizational unit
+     */
+    public static function userCanAccessUnit(User $user, string $unitId): bool
+    {
+        if ($user->can('scope:global') || $user->hasAnyRole(['superadmin', 'admin'])) {
+            return true;
+        }
+
+        $userScopes = UserScope::where('user_id', $user->id)
+            ->where('is_active', true)
+            ->where(function ($query) {
+                $query->whereNull('expires_at')
+                      ->orWhere('expires_at', '>', now());
+            })
+            ->pluck('organizational_unit_id')
+            ->toArray();
+
+        if (empty($userScopes)) {
+            return false;
+        }
+
+        // Check if the unit is in user's direct scopes or descendants
+        $scope = new self();
+        $accessibleIds = $scope->getDescendantUnitIds($userScopes);
+        
+        return in_array($unitId, $accessibleIds);
+    }
+
+    /**
+     * Get all organizational units accessible by the user
+     */
+    public static function getAccessibleUnits(User $user)
+    {
+        if ($user->can('scope:global') || $user->hasAnyRole(['superadmin', 'admin'])) {
+            return OrganizationalUnit::active()->get();
+        }
+
+        $userScopes = UserScope::where('user_id', $user->id)
+            ->where('is_active', true)
+            ->where(function ($query) {
+                $query->whereNull('expires_at')
+                      ->orWhere('expires_at', '>', now());
+            })
+            ->pluck('organizational_unit_id')
+            ->toArray();
+
+        if (empty($userScopes)) {
+            return collect();
+        }
+
+        $scope = new self();
+        $accessibleIds = $scope->getDescendantUnitIds($userScopes);
+        
+        return OrganizationalUnit::whereIn('id', $accessibleIds)
+                                ->active()
+                                ->with(['levelDefinition', 'parent'])
+                                ->orderBy('level_order')
+                                ->orderBy('display_order')
+                                ->orderBy('name')
+                                ->get();
+    }
+}

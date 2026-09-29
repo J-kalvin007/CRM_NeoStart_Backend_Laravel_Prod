@@ -35,9 +35,18 @@ class ActivityController extends Controller
     {
         Activity::markMissedPastActivities();
 
-        $query = Activity::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)
-            ->with(['delegue', 'contact', 'account', 'products'])
-            ->when($request->user_id, fn($q, $v) => $q->where('user_id', $v))
+        $user = auth()->user();
+        $isGlobal = $user->hasAnyRole(['superadmin', 'admin']) || $user->can('scope:global');
+        $isManager = $user->hasAnyRole(['superviseur', 'directeur_regional', 'directeur_commercial', 'directeur_marketing', 'manager']);
+
+        $query = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
+            ->with([
+                'delegue',
+                'contact' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account', 'speciality', 'potential', 'influence']),
+                'account' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class),
+                'products' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class),
+            ])
+            ->when($request->user_id, fn($q, $v) => $q->where('activities.user_id', $v))
             ->when($request->activity_type, fn($q, $v) => $q->where('activity_type', $v))
             ->when($request->statut, fn($q, $v) => $q->where('statut', $v))
             ->when($request->report_status, fn($q, $v) => $q->where('report_status', $v))
@@ -48,9 +57,79 @@ class ActivityController extends Controller
             ->when($request->tour_plan_id, fn($q, $v) => $q->where('tour_plan_id', $v))
             ->orderByDesc('date_activite');
 
+        // Filtrage par périmètre organisationnel sélectionné dans le frontend (header X-Organizational-Unit-Id)
+        $perimeterUnitId = app()->bound('active_perimeter_unit_id') ? app('active_perimeter_unit_id') : null;
+        if ($perimeterUnitId && !$request->user_id && !$isGlobal) {
+            $userIdsInUnit = $this->getUserIdsInUnit($perimeterUnitId);
+            if (!empty($userIdsInUnit)) {
+                $query->whereIn('activities.user_id', $userIdsInUnit);
+            }
+        }
+
+        // Restreindre la visibilité si pas d'accès global
+        if (!$isGlobal) {
+            $query->where(function ($q) use ($user, $isManager) {
+                // Voit toujours ses propres visites
+                $q->where('activities.user_id', $user->id);
+
+                if ($isManager) {
+                    // S'il est manager, voit les visites de son équipe ou des délégués sous lui
+                    $q->orWhereHas('delegue', function ($delegueQuery) use ($user) {
+                        $delegueQuery->where('manager_id', $user->id);
+                        if ($user->team_id) {
+                            $delegueQuery->orWhere('team_id', $user->team_id);
+                        }
+                    });
+                }
+            });
+        }
+
         $perPage = (int) $request->query('per_page', 200);
         return ActivityResource::collection($query->paginate($perPage));
     }
+
+    /**
+     * Retourne les IDs de tous les utilisateurs appartenant à une unité organisationnelle et ses descendants
+     */
+    private function getUserIdsInUnit(string $unitId): array
+    {
+        // Récupérer récursivement l'unité + tous ses enfants
+        $allUnitIds = $this->getDescendantUnitIds([$unitId]);
+
+        return \Illuminate\Support\Facades\DB::table('user_scopes')
+            ->whereIn('organizational_unit_id', $allUnitIds)
+            ->where('is_active', true)
+            ->pluck('user_id')
+            ->unique()
+            ->toArray();
+    }
+
+    /**
+     * Récupère tous les IDs descendants récursivement
+     */
+    private function getDescendantUnitIds(array $parentIds): array
+    {
+        if (empty($parentIds)) return [];
+
+        $allIds = $parentIds;
+        $currentParentIds = $parentIds;
+
+        while (true) {
+            $childrenIds = \Illuminate\Support\Facades\DB::table('organizational_units')
+                ->whereIn('parent_id', $currentParentIds)
+                ->where('is_active', true)
+                ->pluck('id')
+                ->toArray();
+
+            if (empty($childrenIds)) break;
+
+            $allIds = array_merge($allIds, $childrenIds);
+            $currentParentIds = $childrenIds;
+        }
+
+        return array_unique($allIds);
+    }
+
 
     #[OA\Post(
         path: '/api/v1/activities',
@@ -97,14 +176,46 @@ class ActivityController extends Controller
     {
         $data = $request->validated();
         $samples = $data['samples'] ?? [];
-        unset($data['samples']);
+        $products = $data['products'] ?? [];
+        unset($data['samples'], $data['products']);
 
         // Convertir 'soumis_definitif' en 'realisee' pour la logique interne (optionnel, mais utile)
         if (isset($data['statut']) && $data['statut'] === 'soumis_definitif') {
             $data['statut'] = 'realisee';
         }
 
-        $activity = Activity::create(array_merge($data, ['user_id' => auth()->id()]));
+        // Si l'utilisateur est admin/superviseur et qu'il fournit un user_id, on l'utilise
+        $user = auth()->user();
+        $targetUserId = $user->id;
+        
+        if (isset($data['user_id']) && ($user->hasRole(['superadmin', 'admin', 'superviseur', 'manager']) || $user->can('create-others-activities'))) {
+            $targetUserId = $data['user_id'];
+        }
+
+        // Vérification de chevauchement : interdire deux visites à la même heure pour le même utilisateur
+        if (!empty($data['date_activite']) && !empty($data['heure_debut'])) {
+            $overlap = Activity::where('user_id', $targetUserId)
+                ->where('date_activite', $data['date_activite'])
+                ->where('heure_debut', $data['heure_debut'])
+                ->whereNotIn('statut', ['annulee', 'rejetee'])
+                ->exists();
+            if ($overlap) {
+                return response()->json([
+                    'message' => 'Ce délégué a déjà une visite planifiée à cette date et à cette heure.'
+                ], 422);
+            }
+        }
+
+        // Définir le statut initial : En attente pour le délégué, Planifiée/Validée si par un manager
+        if (!isset($data['statut']) || $data['statut'] === 'planifiee') {
+            if ($user->hasRole(['superadmin', 'admin', 'superviseur', 'manager'])) {
+                $data['statut'] = 'planifiee';
+            } else {
+                $data['statut'] = 'en_attente';
+            }
+        }
+
+        $activity = Activity::create(array_merge($data, ['user_id' => $targetUserId]));
 
         // Attacher les échantillons (SampleMovement)
         if (!empty($samples)) {
@@ -114,12 +225,30 @@ class ActivityController extends Controller
                     'user_id' => auth()->id(),
                     'contact_id' => $data['contact_id'] ?? null,
                     'activity_id' => $activity->id,
-                    'movement_type' => 'out',
-                    'quantity' => reset($sample['quantite']) ?? $sample['quantite'], // in case it's parsed as array somehow
+                    'movement_type' => 'distribution',
+                    'quantity' => is_array($sample['quantite']) ? (int) reset($sample['quantite']) : (int) ($sample['quantite'] ?? 1),
                     'lot_number' => $sample['num_lot'] ?? null,
                     'expiry_date' => $sample['date_peremption'] ?? null,
                 ]);
             }
+        }
+
+        // Attach presented products
+        if (!empty($products)) {
+            $existingPivot = \Illuminate\Support\Facades\DB::table('activity_product')
+                ->where('activity_id', $activity->id)
+                ->pluck('id', 'product_id')->toArray();
+            
+            $syncData = [];
+            foreach ($products as $p) {
+                $syncData[$p['product_id']] = [
+                    'id' => $existingPivot[$p['product_id']] ?? \Illuminate\Support\Str::uuid()->toString(),
+                    'quantity' => $p['quantity'] ?? 0,
+                    'customer_interest' => $p['customer_interest'] ?? null,
+                    'remarques' => $p['remarques'] ?? null,
+                ];
+            }
+            $activity->products()->sync($syncData);
         }
 
         // Verrouiller automatiquement si statut = realisee ou soumis_definitif
@@ -145,7 +274,13 @@ class ActivityController extends Controller
             );
         }
 
-        return new ActivityResource($activity->load(['delegue', 'contact', 'account', 'products', 'sampleMovements']));
+        return new ActivityResource($activity->load([
+            'delegue', 
+            'contact' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account', 'speciality', 'potential', 'influence']), 
+            'account' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class), 
+            'products' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class), 
+            'sampleMovements'
+        ]));
     }
 
     #[OA\Get(
@@ -163,7 +298,14 @@ class ActivityController extends Controller
     )]
     public function show(string $id)
     {
-        $activity = Activity::with(['delegue', 'contact', 'account', 'tourPlan', 'products', 'sampleMovements'])->findOrFail($id);
+        $activity = Activity::with([
+            'delegue', 
+            'contact' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account', 'speciality', 'potential', 'influence']), 
+            'account' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class), 
+            'tourPlan', 
+            'products' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class), 
+            'sampleMovements'
+        ])->findOrFail($id);
         return new ActivityResource($activity);
     }
 
@@ -208,6 +350,10 @@ class ActivityController extends Controller
 
         $validatedData = $request->validated();
         $targetStatus = $validatedData['statut'] ?? null;
+        $products = $validatedData['products'] ?? null;
+        if (array_key_exists('products', $validatedData)) {
+            unset($validatedData['products']);
+        }
 
         // Contrôle de sécurité 1: Démarrer la visite (en_cours) nécessite que la visite ne soit pas annulée ou refusée
         if ($targetStatus === 'en_cours' && !in_array(strtolower($activity->statut), ['planifiee', 'planifiée', 'validee', 'validée', 'validated', 'en_attente_validation', 'en_cours', 'realisee'])) {
@@ -224,13 +370,69 @@ class ActivityController extends Controller
             ], 422);
         }
 
+        // Contrôle de chevauchement pour modification
+        if ((!empty($validatedData['date_activite']) || !empty($activity->date_activite)) &&
+            (!empty($validatedData['heure_debut']) || !empty($activity->heure_debut))) {
+            $checkDate = $validatedData['date_activite'] ?? $activity->date_activite;
+            $checkTime = $validatedData['heure_debut'] ?? $activity->heure_debut;
+            
+            // Si la date ou l'heure changent, on vérifie
+            if ($checkDate !== $activity->date_activite || $checkTime !== $activity->heure_debut) {
+                $overlap = Activity::where('user_id', $activity->user_id)
+                    ->where('id', '!=', $activity->id)
+                    ->where('date_activite', $checkDate)
+                    ->where('heure_debut', $checkTime)
+                    ->whereNotIn('statut', ['annulee', 'rejetee'])
+                    ->exists();
+                if ($overlap) {
+                    return response()->json([
+                        'message' => 'Ce délégué a déjà une visite planifiée à cette date et à cette heure.'
+                    ], 422);
+                }
+            }
+        }
+
+        // Trace of previous date/time if changed
+        if (isset($validatedData['date_activite']) || isset($validatedData['heure_debut'])) {
+            $newDate = $validatedData['date_activite'] ?? $activity->date_activite;
+            $newTime = $validatedData['heure_debut'] ?? $activity->heure_debut;
+            
+            if ($newDate !== $activity->date_activite || $newTime !== $activity->heure_debut) {
+                $trace = "\n[Report] Visite reportée le " . date('d/m/Y H:i') . " : de " . $activity->date_activite . " " . $activity->heure_debut . " vers " . $newDate . " " . $newTime;
+                $validatedData['notes'] = ($validatedData['notes'] ?? $activity->notes) . $trace;
+            }
+        }
+
         $activity->update($validatedData);
+
+        // Attach presented products
+        if ($products !== null) {
+            $existingPivot = \Illuminate\Support\Facades\DB::table('activity_product')
+                ->where('activity_id', $activity->id)
+                ->pluck('id', 'product_id')->toArray();
+                
+            $syncData = [];
+            foreach ($products as $p) {
+                $syncData[$p['product_id']] = [
+                    'id' => $existingPivot[$p['product_id']] ?? \Illuminate\Support\Str::uuid()->toString(),
+                    'quantity' => $p['quantity'] ?? 0,
+                    'customer_interest' => $p['customer_interest'] ?? null,
+                    'remarques' => $p['remarques'] ?? null,
+                ];
+            }
+            $activity->products()->sync($syncData);
+        }
 
         if ($activity->statut === 'realisee') {
             $activity->lock();
         }
 
-        return new ActivityResource($activity->load(['delegue', 'contact', 'account', 'products']));
+        return new ActivityResource($activity->load([
+            'delegue', 
+            'contact' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account', 'speciality', 'potential', 'influence']), 
+            'account' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class), 
+            'products' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
+        ]));
     }
 
     #[OA\Delete(
@@ -249,10 +451,22 @@ class ActivityController extends Controller
     public function destroy(string $id)
     {
         $activity = Activity::findOrFail($id);
-        if ($activity->is_locked) {
-            return response()->json(['message' => 'Activité verrouillée.'], 403);
+        $user = auth()->user();
+        
+        $isSuperAdmin = $user && ($user->hasAnyRole(['superadmin', 'admin']) || $user->can('scope:global'));
+        $isOwner = $user && $activity->user_id === $user->id;
+
+        if (!$isSuperAdmin && !$isOwner) {
+            return response()->json(['message' => 'Vous n\'êtes pas autorisé à supprimer cette visite.'], 403);
         }
+
+        if ($activity->is_locked && !$isSuperAdmin) {
+            return response()->json(['message' => 'Activité verrouillée - suppression interdite.'], 403);
+        }
+
         $activity->delete();
+        
+        return response()->json(null, 204);
     }
 
     public function validateActivity(Request $request, string $id)
@@ -283,7 +497,7 @@ class ActivityController extends Controller
         // Notifier le délégué de la décision du manager
         if ($activity->user) {
             $title = $newStatut === 'validee' ? 'Visite Validée' : 'Visite Refusée';
-            $dateStr = $activity->date_activite ? $activity->date_activite->format('d/m/Y') : now()->format('d/m/Y');
+            $dateStr = $activity->date_activite ? \Illuminate\Support\Carbon::parse($activity->date_activite)->format('d/m/Y') : now()->format('d/m/Y');
             $msg = $newStatut === 'validee'
                 ? "Votre visite prévue le {$dateStr} a été validée par votre responsable."
                 : "Votre visite prévue le {$dateStr} a été refusée par votre responsable.";

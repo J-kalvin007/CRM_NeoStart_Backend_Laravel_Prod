@@ -27,7 +27,9 @@ class AccountResource extends JsonResource
             'statut_validation' => $this->statut_validation,
             'meta'          => $this->meta,
             'local_uuid'    => $this->local_uuid,
-            'subsidiary_id' => $this->subsidiary_id,
+            'organizational_unit_id' => $this->organizational_unit_id,
+            'user_id'       => $this->user_id,
+            'delegue_id'    => $this->delegue_id,
             'type'          => $this->whenLoaded('accountType', fn() => [
                 'id'      => $this->accountType->id,
                 'code'    => $this->accountType->code,
@@ -35,9 +37,17 @@ class AccountResource extends JsonResource
                 'couleur' => $this->accountType->couleur,
                 'icone'   => $this->accountType->icone,
             ]),
-            'subsidiary'    => $this->whenLoaded('subsidiary', fn() => [
-                'id'   => $this->subsidiary->id,
-                'name' => $this->subsidiary->name,
+            'organizational_unit' => $this->whenLoaded('organizationalUnit', fn() => [
+                'id'   => $this->organizationalUnit->id,
+                'name' => $this->organizationalUnit->name,
+            ]),
+            'user' => $this->whenLoaded('user', fn() => [
+                'id'   => $this->user->id,
+                'name' => $this->user->name,
+            ]),
+            'delegue' => $this->whenLoaded('delegue', fn() => [
+                'id'   => $this->delegue->id,
+                'name' => $this->delegue->name,
             ]),
             'categories'    => $this->whenLoaded('categories', fn() =>
                 $this->categories->map(fn($c) => ['id' => $c->id, 'nom' => $c->nom, 'type' => $c->type])

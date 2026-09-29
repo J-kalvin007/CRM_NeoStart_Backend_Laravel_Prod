@@ -32,10 +32,10 @@ class UserController extends Controller
     )]
     public function index(Request $request)
     {
-        $query = User::with(['roles', 'team']);
+        $query = User::with(['roles', 'scopes']);
         
         if ($request->has('team_id')) {
-            $query->where('team_id', $request->team_id);
+            // Ignore legacy team_id 
         }
         
         return UserResource::collection($query->get());
@@ -99,16 +99,28 @@ class UserController extends Controller
         
         // Validation stricte du périmètre (1 seul périmètre max si permission `restriction:single_scope`)
         if (isset($data['scopes'])) {
-            if ($user->hasPermissionTo('restriction:single_scope') && count($data['scopes']) > 1) {
+            $hasSingleScopeRestriction = $user->permissions()->where('name', 'restriction:single_scope')->exists()
+                || $user->roles()->whereHas('permissions', function ($query) {
+                    $query->where('name', 'restriction:single_scope');
+                })->exists();
+
+            if ($hasSingleScopeRestriction && count($data['scopes']) > 1) {
                 return response()->json(['message' => 'Ce rôle ne permet l\'affectation qu\'à un seul périmètre à la fois.'], 422);
             }
-            $user->scopes()->sync($data['scopes']);
+            foreach ($data['scopes'] as $index => $unitId) {
+                \App\Models\UserScope::create([
+                    'user_id' => $user->id,
+                    'organizational_unit_id' => $unitId,
+                    'is_active' => true,
+                    'is_primary' => ($index === 0)
+                ]);
+            }
         }
 
         // Envoyer l'email d'invitation avec le mot de passe temporaire en clair
         Mail::to($user->email)->send(new UserInvitationMail($user, $temporaryPassword));
 
-        return response()->json(new UserResource($user->load(['roles', 'team', 'permissions'])), 201);
+        return response()->json(new UserResource($user->load(['roles', 'scopes', 'permissions'])), 201);
     }
 
     #[OA\Get(
@@ -127,7 +139,7 @@ class UserController extends Controller
     )]
     public function show(string $id)
     {
-        $user = User::with(['roles', 'team', 'permissions'])->findOrFail($id);
+        $user = User::with(['roles', 'scopes', 'permissions'])->findOrFail($id);
         return new UserResource($user);
     }
 
@@ -168,28 +180,63 @@ class UserController extends Controller
 
         // Convertir 'active'/'inactive' → boolean pour la colonne DB
         if (isset($data['status'])) {
-            $data['status'] = $data['status'] === 'active' ? 1 : 0;
+            $data['status'] = in_array($data['status'], ['active', 'true', '1', 1]) ? 1 : 0;
         }
 
+        // Extraire les champs relations avant l'update
+        $roles       = $data['roles']       ?? null;
+        $permissions = $data['permissions'] ?? null;
+        $scopes      = $data['scopes']      ?? null;
+
+        unset($data['roles'], $data['permissions'], $data['scopes']);
+
+        // Mettre à jour les champs du modèle (inclut manager_id)
         $user->update($data);
 
-        if (isset($data['roles'])) {
-            $user->syncRoles($data['roles']);
+        if ($roles !== null) {
+            $user->syncRoles($roles);
         }
 
-        if (isset($data['permissions'])) {
-            $user->syncPermissions($data['permissions']);
+        if ($permissions !== null) {
+            $user->syncPermissions($permissions);
         }
-        
-        // Validation stricte du périmètre (1 seul périmètre max si permission `restriction:single_scope`)
-        if (isset($data['scopes'])) {
-            if ($user->hasPermissionTo('restriction:single_scope') && count($data['scopes']) > 1) {
-                return response()->json(['message' => 'Ce rôle ne permet l\'affectation qu\'à un seul périmètre à la fois.'], 422);
+
+        // Gestion des périmètres organisationnels (UserScope)
+        if ($scopes !== null) {
+            $hasSingleScopeRestriction = $user->permissions()->where('name', 'restriction:single_scope')->exists()
+                || $user->roles()->whereHas('permissions', function ($query) {
+                    $query->where('name', 'restriction:single_scope');
+                })->exists();
+
+            if ($hasSingleScopeRestriction && count($scopes) > 1) {
+                return response()->json([
+                    'message' => "Ce rôle ne permet l'affectation qu'à un seul périmètre à la fois."
+                ], 422);
             }
-            $user->scopes()->sync($data['scopes']);
+
+            // Supprimer les anciens scopes et recréer
+            \App\Models\UserScope::where('user_id', $user->id)->update(['is_active' => false]);
+            foreach ($scopes as $unitId) {
+                \App\Models\UserScope::updateOrCreate(
+                    ['user_id' => $user->id, 'organizational_unit_id' => $unitId],
+                    ['is_active' => true, 'is_primary' => false]
+                );
+            }
+            // Définir le premier comme primaire s'il n'y en a pas
+            if (!empty($scopes)) {
+                $hasPrimary = \App\Models\UserScope::where('user_id', $user->id)
+                    ->where('is_primary', true)
+                    ->where('is_active', true)
+                    ->exists();
+                if (!$hasPrimary) {
+                    \App\Models\UserScope::where('user_id', $user->id)
+                        ->where('organizational_unit_id', $scopes[0])
+                        ->update(['is_primary' => true]);
+                }
+            }
         }
 
-        return new UserResource($user->load(['roles', 'team', 'permissions']));
+        return new UserResource($user->load(['roles', 'scopes', 'permissions']));
     }
 
     #[OA\Delete(

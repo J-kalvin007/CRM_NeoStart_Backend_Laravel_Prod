@@ -17,10 +17,16 @@ class Contact extends Model
 
     protected $fillable = [
         'account_id', 'user_id', 'contact_type_id',
+        'speciality_id', 'segmentation_id', 'potential_id', 'influence_id',
         'nom', 'prenom', 'titre',
-        'telephone', 'email', 'gps_lat', 'gps_lng',
-        'potentiel', 'influence', 'score',
-        'statut', 'statut_validation', 'meta', 'local_uuid',
+        'telephone', 'whatsapp', 'email',
+        'ville', 'zone_quartier', 'adresse',
+        'gps_lat', 'gps_lng',
+        'score',
+        'nb_patients_cible_mois', 'nb_visites_recommandees_mois',
+        'produit_prioritaire', 'produit_secondaire', 'autre_produit_interet',
+        'canal_prefere', 'statut_relation',
+        'statut', 'statut_validation', 'meta', 'local_uuid', 'code_externe',
     ];
 
     protected $casts = [

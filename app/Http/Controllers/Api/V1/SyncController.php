@@ -49,7 +49,7 @@ class SyncController extends Controller
         $lastSync = $request->query('last_sync', '1970-01-01 00:00:00');
         $user = Auth::user();
 
-        // Fonction utilitaire pour récupérer les données modifiées (le PerimeterScope applique automatiquement le RBAC)
+        // Fonction utilitaire pour récupérer les données modifiées (le DynamicPerimeterScope applique automatiquement le RBAC)
         $getModified = function ($modelClass) use ($lastSync) {
             if (in_array('Illuminate\Database\Eloquent\SoftDeletes', class_uses_recursive($modelClass))) {
                 return $modelClass::withTrashed()->where('updated_at', '>=', $lastSync)->get();
