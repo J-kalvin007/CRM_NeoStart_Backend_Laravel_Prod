@@ -27,19 +27,36 @@ class SampleRequestController extends Controller
     public function store(Request $request)
     {
         $user = $request->user();
-        $validated = $request->validate([
-            'product_id' => 'required|uuid|exists:products,id',
-            'quantity' => 'required|integer|min:1',
-            'notes' => 'nullable|string'
-        ]);
+
+        $productId = $request->input('product_id');
+        $product = \App\Models\Product::where('id', $productId)->first();
+        if (!$product) {
+            $product = \App\Models\Product::first();
+        }
+
+        $quantity = (int) ($request->input('quantity') ?? $request->input('quantity_requested') ?? 1);
+        $notes = $request->input('notes') ?? $request->input('motif') ?? 'Demande de réassort d\'échantillons';
 
         $sampleRequest = SampleRequest::create([
             'user_id' => $user->id,
-            'product_id' => $validated['product_id'],
-            'quantity' => $validated['quantity'],
+            'product_id' => $product?->id,
+            'quantity' => $quantity > 0 ? $quantity : 1,
             'status' => 'pending',
-            'notes' => $validated['notes'] ?? null
+            'notes' => $notes,
         ]);
+
+        // Envoyer une notification au Manager / Superviseur
+        $manager = $user?->manager ?? \App\Models\User::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)->where('id', '!=', $user->id)->first();
+        if ($manager) {
+            NotificationController::sendNotification(
+                $manager,
+                'Nouvelle Demande de Stock',
+                "Le délégué {$user->name} a soumis une demande de réassort de " . ($product ? ($product->nom ?: $product->name) : 'échantillons') . " ({$quantity} boîtes).",
+                'sample',
+                'superviseur',
+                ['request_id' => (string) $sampleRequest->id]
+            );
+        }
 
         return response()->json($sampleRequest->load(['product', 'user']), 201);
     }
@@ -48,7 +65,7 @@ class SampleRequestController extends Controller
     {
         $user = $request->user();
 
-        if (!$user->hasRole('superviseur') && !$user->hasRole('directeur_marketing') && !$user->hasRole('superadmin')) {
+        if (!$user->isAdminOrSupervisor() && !$user->hasRole(['superviseur', 'directeur_marketing', 'superadmin', 'manager', 'Manager'])) {
             return response()->json(['message' => 'Non autorisé.'], 403);
         }
 
@@ -87,6 +104,19 @@ class SampleRequestController extends Controller
             'date_mouvement' => date('Y-m-d')
         ]);
 
+        // Notification au délégué
+        $delegate = $sampleRequest->user;
+        if ($delegate) {
+            NotificationController::sendNotification(
+                $delegate,
+                'Demande d\'Échantillons Approuvée',
+                "Votre demande de réassort d'échantillons ({$sampleRequest->quantity} boîtes) a été approuvée par votre manager.",
+                'sample',
+                'delegate',
+                ['id' => (string) $sampleRequest->id, 'type' => 'sample']
+            );
+        }
+
         return response()->json($sampleRequest->load(['product', 'user', 'approver']));
     }
 
@@ -94,7 +124,7 @@ class SampleRequestController extends Controller
     {
         $user = $request->user();
 
-        if (!$user->hasRole('superviseur') && !$user->hasRole('directeur_marketing') && !$user->hasRole('superadmin')) {
+        if (!$user->isAdminOrSupervisor() && !$user->hasRole(['superviseur', 'directeur_marketing', 'superadmin', 'manager', 'Manager'])) {
             return response()->json(['message' => 'Non autorisé.'], 403);
         }
 
@@ -107,6 +137,18 @@ class SampleRequestController extends Controller
         $sampleRequest->status = 'rejected';
         $sampleRequest->approved_by = $user->id;
         $sampleRequest->save();
+
+        $delegate = $sampleRequest->user;
+        if ($delegate) {
+            NotificationController::sendNotification(
+                $delegate,
+                'Demande d\'Échantillons Refusée',
+                "Votre demande de réassort d'échantillons a été refusée par votre manager.",
+                'sample',
+                'delegate',
+                ['id' => (string) $sampleRequest->id, 'type' => 'sample']
+            );
+        }
 
         return response()->json($sampleRequest->load(['product', 'user', 'approver']));
     }

@@ -140,11 +140,50 @@ class ValidationController extends Controller
                 ];
             });
 
+        $pendingSampleRequests = \App\Models\SampleRequest::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)
+            ->with(['product', 'user'])
+            ->whereIn('status', ['pending', 'en_attente'])
+            ->get()
+            ->map(function ($sr) {
+                return [
+                    'id' => (string) $sr->id,
+                    'type' => 'sample',
+                    'nom' => $sr->product ? ($sr->product->nom ?: $sr->product->name) : 'Échantillon Médical',
+                    'product' => $sr->product ? ($sr->product->nom ?: $sr->product->name) : 'Échantillon Médical',
+                    'quantityRequested' => "{$sr->quantity} boîtes",
+                    'stockCurrent' => 'Demande de réassort',
+                    'reason' => $sr->notes ?? $sr->motif ?? 'Réassort de stock',
+                    'created_by' => $sr->user ? ($sr->user->name ?: $sr->user->email) : 'Délégué Médical',
+                    'created_at' => $sr->created_at,
+                    'isRequest' => true,
+                ];
+            });
+
+        $pendingDelegateRequests = \App\Models\DelegateRequest::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)
+            ->with(['user', 'contact'])
+            ->whereIn('status', ['pending_manager_approval', 'en_attente', 'pending', 'soumis'])
+            ->get()
+            ->map(function ($req) {
+                return [
+                    'id' => (string) $req->id,
+                    'type' => 'request',
+                    'nom' => $req->subject ?? $req->objet ?? $req->request_type ?? 'Demande terrain',
+                    'title' => $req->subject ?? $req->objet ?? $req->request_type ?? 'Demande terrain',
+                    'description' => $req->description ?? $req->reason ?? '',
+                    'request_type' => $req->request_type ?? $req->type_demande ?? 'Demande',
+                    'statut' => 'en_attente_superviseur',
+                    'created_by' => $req->user ? ($req->user->name ?: $req->user->email) : 'Délégué Médical',
+                    'created_at' => $req->created_at,
+                ];
+            });
+
         $pending = $pendingContacts
             ->concat($pendingAccounts)
             ->concat($pendingActivities)
             ->concat($pendingTourPlans)
             ->concat($pendingExpenses)
+            ->concat($pendingSampleRequests)
+            ->concat($pendingDelegateRequests)
             ->sortByDesc('created_at')
             ->values();
 
@@ -238,6 +277,74 @@ class ValidationController extends Controller
             }
 
             return response()->json(['message' => 'Note de frais approuvée avec succès', 'data' => $expense]);
+        }
+
+        if (in_array($type, ['sample', 'sample_request'])) {
+            $sampleRequest = \App\Models\SampleRequest::findOrFail($id);
+            $sampleRequest->update([
+                'status' => 'approved',
+                'approved_by' => auth()->id(),
+            ]);
+
+            $lotNumber = 'LOT-' . date('Y-m') . '-' . strtoupper(substr(uniqid(), -4));
+            $expiryDate = date('Y-m-d', strtotime('+1 year'));
+
+            $stock = \App\Models\SampleStock::firstOrCreate([
+                'user_id' => $sampleRequest->user_id,
+                'product_id' => $sampleRequest->product_id,
+                'lot_number' => $lotNumber
+            ], [
+                'expiry_date' => $expiryDate,
+                'quantity' => 0
+            ]);
+
+            $stock->increment('quantity', $sampleRequest->quantity);
+
+            \App\Models\SampleMovement::create([
+                'user_id' => $sampleRequest->user_id,
+                'product_id' => $sampleRequest->product_id,
+                'movement_type' => 'reception',
+                'quantity' => $sampleRequest->quantity,
+                'remarques' => 'Approuvé par ' . (auth()->user()?->name ?? 'Manager'),
+                'lot_number' => $lotNumber,
+                'expiry_date' => $expiryDate,
+                'date_mouvement' => date('Y-m-d')
+            ]);
+
+            $recipient = $sampleRequest->user;
+            if ($recipient) {
+                NotificationController::sendNotification(
+                    $recipient,
+                    'Demande d\'Échantillons Approuvée',
+                    "Votre demande de réassort d'échantillons ({$sampleRequest->quantity} boîtes) a été approuvée.",
+                    'sample',
+                    'delegate',
+                    ['id' => (string) $sampleRequest->id, 'type' => 'sample']
+                );
+            }
+
+            return response()->json(['message' => 'Demande d\'échantillons approuvée avec succès', 'data' => $sampleRequest]);
+        }
+
+        if (in_array($type, ['request', 'delegate_request'])) {
+            $req = \App\Models\DelegateRequest::findOrFail($id);
+            $req->update([
+                'status' => 'approved',
+            ]);
+
+            $recipient = $req->user;
+            if ($recipient) {
+                NotificationController::sendNotification(
+                    $recipient,
+                    'Demande Approuvée',
+                    "Votre demande '" . ($req->subject ?? $req->request_type) . "' a été approuvée par votre manager.",
+                    'request',
+                    'delegate',
+                    ['id' => (string) $req->id, 'type' => 'request']
+                );
+            }
+
+            return response()->json(['message' => 'Demande approuvée avec succès', 'data' => $req]);
         }
 
         $model = $this->getModel($type, $id);
@@ -357,6 +464,49 @@ class ValidationController extends Controller
             }
 
             return response()->json(['message' => 'Note de frais refusée avec succès', 'data' => $expense]);
+        }
+
+        if (in_array($type, ['sample', 'sample_request'])) {
+            $sampleRequest = \App\Models\SampleRequest::findOrFail($id);
+            $sampleRequest->update([
+                'status' => 'rejected',
+                'approved_by' => auth()->id(),
+            ]);
+
+            $recipient = $sampleRequest->user;
+            if ($recipient) {
+                NotificationController::sendNotification(
+                    $recipient,
+                    'Demande d\'Échantillons Refusée',
+                    "Votre demande de réassort d'échantillons n'a pas été validée par votre manager." . ($reason ? " Motif : {$reason}" : ""),
+                    'sample',
+                    'delegate',
+                    ['id' => (string) $sampleRequest->id, 'type' => 'sample']
+                );
+            }
+
+            return response()->json(['message' => 'Demande d\'échantillons refusée avec succès', 'data' => $sampleRequest]);
+        }
+
+        if (in_array($type, ['request', 'delegate_request'])) {
+            $req = \App\Models\DelegateRequest::findOrFail($id);
+            $req->update([
+                'status' => 'rejected',
+            ]);
+
+            $recipient = $req->user;
+            if ($recipient) {
+                NotificationController::sendNotification(
+                    $recipient,
+                    'Demande Refusée',
+                    "Votre demande '" . ($req->subject ?? $req->request_type) . "' a été refusée par votre manager." . ($reason ? " Motif : {$reason}" : ""),
+                    'request',
+                    'delegate',
+                    ['id' => (string) $req->id, 'type' => 'request']
+                );
+            }
+
+            return response()->json(['message' => 'Demande refusée avec succès', 'data' => $req]);
         }
 
         $model = $this->getModel($type, $id);

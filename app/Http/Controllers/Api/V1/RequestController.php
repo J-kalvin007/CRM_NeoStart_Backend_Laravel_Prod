@@ -35,31 +35,39 @@ class RequestController extends Controller
     )]
     public function store(Request $request)
     {
-        $data = $request->validate([
-            'request_type' => 'required|string',
-            'contact_id' => 'nullable|uuid|exists:contacts,id',
-            'reason' => 'nullable|string',
-            'priority' => 'required|in:low,normal,high',
-            'status' => 'nullable|string',
-            'local_uuid' => 'nullable|uuid',
+        $user = Auth::user();
+
+        $reqType = $request->input('type_demande') ?? $request->input('request_type') ?? 'general';
+        $subject = $request->input('objet') ?? $request->input('subject') ?? 'Demande du délégué';
+        $description = $request->input('description') ?? $request->input('reason') ?? '';
+        $justification = $request->input('justification');
+        $priority = $request->input('priority') ?? 'normal';
+        if (!in_array($priority, ['low', 'normal', 'high'])) {
+            $priority = 'normal';
+        }
+
+        $delegateRequest = DelegateRequest::create([
+            'user_id' => $user?->id ?? Auth::id(),
+            'delegate_id' => $request->input('delegate_id') ?? $user?->id,
+            'request_type' => $reqType,
+            'subject' => $subject,
+            'description' => $description,
+            'reason' => $description,
+            'justification' => $justification,
+            'priority' => $priority,
+            'status' => 'pending_manager_approval',
         ]);
 
-        $data['user_id'] = Auth::id();
-        $data['status'] = $data['status'] ?? 'pending_manager_approval';
-
-        $delegateRequest = DelegateRequest::create($data);
-
         // Notify supervisor / manager
-        $user = Auth::user();
         $manager = $user?->manager ?? \App\Models\User::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)->where('id', '!=', $user->id)->first();
         if ($manager) {
             NotificationController::sendNotification(
                 $manager,
                 'Nouvelle demande soumise',
-                "Le délégué {$user->name} a soumis une demande ({$delegateRequest->request_type}).",
+                "Le délégué {$user->name} a soumis une demande : {$subject}.",
                 'request',
                 'superviseur',
-                ['request_id' => $delegateRequest->id]
+                ['request_id' => (string) $delegateRequest->id]
             );
         }
 
@@ -79,9 +87,22 @@ class RequestController extends Controller
             new OA\Response(response: 200, description: 'Liste des demandes')
         ]
     )]
-    public function index()
+    public function index(Request $request)
     {
-        $requests = DelegateRequest::where('user_id', Auth::id())->latest()->get();
+        $user = Auth::user();
+        $isManager = $user && $user->isAdminOrSupervisor();
+
+        if ($isManager) {
+            $requests = DelegateRequest::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)
+                ->with(['user', 'contact'])
+                ->latest()
+                ->get();
+        } else {
+            $requests = DelegateRequest::where('user_id', Auth::id())
+                ->latest()
+                ->get();
+        }
+
         return response()->json($requests);
     }
 

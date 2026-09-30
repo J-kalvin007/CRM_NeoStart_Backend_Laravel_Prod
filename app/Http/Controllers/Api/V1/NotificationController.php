@@ -91,6 +91,8 @@ class NotificationController extends Controller
                         'message' => $message,
                         'type' => $type,
                         'recipient_role' => $recipientRole,
+                        'user_id' => (string) $user->id,
+                        'delegate_name' => (string) $user->name,
                     ], $extra)),
                     'read_at' => null,
                     'created_at' => now(),
