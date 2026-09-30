@@ -248,7 +248,7 @@ class ContactController extends Controller
         $duplicateService->abortIfDuplicateContact($countryId, $validated);
 
         $user = auth()->user();
-        $isDelegue = $user && $user->hasRole('delegue_medical');
+        $isDelegue = $user && !$user->isAdminOrSupervisor();
         $statutValidation = $isDelegue ? 'en_attente' : 'valide';
 
         $contact = Contact::create(array_merge(

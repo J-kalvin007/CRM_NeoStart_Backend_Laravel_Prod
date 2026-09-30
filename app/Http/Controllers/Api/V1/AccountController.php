@@ -200,7 +200,7 @@ class AccountController extends Controller
         $duplicateService->abortIfDuplicateAccount($validated['organizational_unit_id'] ?? null, $validated);
 
         $user = auth()->user();
-        $isDelegue = $user && $user->hasRole('delegue_medical');
+        $isDelegue = $user && !$user->isAdminOrSupervisor();
         $statutValidation = $isDelegue ? 'en_attente' : 'valide';
 
         // Mettre le nom en majuscules

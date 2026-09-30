@@ -24,7 +24,9 @@ class ObjectifController extends Controller
     )]
     public function index(Request $request)
     {
+        $user = auth()->user();
         $query = Objectif::with(['user', 'team', 'product', 'indicator', 'type', 'organizationalUnit'])
+            ->when(!$user?->isAdminOrSupervisor(), fn($q) => $q->where('user_id', $user->id))
             ->when($request->user_id, fn($q, $v) => $q->where('user_id', $v))
             ->when($request->team_id, fn($q, $v) => $q->where('team_id', $v))
             ->when($request->indicator_id, fn($q, $v) => $q->where('indicator_id', $v))
@@ -56,7 +58,7 @@ class ObjectifController extends Controller
     public function store(StoreObjectifRequest $request)
     {
         // Le délégué médical n'est pas autorisé à créer des objectifs
-        if (auth()->user()->hasRole('delegue-medical')) {
+        if (!auth()->user()?->isAdminOrSupervisor()) {
             return response()->json(['message' => 'Non autorisé. Seul un superviseur ou directeur peut créer des objectifs.'], 403);
         }
         $data = $request->validated();
@@ -100,7 +102,7 @@ class ObjectifController extends Controller
     )]
     public function destroy(string $id)
     {
-        if (auth()->user()->hasRole('delegue-medical')) {
+        if (!auth()->user()?->isAdminOrSupervisor()) {
             return response()->json(['message' => 'Non autorisé. Seul un superviseur ou directeur peut supprimer des objectifs.'], 403);
         }
 

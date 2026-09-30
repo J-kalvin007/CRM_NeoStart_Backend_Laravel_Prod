@@ -17,7 +17,7 @@ class SampleRequestController extends Controller
         $query = SampleRequest::with(['product', 'user', 'approver'])
             ->orderBy('created_at', 'desc');
 
-        if ($user->hasRole('délégué')) {
+        if (!$user->isAdminOrSupervisor()) {
             $query->where('user_id', $user->id);
         } 
 
