@@ -136,14 +136,20 @@ class SupervisorDashboardController extends Controller
         $temporality = $request->query('temporality', 'Jour');
         $dateStr = $request->query('date', date('Y-m-d'));
 
-        $sectors = [
-            'Tous les secteurs',
-            'Abidjan Est',
-            'Abidjan Sud',
-            'Abidjan Centre',
-            'Abidjan Nord',
-            'Abidjan Ouest',
-        ];
+        $sectorsFromDb = [];
+        try {
+            if (class_exists('\App\Models\Sector')) {
+                $sectorsFromDb = \App\Models\Sector::pluck('name')->filter()->unique()->values()->toArray();
+            }
+            if (empty($sectorsFromDb)) {
+                $sectorsFromDb = \Illuminate\Support\Facades\DB::table('sectors')->pluck('nom')->filter()->unique()->values()->toArray();
+            }
+        } catch (\Throwable $e) {}
+
+        if (empty($sectorsFromDb)) {
+            $sectorsFromDb = ['Abidjan Est', 'Abidjan Sud', 'Abidjan Centre', 'Abidjan Nord', 'Abidjan Ouest'];
+        }
+        $sectors = array_merge(['Tous les secteurs'], $sectorsFromDb);
 
         $delegates = [
             [
@@ -159,12 +165,19 @@ class SupervisorDashboardController extends Controller
         ];
 
         try {
-            $dbUsers = User::whereHas('roles', function($q) {
-                $q->whereIn('name', ['delegue_medical', 'superviseur']);
-            })->get();
+            $user = auth()->user();
+            $dbUsers = User::where('id', '!=', $user?->id)
+                ->where(function($q) use ($user) {
+                    if ($user) {
+                        $q->where('manager_id', $user->id);
+                    }
+                    $q->orWhereHas('roles', function($r) {
+                        $r->whereIn('name', ['Delegue_medicale', 'delegue_medicale', 'delegue_medical', 'delegue', 'délégué', 'Délégué Médical', 'superviseur']);
+                    })->orWhereDoesntHave('roles');
+                })->get();
 
             if ($dbUsers->isEmpty()) {
-                $dbUsers = User::all();
+                $dbUsers = User::where('id', '!=', $user?->id)->get();
             }
 
             foreach ($dbUsers as $index => $u) {

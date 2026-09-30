@@ -45,7 +45,8 @@ class AccountController extends Controller
         $user = auth()->user();
         if ($user && !$user->isAdminOrSupervisor()) {
             $query->where(function ($q) use ($user) {
-                $q->where('accounts.user_id', $user->id)
+                $q->whereIn('statut', ['actif', 'valide'])
+                  ->orWhere('accounts.user_id', $user->id)
                   ->orWhere('accounts.delegue_id', $user->id)
                   ->orWhere('accounts.created_by', $user->id);
             });
@@ -63,9 +64,14 @@ class AccountController extends Controller
                 ->unique()
                 ->toArray();
             if (!empty($userIdsInUnit)) {
-                $query->whereIn('accounts.user_id', $userIdsInUnit);
-            } else {
-                $query->whereRaw('1 = 0');
+                $query->where(function ($q) use ($userIdsInUnit, $user) {
+                    $q->whereIn('accounts.user_id', $userIdsInUnit)
+                      ->orWhereIn('accounts.delegue_id', $userIdsInUnit)
+                      ->orWhereNull('accounts.user_id');
+                    if ($user->subsidiary_id) {
+                        $q->orWhere('accounts.subsidiary_id', $user->subsidiary_id);
+                    }
+                });
             }
         }
 
