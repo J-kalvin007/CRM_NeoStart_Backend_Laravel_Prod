@@ -139,7 +139,17 @@ class UserController extends Controller
     )]
     public function show(string $id)
     {
-        $user = User::with(['roles', 'scopes', 'permissions'])->findOrFail($id);
+        $user = User::with([
+            'roles', 
+            'scopes', 
+            'permissions',
+            'manager',
+            'contacts' => fn($q) => $q->with(['account', 'speciality'])->latest()->limit(50),
+            'accounts' => fn($q) => $q->latest()->limit(50),
+            'activities' => fn($q) => $q->with(['contact', 'account'])->latest()->limit(50)
+        ])
+        ->withCount(['contacts', 'accounts', 'activities'])
+        ->findOrFail($id);
         return new UserResource($user);
     }
 

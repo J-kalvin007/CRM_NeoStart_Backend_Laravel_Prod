@@ -18,6 +18,11 @@ class DocumentController extends Controller
                   ->where('documentable_id', $request->documentable_id);
         }
 
+        \Illuminate\Support\Facades\Log::info('Document Query:', [
+            'sql' => $query->toSql(),
+            'bindings' => $query->getBindings(),
+        ]);
+
         $documents = $query->get()->map(function ($doc) {
             // Map the internal types to frontend display types
             $mappedType = 'NOTICE';
@@ -52,7 +57,7 @@ class DocumentController extends Controller
                 'paysAutorises' => ['FR', 'CI', 'SN'],
                 'documentable_id' => $doc->documentable_id,
                 'documentable_type' => $doc->documentable_type,
-                'url' => config('app.url') . \Illuminate\Support\Facades\Storage::url($doc->file_path),
+                'url' => config('app.url') . \Illuminate\Support\Facades\Storage::url(preg_replace('/^\/?storage\//', '', $doc->file_path)),
                 'folder' => $mappedType === 'E-DETAILING' ? 'E-Detailing' : ($mappedType === 'VIDEO' ? 'Vidéos' : 'Brochures')
             ];
         });
@@ -74,6 +79,9 @@ class DocumentController extends Controller
             'file_path' => 'nullable|string', // Fallback
             'version' => 'nullable|string|max:50',
             'expiration_date' => 'nullable|date|after:today',
+            'speciality_id' => 'nullable|uuid',
+            'role_id' => 'nullable|integer',
+            'status' => 'nullable|in:draft,review,approved,expired',
         ]);
 
         if ($request->hasFile('file')) {
@@ -102,7 +110,7 @@ class DocumentController extends Controller
             'taille' => '2.4 MB',
             'dateExpiration' => $document->expiration_date ? \Carbon\Carbon::parse($document->expiration_date)->format('Y-m-d') : 'N/A',
             'statut' => 'VALIDE',
-            'url' => config('app.url') . \Illuminate\Support\Facades\Storage::url($document->file_path),
+            'url' => config('app.url') . \Illuminate\Support\Facades\Storage::url(preg_replace('/^\/?storage\//', '', $document->file_path)),
             'folder' => $mappedType === 'E-DETAILING' ? 'E-Detailing' : ($mappedType === 'VIDEO' ? 'Vidéos' : 'Brochures')
         ];
 
@@ -125,6 +133,9 @@ class DocumentController extends Controller
             'documentable_id' => 'sometimes|uuid',
             'documentable_type' => 'sometimes|string',
             'file' => 'sometimes|nullable|file',
+            'speciality_id' => 'sometimes|nullable|uuid',
+            'role_id' => 'sometimes|nullable|integer',
+            'status' => 'sometimes|nullable|in:draft,review,approved,expired',
         ]);
 
         if ($request->hasFile('file')) {
@@ -154,7 +165,7 @@ class DocumentController extends Controller
             'taille' => '2.4 MB',
             'dateExpiration' => $document->expiration_date ? \Carbon\Carbon::parse($document->expiration_date)->format('Y-m-d') : 'N/A',
             'statut' => $document->is_active ? 'VALIDE' : 'ARCHIVE',
-            'url' => config('app.url') . \Illuminate\Support\Facades\Storage::url($document->file_path),
+            'url' => config('app.url') . \Illuminate\Support\Facades\Storage::url(preg_replace('/^\/?storage\//', '', $document->file_path)),
             'folder' => $mappedType === 'E-DETAILING' ? 'E-Detailing' : ($mappedType === 'VIDEO' ? 'Vidéos' : 'Brochures'),
             'documentable_id' => $document->documentable_id,
             'documentable_type' => $document->documentable_type,

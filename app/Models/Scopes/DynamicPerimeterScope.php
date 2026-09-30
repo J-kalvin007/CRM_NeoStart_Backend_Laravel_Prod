@@ -66,7 +66,7 @@ class DynamicPerimeterScope implements Scope
         $operationalTables = [
             'contacts', 'activities', 'tour_plans', 'sample_movements', 'objectifs', 
             'accounts', 'kol_profiles', 'opportunities', 'orders', 'sales',
-            'expenses', 'events', 'documents', 'tasks', 'indicators'
+            'expenses', 'events', 'tasks', 'indicators'
         ];
 
         if ($table === 'users') {
@@ -76,6 +76,8 @@ class DynamicPerimeterScope implements Scope
         } elseif (in_array($table, ['products', 'categories', 'product_types', 'specialities', 'galenic_forms'])) {
             // Reference catalogs are accessible to all authenticated users
             return;
+        } elseif ($table === 'documents') {
+            $this->filterDocuments($builder, $user, []);
         } else {
             // Restrict access to other tables
             $builder->whereRaw('1 = 0');
@@ -98,6 +100,10 @@ class DynamicPerimeterScope implements Scope
                 
             case 'users':
                 $this->filterUsers($builder, $user, $accessibleUnitIds);
+                break;
+                
+            case 'documents':
+                $this->filterDocuments($builder, $user, $accessibleUnitIds);
                 break;
                 
             default:
@@ -201,7 +207,7 @@ class DynamicPerimeterScope implements Scope
         $operationalTables = [
             'contacts', 'activities', 'tour_plans', 'sample_movements', 'objectifs', 
             'accounts', 'kol_profiles', 'opportunities', 'orders', 'sales',
-            'expenses', 'events', 'documents', 'tasks', 'indicators'
+            'expenses', 'events', 'tasks', 'indicators'
         ];
 
         // Reference catalogs are accessible to all
@@ -235,6 +241,16 @@ class DynamicPerimeterScope implements Scope
             // Filter by users who have access to the organizational units
             $builder->where(function ($query) use ($table, $user, $accessibleUnitIds) {
                 $query->where($table . '.user_id', $user->id); // Always include own records
+
+                // For the accounts table: also include establishments linked to the delegate's contacts
+                if ($table === 'accounts') {
+                    $query->orWhereIn('accounts.id', function ($sub) use ($user) {
+                        $sub->select('account_id')
+                            ->from('contacts')
+                            ->where('user_id', $user->id)
+                            ->whereNotNull('account_id');
+                    });
+                }
                 
                 // Supervisors and managers can see their team members' records
                 if ($user->hasAnyRole(['superviseur', 'directeur_regional', 'directeur_commercial', 'directeur_marketing'])) {
@@ -246,6 +262,25 @@ class DynamicPerimeterScope implements Scope
                             $subQuery->orWhere('team_id', $user->team_id);
                         }
                     });
+
+                    // For supervisors managing accounts: also include establishments linked to their team's contacts
+                    if ($table === 'accounts') {
+                        $query->orWhereIn('accounts.id', function ($sub) use ($user) {
+                            $sub->select('account_id')
+                                ->from('contacts')
+                                ->where(function ($q) use ($user) {
+                                    $q->whereIn('user_id', function ($s) use ($user) {
+                                        $s->select('id')->from('users')->where('manager_id', $user->id);
+                                    });
+                                    if ($user->team_id) {
+                                        $q->orWhereIn('user_id', function ($s) use ($user) {
+                                            $s->select('id')->from('users')->where('team_id', $user->team_id);
+                                        });
+                                    }
+                                })
+                                ->whereNotNull('account_id');
+                        });
+                    }
                 }
 
                 if (!empty($accessibleUnitIds)) {
@@ -255,12 +290,64 @@ class DynamicPerimeterScope implements Scope
                                  ->whereIn('organizational_unit_id', $accessibleUnitIds)
                                  ->where('is_active', true);
                     });
+
+                    // For accounts with unit scope: also include establishments linked to contacts of users in those units
+                    if ($table === 'accounts') {
+                        $query->orWhereIn('accounts.id', function ($sub) use ($accessibleUnitIds) {
+                            $sub->select('account_id')
+                                ->from('contacts')
+                                ->whereIn('user_id', function ($s) use ($accessibleUnitIds) {
+                                    $s->select('user_id')
+                                      ->from('user_scopes')
+                                      ->whereIn('organizational_unit_id', $accessibleUnitIds)
+                                      ->where('is_active', true);
+                                })
+                                ->whereNotNull('account_id');
+                        });
+                    }
                 }
             });
         } else {
             // For unknown tables, restrict access
             $builder->whereRaw('1 = 0');
         }
+    }
+
+    /**
+     * Filter documents table based on organization, role, and speciality
+     */
+    protected function filterDocuments(Builder $builder, User $user, array $accessibleUnitIds): void
+    {
+        $builder->where(function ($query) use ($user, $accessibleUnitIds) {
+            // 1. Check organizational unit (perimeter)
+            $query->where(function ($q) use ($accessibleUnitIds) {
+                $q->whereNull('organizational_unit_id');
+                if (!empty($accessibleUnitIds)) {
+                    $q->orWhereIn('organizational_unit_id', $accessibleUnitIds);
+                }
+            });
+
+            // 2. Check role restriction
+            $query->where(function ($q) use ($user) {
+                $q->whereNull('role_id');
+                // The user object might not have role_id directly if using spatie, but we can check hasRole or directly against user's roles
+                // If using spatie, the user has multiple roles.
+                // Assuming we have roles relation or role_id
+                $userRoleIds = $user->roles()->pluck('id')->toArray();
+                if (!empty($userRoleIds)) {
+                    $q->orWhereIn('role_id', $userRoleIds);
+                }
+            });
+
+            // 3. Check speciality restriction
+            $query->where(function ($q) use ($user) {
+                $q->whereNull('speciality_id');
+                // Assuming user has a speciality_id or specialities
+                if (!empty($user->speciality_id)) {
+                    $q->orWhere('speciality_id', $user->speciality_id);
+                }
+            });
+        });
     }
 
     /**

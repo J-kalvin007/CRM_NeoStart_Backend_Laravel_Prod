@@ -340,26 +340,74 @@ class AnalyticsController extends Controller
     {
         $user = auth()->user();
         
-        $query = ClmPresentationAnalytic::with('document')
-            ->select('document_id', DB::raw('count(*) as views_count'), DB::raw('avg(total_duration_seconds) as average_duration'))
-            ->groupBy('document_id');
-
+        $query = ClmPresentationAnalytic::with('document');
+        
         // Filtrer par équipe si l'utilisateur n'est pas un administrateur global
         if (!$user->can('scope:global') && !$user->hasAnyRole(['superadmin', 'admin'])) {
             $teamUsers = User::pluck('id');
             $query->whereIn('user_id', $teamUsers);
         }
 
-        $analytics = $query->get()->map(function ($item) {
-            return [
-                'document_id' => $item->document_id,
-                'document_name' => $item->document->title ?? 'Document inconnu',
-                'views_count' => $item->views_count,
-                'average_duration_seconds' => round($item->average_duration),
-            ];
-        });
+        $analyticsData = $query->get();
 
-        return response()->json($analytics);
+        $totalSessions = $analyticsData->count();
+        $totalDuration = $analyticsData->sum('total_duration_seconds');
+        $completedSessions = $analyticsData->where('completed', true)->count();
+        $engagementRate = $totalSessions > 0 ? round(($completedSessions / $totalSessions) * 100) : 0;
+        
+        // Calculer les top decks
+        $deckStats = [];
+        $slideStats = [];
+        $totalSlidesViewed = 0;
+
+        foreach ($analyticsData as $analytic) {
+            $docId = $analytic->document_id;
+            if (!isset($deckStats[$docId])) {
+                $deckStats[$docId] = [
+                    'document_id' => $docId,
+                    'document_name' => $analytic->document->titre ?? $analytic->document->title ?? 'Document inconnu',
+                    'sessions' => 0,
+                    'total_duration' => 0,
+                ];
+            }
+            $deckStats[$docId]['sessions']++;
+            $deckStats[$docId]['total_duration'] += $analytic->total_duration_seconds;
+
+            if (is_array($analytic->slides_data)) {
+                foreach ($analytic->slides_data as $slide) {
+                    $totalSlidesViewed++;
+                    $slideIndex = $slide['slide_index'] ?? 0;
+                    if (!isset($slideStats[$slideIndex])) {
+                        $slideStats[$slideIndex] = [
+                            'name' => 'Slide ' . $slideIndex,
+                            'views' => 0,
+                            'total_duration' => 0,
+                        ];
+                    }
+                    $slideStats[$slideIndex]['views']++;
+                    $slideStats[$slideIndex]['total_duration'] += ($slide['duration_seconds'] ?? 0);
+                }
+            }
+        }
+
+        $topDecks = collect(array_values($deckStats))->map(function($d) {
+            $d['average_duration_seconds'] = $d['sessions'] > 0 ? round($d['total_duration'] / $d['sessions']) : 0;
+            return $d;
+        })->sortByDesc('sessions')->take(5)->values();
+
+        $topSlides = collect(array_values($slideStats))->map(function($s) {
+            $s['average_duration_seconds'] = $s['views'] > 0 ? round($s['total_duration'] / $s['views']) : 0;
+            return $s;
+        })->sortByDesc('views')->take(5)->values();
+
+        return response()->json([
+            'total_sessions' => $totalSessions,
+            'average_duration_seconds' => $totalSessions > 0 ? round($totalDuration / $totalSessions) : 0,
+            'total_slides_viewed' => $totalSlidesViewed,
+            'engagement_rate' => $engagementRate,
+            'top_decks' => $topDecks,
+            'top_slides' => $topSlides,
+        ]);
     }
 
     #[OA\Get(

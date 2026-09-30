@@ -36,7 +36,13 @@ class ContactController extends Controller
     )]
     public function index(Request $request)
     {
-        $query = Contact::with(['account', 'categories', 'speciality', 'contactType', 'potential', 'influence', 'segmentation', 'delegue'])
+        $query = Contact::with([
+                // L'account doit être chargé sans le DynamicPerimeterScope car un établissement
+                // peut appartenir à un autre utilisateur (ex: admin) que le délégué qui consulte.
+                // withoutGlobalScopes() sur la relation garantit que le nom s'affiche toujours.
+                'account' => fn($q) => $q->withoutGlobalScopes(),
+                'categories', 'speciality', 'contactType', 'potential', 'influence', 'segmentation', 'delegue',
+            ])
             ->when($request->specialite ?? $request->speciality, function($q, $v) {
                 if (!$v || $v === 'Tous') return;
                 $q->where(function($sub) use ($v) {
@@ -70,6 +76,10 @@ class ContactController extends Controller
             }));
 
         $user = auth()->user();
+        if ($user && $user->hasRole('delegue_medical')) {
+            $query->where('contacts.user_id', $user->id);
+        }
+
         if ($user && !$user->isAdminOrSupervisor()) {
             $query->whereIn('statut', ['actif', 'valide']);
         }
@@ -295,7 +305,13 @@ class ContactController extends Controller
     )]
     public function show(string $id)
     {
-        $contact = Contact::with(['account', 'categories', 'activities' => fn($q) => $q->latest()->limit(10)])->findOrFail($id);
+        $contact = Contact::with([
+                'account'    => fn($q) => $q->withoutGlobalScopes(),
+                'categories',
+                'delegue',
+                'speciality',
+                'activities' => fn($q) => $q->latest()->limit(10),
+            ])->findOrFail($id);
         return new ContactResource($contact);
     }
 

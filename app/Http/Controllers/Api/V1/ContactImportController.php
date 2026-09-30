@@ -201,7 +201,16 @@ class ContactImportController extends Controller
                     }
 
                     $action = $this->upsertContact($parsed, $mode);
-                    $results[$action]++;
+                    
+                    if ($action === 'skipped_exists') {
+                        $results['skipped']++;
+                        $results['errors'][] = "Ligne {$lineNum} : ignorée (déjà existante, et mode création sélectionné).";
+                    } elseif ($action === 'skipped_not_exists') {
+                        $results['skipped']++;
+                        $results['errors'][] = "Ligne {$lineNum} : ignorée (n'existe pas, et mode mise à jour sélectionné).";
+                    } else {
+                        $results[$action]++;
+                    }
 
                 } catch (\Throwable $e) {
                     $results['errors'][] = "Ligne {$lineNum} : " . $e->getMessage();
@@ -427,7 +436,8 @@ class ContactImportController extends Controller
             $accountId = $this->findOrCreateAccount(
                 $nomStructure, $typeStructure,
                 $data['ville'] ?? null,
-                $accounts
+                $accounts,
+                $countryUnitId
             );
             if ($accountId) {
                 $data['account_id'] = $accountId;
@@ -445,11 +455,10 @@ class ContactImportController extends Controller
 
         $data['statut_validation'] = 'valide';
 
-        // ── Périmètre géographique dans meta ──────────────────────────────
+        // ── Périmètre géographique ────────────────────────────────────────
         if ($countryUnitId) {
-            $data['meta'] = array_merge($data['meta'] ?? [], [
-                'import_country_unit_id' => $countryUnitId,
-            ]);
+            // Lien direct pour que le filtre DynamicPerimeterScope fonctionne
+            $data['organizational_unit_id'] = $countryUnitId;
         }
 
         return $data;
@@ -498,7 +507,7 @@ class ContactImportController extends Controller
      * Trouve ou crée un Account (établissement de santé).
      * Vérifie avec normalisation pour éviter les doublons.
      */
-    private function findOrCreateAccount(string $nom, string $type, ?string $ville, array &$accounts): ?string
+    private function findOrCreateAccount(string $nom, string $type, ?string $ville, array &$accounts, ?string $unitId = null): ?string
     {
         $normNom = $this->normalizeStr($nom);
 
@@ -520,6 +529,10 @@ class ContactImportController extends Controller
         }
 
         if ($existing) {
+            // Mettre à jour le périmètre si non défini et qu'on en a un
+            if ($unitId && empty($existing->organizational_unit_id)) {
+                $existing->update(['organizational_unit_id' => $unitId]);
+            }
             $accounts[$nom] = $existing->id;
             return $existing->id;
         }
@@ -528,12 +541,13 @@ class ContactImportController extends Controller
         try {
             $nomMaj = mb_strtoupper(trim($nom), 'UTF-8'); // Nom en majuscules
             $account = Account::create([
-                'nom'    => $nomMaj,
-                'type'   => $type ?: 'Établissement de santé',
-                'ville'  => $ville,
-                'statut' => 'actif',
-                'user_id'=> auth()->id(),
-                'statut_validation' => 'valide',
+                'nom'                    => $nomMaj,
+                'type'                   => $type ?: 'Établissement de santé',
+                'ville'                  => $ville,
+                'statut'                 => 'actif',
+                'user_id'                => auth()->id(),
+                'statut_validation'      => 'valide',
+                'organizational_unit_id' => $unitId,
             ]);
             $accounts[$nom]    = $account->id;
             $accounts[$nomMaj] = $account->id; // aussi dans le cache en majuscules
@@ -597,7 +611,11 @@ class ContactImportController extends Controller
         $existing = null;
 
         if (!empty($data['code_externe'])) {
-            $existing = Contact::withoutGlobalScopes()->where('code_externe', $data['code_externe'])->first();
+            $query = Contact::withoutGlobalScopes()->where('code_externe', $data['code_externe']);
+            if (!empty($data['user_id'])) {
+                $query->where('user_id', $data['user_id']);
+            }
+            $existing = $query->first();
         }
 
         if (!$existing && !empty($data['nom'])) {
@@ -608,7 +626,7 @@ class ContactImportController extends Controller
         }
 
         if ($existing) {
-            if ($mode === 'create') return 'skipped';
+            if ($mode === 'create') return 'skipped_exists';
             if (!empty($data['meta'])) {
                 $data['meta'] = array_merge($existing->meta ?? [], $data['meta']);
             }
@@ -616,7 +634,7 @@ class ContactImportController extends Controller
             return 'updated';
         }
 
-        if ($mode === 'update') return 'skipped';
+        if ($mode === 'update') return 'skipped_not_exists';
 
         Contact::create($data);
         return 'created';

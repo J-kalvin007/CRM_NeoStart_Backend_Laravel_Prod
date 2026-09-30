@@ -82,7 +82,20 @@ class User extends Authenticatable
         return $this->hasMany(User::class, 'manager_id');
     }
 
+    public function contacts()
+    {
+        return $this->hasMany(Contact::class, 'user_id');
+    }
 
+    public function activities()
+    {
+        return $this->hasMany(Activity::class, 'user_id');
+    }
+
+    public function accounts()
+    {
+        return $this->hasMany(Account::class, 'user_id');
+    }
 
     public function isAdminOrSupervisor(): bool
     {

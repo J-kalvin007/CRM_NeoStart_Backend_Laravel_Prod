@@ -52,6 +52,7 @@ class AccountResource extends JsonResource
             'categories'    => $this->whenLoaded('categories', fn() =>
                 $this->categories->map(fn($c) => ['id' => $c->id, 'nom' => $c->nom, 'type' => $c->type])
             ),
+            'contacts' => $this->whenLoaded('contacts', fn() => ContactResource::collection($this->contacts)),
             'contacts_count' => $this->whenCounted('contacts'),
             'created_at'    => $this->created_at,
             'updated_at'    => $this->updated_at,

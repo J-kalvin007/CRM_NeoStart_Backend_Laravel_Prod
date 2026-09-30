@@ -63,16 +63,33 @@ class AccountController extends Controller
                 ->pluck('user_id')
                 ->unique()
                 ->toArray();
+
             if (!empty($userIdsInUnit)) {
-                $query->where(function ($q) use ($userIdsInUnit, $user) {
+                $query->where(function ($q) use ($userIdsInUnit) {
                     $q->whereIn('accounts.user_id', $userIdsInUnit)
+                    // Établissements créés par un utilisateur du périmètre
                       ->orWhereIn('accounts.delegue_id', $userIdsInUnit)
-                      ->orWhereNull('accounts.user_id');
-                    if ($user->subsidiary_id) {
-                        $q->orWhere('accounts.subsidiary_id', $user->subsidiary_id);
-                    }
+                      ->orWhereIn('accounts.id', function ($sub) use ($userIdsInUnit) {
+                          $sub->select('account_id')
+                              ->from('contacts')
+                              ->whereIn('user_id', $userIdsInUnit)
+                              ->whereNotNull('account_id');
+                      });
                 });
+            } else {
+                $query->whereRaw('1 = 0');
             }
+        } elseif (!$isGlobalAdmin && !$perimeterUnitId) {
+            // Pas de périmètre sélectionné mais non-admin : voir ses propres établissements + ceux de ses contacts
+            $query->where(function ($q) use ($user) {
+                $q->where('accounts.user_id', $user->id)
+                  ->orWhereIn('accounts.id', function ($sub) use ($user) {
+                      $sub->select('account_id')
+                          ->from('contacts')
+                          ->where('user_id', $user->id)
+                          ->whereNotNull('account_id');
+                  });
+            });
         }
 
         // Ordre par défaut pour éviter les sauts de pagination lors des mises à jour
@@ -262,7 +279,7 @@ class AccountController extends Controller
     )]
     public function show(string $id)
     {
-        $account = Account::with(['organizationalUnit', 'categories', 'contacts', 'activities', 'user', 'delegue'])->findOrFail($id);
+        $account = Account::with(['organizationalUnit', 'categories', 'contacts.delegue', 'contacts.speciality', 'activities', 'user', 'delegue'])->findOrFail($id);
         return new AccountResource($account);
     }
 

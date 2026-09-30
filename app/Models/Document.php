@@ -15,6 +15,9 @@ class Document extends Model
 
     protected $fillable = [
         'subsidiary_id',
+        'organizational_unit_id',
+        'speciality_id',
+        'role_id',
         'documentable_id',
         'documentable_type',
         'title',
@@ -23,6 +26,7 @@ class Document extends Model
         'file_path',
         'version',
         'is_active',
+        'status',
         'expiration_date',
     ];
 
@@ -34,5 +38,20 @@ class Document extends Model
     public function documentable()
     {
         return $this->morphTo();
+    }
+
+    public function organizationalUnit()
+    {
+        return $this->belongsTo(OrganizationalUnit::class);
+    }
+
+    public function speciality()
+    {
+        return $this->belongsTo(Speciality::class);
+    }
+
+    public function role()
+    {
+        return $this->belongsTo(Role::class);
     }
 }

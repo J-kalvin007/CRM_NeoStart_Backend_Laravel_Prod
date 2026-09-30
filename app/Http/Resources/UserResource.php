@@ -28,6 +28,12 @@ class UserResource extends JsonResource
             'otp_enabled' => (bool) $this->otp_enabled,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
+            'contacts_count' => $this->whenCounted('contacts'),
+            'accounts_count' => $this->whenCounted('accounts'),
+            'activities_count' => $this->whenCounted('activities'),
+            'contacts' => ContactResource::collection($this->whenLoaded('contacts')),
+            'accounts' => AccountResource::collection($this->whenLoaded('accounts')),
+            'activities' => ActivityResource::collection($this->whenLoaded('activities')),
         ];
     }
 }
