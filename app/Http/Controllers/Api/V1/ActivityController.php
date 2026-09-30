@@ -398,7 +398,12 @@ class ActivityController extends Controller
             $newTime = $validatedData['heure_debut'] ?? $activity->heure_debut;
             
             if ($newDate !== $activity->date_activite || $newTime !== $activity->heure_debut) {
-                $trace = "\n[Report] Visite reportée le " . date('d/m/Y H:i') . " : de " . $activity->date_activite . " " . $activity->heure_debut . " vers " . $newDate . " " . $newTime;
+                $oldD = date('d/m/Y', strtotime($activity->date_activite));
+                $oldT = $activity->heure_debut ? substr($activity->heure_debut, 0, 5) : '';
+                $newD = date('d/m/Y', strtotime($newDate));
+                $newT = $newTime ? substr($newTime, 0, 5) : '';
+
+                $trace = "\nVisite reportée le " . date('d/m/Y à H:i') . " (du " . $oldD . ($oldT ? " à " . $oldT : "") . " au " . $newD . ($newT ? " à " . $newT : "") . ")";
                 $validatedData['notes'] = ($validatedData['notes'] ?? $activity->notes) . $trace;
             }
         }
