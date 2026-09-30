@@ -165,11 +165,11 @@ class NotificationController extends Controller
                     $def = User::where('email', 'cmoucharif@gmail.com')->first();
                     if ($def) $targetUsers->push($def);
                 }
-            } elseif (in_array($role, ['delegate', 'delegue', 'delegue_medical'])) {
+            } elseif (in_array($role, ['delegate', 'delegue', 'delegue_medical', 'delegue_medicale'])) {
                 if ($sender && $sender->subordinates()->exists()) {
                     $targetUsers = $sender->subordinates;
                 } else {
-                    $targetUsers = User::whereHas('roles', fn($q) => $q->whereIn('name', ['delegue', 'delegate', 'Délégué', 'Délégué Médical']))->get();
+                    $targetUsers = User::whereHas('roles', fn($q) => $q->whereIn('name', ['delegue', 'delegate', 'Délégué', 'Délégué Médical', 'Delegue_medicale', 'delegue_medicale', 'Superviseur', 'Superadmin']))->get();
                 }
             } else {
                 $targetUsers = User::all();

@@ -44,7 +44,11 @@ class AccountController extends Controller
 
         $user = auth()->user();
         if ($user && !$user->isAdminOrSupervisor()) {
-            $query->whereIn('statut', ['actif', 'valide']);
+            $query->where(function ($q) use ($user) {
+                $q->where('accounts.user_id', $user->id)
+                  ->orWhere('accounts.delegue_id', $user->id)
+                  ->orWhere('accounts.created_by', $user->id);
+            });
         }
 
         $perimeterUnitId = app()->bound('active_perimeter_unit_id') ? app('active_perimeter_unit_id') : null;
