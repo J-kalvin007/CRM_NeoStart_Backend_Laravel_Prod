@@ -11,7 +11,12 @@ class SaleController extends Controller
 {
     public function index()
     {
-        $sales = Sale::with(['account', 'order', 'user'])->paginate(15);
+        $user = Auth::user();
+        $query = Sale::with(['account', 'order', 'user']);
+        if ($user && !$user->isAdminOrSupervisor()) {
+            $query->where('user_id', $user->id);
+        }
+        $sales = $query->paginate(15);
         return response()->json($sales);
     }
 
