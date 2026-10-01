@@ -586,6 +586,60 @@ class ValidationController extends Controller
     }
 
     /**
+     * Validation / rejet par lot.
+     * Corps : { action: approve|reject, rejection_reason?, items: [ {type, id}, ... ] }
+     * Chaque élément passe par approve()/reject() (mêmes contrôles d'équipe et notifications) ;
+     * un échec n'interrompt pas le lot. Réponse : compte des réussites + détail par élément.
+     */
+    public function bulk(Request $request)
+    {
+        $validated = $request->validate([
+            'action' => 'required|in:approve,reject',
+            'rejection_reason' => 'required_if:action,reject|nullable|string|min:2',
+            'items' => 'required|array|min:1|max:200',
+            'items.*.type' => 'required|string|in:contact,account,visit,activity_report,tour_plan,expense,sample,sample_request,request,delegate_request',
+            'items.*.id' => 'required|string',
+        ], [
+            'rejection_reason.required_if' => 'Le motif du rejet est obligatoire.',
+        ]);
+
+        $results = [];
+        foreach ($validated['items'] as $item) {
+            $sub = $request->duplicate();
+            $sub->replace(['rejection_reason' => $validated['rejection_reason'] ?? null]);
+
+            try {
+                $response = \Illuminate\Support\Facades\DB::transaction(fn () => $validated['action'] === 'approve'
+                    ? $this->approve($sub, $item['type'], $item['id'])
+                    : $this->reject($sub, $item['type'], $item['id']));
+                $ok = $response->getStatusCode() < 300;
+                $message = $response->getData(true)['message'] ?? null;
+            } catch (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e) {
+                $ok = false;
+                $message = $e->getMessage();
+            } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+                $ok = false;
+                $message = 'Élément introuvable ou hors de votre périmètre.';
+            } catch (\Throwable $e) {
+                report($e);
+                $ok = false;
+                $message = 'Erreur lors du traitement.';
+            }
+
+            $results[] = ['type' => $item['type'], 'id' => $item['id'], 'success' => $ok, 'message' => $message];
+        }
+
+        $done = collect($results)->where('success', true)->count();
+
+        return response()->json([
+            'message' => "{$done} / " . count($results) . ' élément(s) ' . ($validated['action'] === 'approve' ? 'validé(s)' : 'rejeté(s)') . '.',
+            'processed' => $done,
+            'failed' => count($results) - $done,
+            'results' => $results,
+        ], $done > 0 || empty($results) ? 200 : 422);
+    }
+
+    /**
      * Un validateur ne peut traiter que les éléments de ses collaborateurs (sauf admin/global).
      */
     private function ensureManaged(?string $ownerId): void

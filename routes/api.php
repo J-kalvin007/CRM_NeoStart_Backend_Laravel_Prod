@@ -212,6 +212,7 @@ Route::prefix('v1')->group(function () {
 
         // ── Répertoire (Comptes & Contacts) ────────────────────
         Route::get('validations/pending', [ValidationController::class, 'index']);
+        Route::post('validations/bulk', [ValidationController::class, 'bulk']);
         Route::post('validations/{type}/{id}/approve', [ValidationController::class, 'approve']);
         Route::post('validations/{type}/{id}/reject', [ValidationController::class, 'reject']);
 
