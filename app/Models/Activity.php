@@ -48,6 +48,18 @@ class Activity extends Model
         'signature_base64',
         'niveau_interet',
         'motif',
+        'meta',
+        'is_duo',
+        'duo_user_id',
+        'duo_activity_type',
+        'duo_status',
+        'duo_rejection_reason',
+        'duo_delegue_status',
+        'duo_delegue_rejection_reason',
+        'gps_debut_accuracy',
+        'gps_fin_accuracy',
+        'start_time',
+        'end_time',
         'report_status',
         'report_content',
         'validated_by_id',
@@ -62,6 +74,7 @@ class Activity extends Model
         'gps_debut_lng'   => 'float',
         'gps_fin_lat'     => 'float',
         'gps_fin_lng'     => 'float',
+        'meta'            => 'array',
         'duree_minutes'   => 'integer',
         'is_locked'       => 'boolean',
         'locked_at'       => 'datetime',
@@ -103,6 +116,12 @@ class Activity extends Model
     public function contact()
     {
         return $this->belongsTo(Contact::class);
+    }
+
+    public function contacts()
+    {
+        return $this->belongsToMany(Contact::class, 'activity_contact', 'activity_id', 'contact_id')
+                    ->withTimestamps();
     }
 
     public function account()

@@ -23,6 +23,7 @@ class ActivityResource extends JsonResource
             'notes'          => $this->notes,
             'prochain_rdv'   => $this->prochain_rdv,
             'statut'         => $this->statut,
+            'meta'           => $this->meta ?? null,
             'is_locked'      => $this->is_locked,
             'report_status'  => $this->report_status,
             'report_content' => $this->report_content,
@@ -40,6 +41,7 @@ class ActivityResource extends JsonResource
                 'email' => $this->delegue->email,
             ]),
             'contact'        => new ContactResource($this->whenLoaded('contact')),
+            'contacts'       => ContactResource::collection($this->whenLoaded('contacts')),
             'account'        => new AccountResource($this->whenLoaded('account')),
             'tour_plan'      => $this->whenLoaded('tourPlan', fn() => [
                 'id'     => $this->tourPlan->id,

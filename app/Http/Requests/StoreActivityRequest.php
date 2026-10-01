@@ -11,6 +11,10 @@ class StoreActivityRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $rawType = strtolower($this->activity_type ?? 'visite');
+        // Conserver le type original pour l'affichage
+        $type = $rawType;
+
+        // Mapping interne si nécessaire
         if (str_contains($rawType, 'visite')) {
             $type = 'visite';
         } elseif (str_contains($rawType, 'appel')) {
@@ -35,11 +39,12 @@ class StoreActivityRequest extends FormRequest
 
         if ($this->has('statut')) {
             $st = strtolower(trim((string)$this->statut));
-            if (in_array($st, ['en attente de validation', 'en_attente_de_validation', 'soumis', 'submitted', 'planifie', 'brouillon'])) {
+            if (in_array($st, ['en attente de validation', 'en_attente_de_validation', 'soumis', 'submitted', 'planifie'])) {
                 $merge['statut'] = 'planifiee';
             } elseif (in_array($st, ['realise', 'réalisée', 'effectuée', 'effectuee'])) {
                 $merge['statut'] = 'realisee';
             }
+            // Ne pas transformer 'brouillon' en 'planifiee'
         }
 
         if ($this->has('contact_id') && (!\Illuminate\Support\Str::isUuid((string)$this->contact_id) || !\App\Models\Contact::where('id', (string)$this->contact_id)->exists())) {
@@ -49,11 +54,22 @@ class StoreActivityRequest extends FormRequest
             $merge['account_id'] = null;
         }
 
+        // Sauvegarder le type original dans meta pour l'affichage
+        if ($this->has('meta') && !empty($this->meta)) {
+            $meta = $this->meta;
+            if (!isset($meta['activity_key'])) {
+                $meta['activity_key'] = $rawType;
+            }
+            $merge['meta'] = $meta;
+        }
+
         $this->merge($merge);
     }
 
     public function rules(): array
     {
+        $isDraft = $this->statut === 'brouillon';
+
         return [
             'subsidiary_id'  => 'nullable|uuid',
             'tour_plan_id'   => 'nullable|uuid|exists:tour_plans,id',
@@ -62,8 +78,8 @@ class StoreActivityRequest extends FormRequest
             'activity_type'  => 'required|string',
             'date_activite'  => 'required|date',
             'heure_debut'    => 'required|string',
-            'heure_fin'      => 'required_without:duree_minutes|nullable|string',
-            'duree_minutes'  => 'required_without:heure_fin|nullable|integer',
+            'heure_fin'      => $isDraft ? 'nullable|string' : 'required_without:duree_minutes|nullable|string',
+            'duree_minutes'  => $isDraft ? 'nullable|integer' : 'required_without:heure_fin|nullable|integer',
             'motif'          => 'nullable|string',
             'notes'          => 'nullable|string',
             'niveau_interet' => 'nullable|integer',
@@ -71,20 +87,23 @@ class StoreActivityRequest extends FormRequest
             'local_uuid'     => 'nullable|string',
             'signature_base64'=> 'nullable|string',
             'user_id'        => 'nullable|string|exists:users,id',
-            
+
             // Samples
             'samples'              => 'nullable|array',
             'samples.*.product_id' => 'required_with:samples|string|exists:products,id',
             'samples.*.quantite'   => 'required_with:samples|integer|min:1',
             'samples.*.num_lot'    => 'nullable|string',
             'samples.*.date_peremption' => 'nullable|date',
-            
+
             // Products
             'products'              => 'nullable|array',
             'products.*.product_id' => 'required_with:products|string|exists:products,id',
             'products.*.quantity'   => 'nullable|integer',
             'products.*.customer_interest' => 'nullable|string',
             'products.*.remarques'  => 'nullable|string',
+
+            // Meta (pour group_contacts, centre, objectif, etc.)
+            'meta' => 'nullable|array',
         ];
     }
 

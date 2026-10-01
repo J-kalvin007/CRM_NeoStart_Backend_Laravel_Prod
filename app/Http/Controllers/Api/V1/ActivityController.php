@@ -45,6 +45,7 @@ class ActivityController extends Controller
             ->with([
                 'delegue' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class),
                 'contact' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account', 'speciality', 'potential', 'influence']),
+                'contacts' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account', 'speciality', 'potential', 'influence']),
                 'account' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class),
                 'products' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class),
             ])
@@ -67,23 +68,31 @@ class ActivityController extends Controller
                   ->orWhere('activities.accompanying_user_id', $user->id);
 
                 if ($isSalesManager) {
-                    // Le Sales Manager voit les plannings de tous les délégués
-                    $q->orWhereNotNull('activities.user_id');
+                    // Le Sales Manager voit les plannings de tous les délégués (sauf brouillons)
+                    $q->orWhere(function ($subQ) {
+                        $subQ->whereNotNull('activities.user_id')
+                             ->where('activities.statut', '!=', 'brouillon');
+                    });
                 } elseif ($isManager) {
-                    // S'il est superviseur/manager, voit les visites de son équipe ou des délégués sous lui
-                    $q->orWhereHas('delegue', function ($delegueQuery) use ($user) {
-                        $delegueQuery->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
-                            ->where('manager_id', $user->id);
-                        if ($user->team_id) {
-                            $delegueQuery->orWhere('team_id', $user->team_id);
-                        }
+                    // S'il est superviseur/manager, voit les visites de son équipe ou des délégués sous lui (sauf brouillons)
+                    $q->orWhere(function ($subQ) use ($user) {
+                        $subQ->where('activities.statut', '!=', 'brouillon')
+                             ->whereHas('delegue', function ($delegueQuery) use ($user) {
+                                $delegueQuery->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
+                                    ->where('manager_id', $user->id);
+                                if ($user->team_id) {
+                                    $delegueQuery->orWhere('team_id', $user->team_id);
+                                }
+                            });
                     });
                 }
             });
         }
 
         $perPage = (int) $request->query('per_page', 200);
-        return ActivityResource::collection($query->paginate($perPage));
+        return response()->json([
+            'data' => $query->paginate($perPage)->items()
+        ]);
     }
 
     /**
@@ -245,7 +254,7 @@ class ActivityController extends Controller
             $existingPivot = \Illuminate\Support\Facades\DB::table('activity_product')
                 ->where('activity_id', $activity->id)
                 ->pluck('id', 'product_id')->toArray();
-            
+
             $syncData = [];
             foreach ($products as $p) {
                 $syncData[$p['product_id']] = [
@@ -256,6 +265,11 @@ class ActivityController extends Controller
                 ];
             }
             $activity->products()->sync($syncData);
+        }
+
+        // Attach multiple contacts if provided in meta.group_contacts
+        if (!empty($data['meta']['group_contacts']) && is_array($data['meta']['group_contacts'])) {
+            $activity->contacts()->sync($data['meta']['group_contacts']);
         }
 
         // Verrouiller automatiquement si statut = realisee ou soumis_definitif
@@ -307,11 +321,12 @@ class ActivityController extends Controller
     {
         $activity = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
             ->with([
-                'delegue', 
-                'contact' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account', 'speciality', 'potential', 'influence']), 
-                'account' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class), 
-                'tourPlan', 
-                'products' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class), 
+                'delegue',
+                'contact' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account', 'speciality', 'potential', 'influence']),
+                'contacts' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account', 'speciality', 'potential', 'influence']),
+                'account' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class),
+                'tourPlan',
+                'products' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class),
                 'sampleMovements'
             ])->findOrFail($id);
         return new ActivityResource($activity);
@@ -535,8 +550,92 @@ class ActivityController extends Controller
         }
 
         return response()->json([
-            'message' => 'Activité mise à jour avec succès', 
+            'message' => 'Activité mise à jour avec succès',
             'data' => new ActivityResource($activity->load(['delegue', 'contact', 'account', 'products']))
+        ]);
+    }
+
+    public function validateActivitiesBulk(Request $request)
+    {
+        $request->validate([
+            'activity_ids' => 'required|array',
+            'activity_ids.*' => 'string|exists:activities,id',
+            'statut' => 'required|in:validee,validated,rejetee,refusee',
+            'rejection_reason' => 'required_if:statut,rejetee,refusee|string|nullable'
+        ]);
+
+        $activityIds = $request->activity_ids;
+        $st = strtolower($request->statut);
+        $newStatut = ($st === 'validee' || $st === 'validated') ? 'validee' : 'refusee';
+        $rejectionReason = $request->rejection_reason ?? $request->motif ?? null;
+
+        if (in_array($st, ['rejetee', 'refusee']) && (empty($rejectionReason) || strlen(trim($rejectionReason)) < 2)) {
+            return response()->json([
+                'message' => 'Le motif du rejet est obligatoire.',
+                'errors'  => ['rejection_reason' => ['Le motif du rejet est obligatoire.']]
+            ], 422);
+        }
+
+        $activities = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
+            ->whereIn('id', $activityIds)
+            ->get();
+
+        $validatedCount = 0;
+        $groupedUsers = [];
+
+        foreach ($activities as $activity) {
+            $notes = $activity->notes;
+            if (in_array($st, ['rejetee', 'refusee']) && $rejectionReason) {
+                $notes = $notes ? $notes . "\n[Rejeté]: " . $rejectionReason : "[Rejeté]: " . $rejectionReason;
+            }
+
+            $activity->update([
+                'statut' => $newStatut,
+                'validated_by_id' => auth()->id(),
+                'validation_date' => now(),
+                'notes' => $notes,
+                'rejection_reason' => $rejectionReason,
+            ]);
+
+            $validatedCount++;
+
+            // Group by user for notification
+            if ($activity->user) {
+                $userId = $activity->user->id;
+                if (!isset($groupedUsers[$userId])) {
+                    $groupedUsers[$userId] = [
+                        'user' => $activity->user,
+                        'activities' => []
+                    ];
+                }
+                $groupedUsers[$userId]['activities'][] = $activity;
+            }
+        }
+
+        // Send one notification per user (not per activity)
+        foreach ($groupedUsers as $userData) {
+            $user = $userData['user'];
+            $userActivities = $userData['activities'];
+            $title = $newStatut === 'validee' ? 'Visites Validées' : 'Visites Refusées';
+            $count = count($userActivities);
+            $msg = $newStatut === 'validee'
+                ? "Vous avez {$count} visite(s) validée(s) par votre responsable."
+                : "Vous avez {$count} visite(s) refusée(s) par votre responsable.";
+
+            try {
+                app(\App\Services\NotificationService::class)->send(
+                    $user,
+                    $title,
+                    $msg,
+                    'planning',
+                    ['bulk_validation' => true, 'count' => $count, 'sender_id' => auth()->id()]
+                );
+            } catch (\Exception $e) {}
+        }
+
+        return response()->json([
+            'message' => "{$validatedCount} activité(s) mise(s) à jour avec succès",
+            'validated_count' => $validatedCount
         ]);
     }
 
