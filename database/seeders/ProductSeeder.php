@@ -100,7 +100,6 @@ class ProductSeeder extends Seeder
                 Product::firstOrCreate(
                     ['code' => $p['code']],
                     array_merge($p, [
-                        'subsidiary_id' => $subsidiary->id,
                         'product_type_id' => $medType?->id
                     ])
                 );

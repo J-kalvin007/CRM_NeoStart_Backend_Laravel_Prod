@@ -97,6 +97,41 @@ class User extends Authenticatable
         return $this->hasMany(Account::class, 'user_id');
     }
 
+    /**
+     * IDs des collaborateurs encadrés (récursif via manager_id) :
+     * un superviseur obtient ses délégués, un directeur ses superviseurs et leurs délégués.
+     */
+    public function teamMemberIds(): array
+    {
+        $ids = [];
+        $current = [$this->id];
+
+        while (!empty($current)) {
+            $children = static::withoutGlobalScopes()
+                ->whereIn('manager_id', $current)
+                ->whereNotIn('id', array_merge($ids, [$this->id]))
+                ->pluck('id')
+                ->all();
+
+            $ids = array_merge($ids, $children);
+            $current = $children;
+        }
+
+        return $ids;
+    }
+
+    /** Collaborateurs encadrés (voir teamMemberIds). */
+    public function teamMembers()
+    {
+        return static::withoutGlobalScopes()->whereIn('id', $this->teamMemberIds());
+    }
+
+    /** Vrai si $userId fait partie de l'équipe encadrée. */
+    public function manages(string $userId): bool
+    {
+        return in_array($userId, $this->teamMemberIds(), true);
+    }
+
     public function isAdminOrSupervisor(): bool
     {
         return $this->hasRole([

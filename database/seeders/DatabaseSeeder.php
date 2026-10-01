@@ -95,13 +95,6 @@ class DatabaseSeeder extends Seeder
         $admin = User::firstOrCreate(['email' => 'admin@crm.local'], [
             'name' => 'Super Administrateur',
             'password' => Hash::make('password'),
-            'country_id' => $country->id,
-            'subsidiary_id' => $subsidiary->id,
-            'region_id' => $region->id,
-            'territory_id' => $territory->id,
-            'zone_id' => $zone->id,
-            'sector_id' => $sector->id,
-            'team_id' => $team->id,
             'status' => true
         ]);
 

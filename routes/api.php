@@ -207,7 +207,6 @@ Route::prefix('v1')->group(function () {
         // ── Superviseur ──────────────────────────────────────────
         Route::get('/supervisor/dashboard', [SupervisorDashboardController::class, 'dashboard']);
         Route::get('/supervisor/team-planning', [SupervisorDashboardController::class, 'teamPlanning']);
-        Route::get('/supervisor/alerts', [SupervisorDashboardController::class, 'alerts']);
 
         // ── Répertoire (Comptes & Contacts) ────────────────────
         Route::get('validations/pending', [ValidationController::class, 'index']);
@@ -268,6 +267,7 @@ Route::prefix('v1')->group(function () {
         Route::post('duo', [ActivityController::class, 'storeDuo']);
         Route::post('activities/{activity}/accept-duo', [ActivityController::class, 'acceptDuo']);
         Route::post('activities/{activity}/refuse-duo', [ActivityController::class, 'refuseDuo']);
+        Route::post('activities/{activity}/join-duo', [ActivityController::class, 'joinDuo']);
         Route::post('duo/{id}/accepter', [ActivityController::class, 'acceptDuo']);
         Route::post('duo/{id}/refuser', [ActivityController::class, 'refuseDuo']);
         Route::post('activities/{activity}/validate', [ActivityController::class, 'validateActivity']);
@@ -319,7 +319,9 @@ Route::prefix('v1')->group(function () {
         // -- Coaching & Visites en Duo --
         Route::get('/coaching/delegates/{id}', [CoachingController::class, 'getSessions']);
         Route::post('/coaching-sessions', [CoachingController::class, 'storeSession']);
+        Route::get('/coaching-sessions', [CoachingController::class, 'index']);
         Route::put('/coaching-sessions/{id}/complete', [CoachingController::class, 'completeSession']);
+        Route::post('/coaching-sessions/{id}/refuse', [CoachingController::class, 'refuseSession']);
 
         // ── Notes de Frais (Expenses) ──────────────────────────
         Route::apiResource('expenses', ExpenseController::class);

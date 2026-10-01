@@ -82,7 +82,6 @@ class AccountSeeder extends Seeder
                 Account::firstOrCreate(
                     ['nom' => $acc['nom']],
                     array_merge($acc, [
-                        'subsidiary_id' => $subsidiary->id,
                         'user_id' => $user->id
                     ])
                 );

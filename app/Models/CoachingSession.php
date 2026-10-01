@@ -14,6 +14,8 @@ class CoachingSession extends Model
     protected $fillable = [
         'supervisor_id',
         'delegate_id',
+        'activity_id',
+        'type',
         'strengths',
         'weaknesses',
         'action_plan',
@@ -46,5 +48,10 @@ class CoachingSession extends Model
     public function delegate()
     {
         return $this->belongsTo(User::class, 'delegate_id');
+    }
+
+    public function activity()
+    {
+        return $this->belongsTo(Activity::class);
     }
 }

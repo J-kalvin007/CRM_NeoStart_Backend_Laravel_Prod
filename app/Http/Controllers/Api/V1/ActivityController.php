@@ -485,6 +485,7 @@ class ActivityController extends Controller
     public function validateActivity(Request $request, string $id)
     {
         $activity = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($id);
+        $this->ensureSupervises($activity->user_id);
 
         $request->validate([
             'statut' => 'required|in:validee,validated,rejetee,refusee',
@@ -617,6 +618,9 @@ class ActivityController extends Controller
         if (!$targetUserId) {
             return response()->json(['message' => 'Le champ délégué est obligatoire.'], 422);
         }
+        if (!$user->manages($targetUserId)) {
+            return response()->json(['message' => "Ce délégué ne fait pas partie de votre équipe."], 403);
+        }
 
         // Vérification immédiate du conflit de planning
         $hasOverlap = Activity::checkOverlap(
@@ -670,6 +674,7 @@ class ActivityController extends Controller
     public function acceptDuo(Request $request, string $id)
     {
         $activity = Activity::findOrFail($id);
+        abort_unless($activity->user_id === auth()->id(), 403, 'Seul le délégué concerné peut répondre à cette proposition DUO.');
 
         $validated = $request->validate([
             'contact_id'    => 'nullable|string',
@@ -728,6 +733,7 @@ class ActivityController extends Controller
     public function refuseDuo(Request $request, string $id)
     {
         $activity = Activity::findOrFail($id);
+        abort_unless($activity->user_id === auth()->id(), 403, 'Seul le délégué concerné peut répondre à cette proposition DUO.');
 
         $validated = $request->validate([
             'motif' => 'required|string|min:2',
@@ -760,6 +766,87 @@ class ActivityController extends Controller
         ]);
     }
 
+    /**
+     * Le superviseur se joint en DUO à une visite déjà planifiée par un délégué,
+     * en précisant s'il s'agit d'une formation ou d'un coaching.
+     */
+    public function joinDuo(Request $request, string $id)
+    {
+        $user = auth()->user();
+        if ($user->hasAnyRole(['superadmin', 'super-admin', 'Super Administrateur', 'admin'])) {
+            return response()->json(['message' => 'Le Super Administrateur ne peut pas accompagner de visite.'], 403);
+        }
+        if ($user->hasAnyRole(['delegue', 'delegue_medical', 'delegate', 'Délégué', 'Délégué Médical'])) {
+            return response()->json(['message' => 'Seul le superviseur ou la hiérarchie peut accompagner une visite en DUO.'], 403);
+        }
+
+        $validated = $request->validate([
+            'type'     => 'required|in:formation,coaching',
+            'objectif' => 'nullable|string|max:1000',
+        ]);
+
+        $activity = Activity::withoutGlobalScopes()->with(['account'])->whereNull('deleted_at')->findOrFail($id);
+
+        if (!$user->manages($activity->user_id)) {
+            return response()->json(['message' => "Cette visite n'appartient pas à un délégué de votre équipe."], 403);
+        }
+        if ($activity->user_id === $user->id) {
+            return response()->json(['message' => 'Vous ne pouvez pas vous accompagner vous-même.'], 422);
+        }
+        if ($activity->accompanying_user_id && $activity->accompanying_user_id !== $user->id) {
+            return response()->json(['message' => 'Cette visite est déjà accompagnée par un autre superviseur.'], 422);
+        }
+        if ($activity->accompanying_user_id === $user->id) {
+            return response()->json(['message' => 'Vous accompagnez déjà cette visite.'], 422);
+        }
+        if (in_array(strtolower((string) $activity->statut), ['realisee', 'réalisée', 'effectuee', 'effectuée', 'validee', 'validée', 'terminee', 'annulee'])) {
+            return response()->json(['message' => 'Impossible de rejoindre une visite déjà réalisée ou annulée.'], 422);
+        }
+        if ($activity->date_activite && $activity->date_activite->lt(now()->startOfDay())) {
+            return response()->json(['message' => 'Impossible de rejoindre une visite passée.'], 422);
+        }
+
+        $typeLabel = $validated['type'] === 'formation' ? 'Formation' : 'Coaching';
+
+        $session = \Illuminate\Support\Facades\DB::transaction(function () use ($activity, $user, $validated, $typeLabel) {
+            $activity->update(['accompanying_user_id' => $user->id]);
+
+            return \App\Models\CoachingSession::create([
+                'supervisor_id'         => $user->id,
+                'delegate_id'           => $activity->user_id,
+                'activity_id'           => $activity->id,
+                'type'                  => $validated['type'],
+                'date_duo'              => $activity->date_activite,
+                'zone'                  => $activity->account?->zone_quartier ?? $activity->account?->ville ?? '',
+                'motif'                 => "Visite DUO — {$typeLabel}",
+                'objectifs_prevus_json' => array_filter([$validated['objectif'] ?? null]),
+                'status'                => 'active',
+            ]);
+        });
+
+        $delegate = User::find($activity->user_id);
+        if ($delegate) {
+            $date = $activity->date_activite?->format('d/m/Y');
+            $heure = $activity->heure_debut ? substr($activity->heure_debut, 0, 5) : '';
+            NotificationController::sendNotification(
+                $delegate,
+                "Visite DUO — {$typeLabel}",
+                "{$user->name} vous accompagnera ({$typeLabel}) lors de votre visite du {$date} à {$heure}.",
+                'nouveau_duo',
+                'delegate',
+                ['activity_id' => (string) $activity->id, 'session_id' => (string) $session->id]
+            );
+        }
+
+        return response()->json([
+            'message' => "Vous accompagnerez cette visite en DUO ({$typeLabel}).",
+            'data'    => [
+                'activity_id' => (string) $activity->id,
+                'session'     => $session,
+            ],
+        ], 201);
+    }
+
     public function storeTrio(Request $request)
     {
         $user = auth()->user();
@@ -784,6 +871,7 @@ class ActivityController extends Controller
 
         $subsidiary = \App\Models\Subsidiary::first();
         $delegate = User::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($validated['user_id']);
+        $this->ensureSupervises($delegate->id);
         $supervisor = $delegate->manager ?? User::whereHas('roles', fn($q) => $q->whereIn('name', ['superviseur', 'supervisor']))->first();
 
         $activity = Activity::create([
@@ -822,6 +910,7 @@ class ActivityController extends Controller
     public function validateTrio(Request $request, string $id)
     {
         $activity = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($id);
+        $this->ensureSupervises($activity->user_id);
 
         // Appliquer la détection de conflit de planning du délégué
         if (!empty($activity->date_activite) && !empty($activity->heure_debut)) {
@@ -898,5 +987,17 @@ class ActivityController extends Controller
             'message' => 'Visite TRIO rejetée avec enregistrement du motif.',
             'data' => new ActivityResource($activity)
         ]);
+    }
+
+    /**
+     * Les actions de supervision ne portent que sur les collaborateurs encadrés (sauf admin/global).
+     */
+    private function ensureSupervises(?string $ownerId): void
+    {
+        $user = auth()->user();
+        if ($user->can('scope:global') || $user->hasAnyRole(['superadmin', 'super-admin', 'admin'])) {
+            return;
+        }
+        abort_unless($ownerId && $user->manages($ownerId), 403, "Cette activité n'appartient pas à un délégué de votre équipe.");
     }
 }

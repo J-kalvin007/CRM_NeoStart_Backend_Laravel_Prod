@@ -17,9 +17,10 @@ class SampleRequestController extends Controller
         $query = SampleRequest::with(['product', 'user', 'approver'])
             ->orderBy('created_at', 'desc');
 
-        if (!$user->isAdminOrSupervisor()) {
-            $query->where('user_id', $user->id);
-        } 
+        // Délégué : ses demandes ; hiérarchie : les siennes + celles de son équipe ; admin : tout
+        if (!($user->can('scope:global') || $user->hasAnyRole(['superadmin', 'super-admin', 'admin']))) {
+            $query->whereIn('user_id', array_merge([$user->id], $user->teamMemberIds()));
+        }
 
         return response()->json($query->get());
     }
@@ -46,7 +47,8 @@ class SampleRequestController extends Controller
         ]);
 
         // Envoyer une notification au Manager / Superviseur
-        $manager = $user?->manager ?? \App\Models\User::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)->where('id', '!=', $user->id)->first();
+        // La demande est adressée au supérieur direct du délégué
+        $manager = $user?->manager;
         if ($manager) {
             NotificationController::sendNotification(
                 $manager,
@@ -70,6 +72,9 @@ class SampleRequestController extends Controller
         }
 
         $sampleRequest = SampleRequest::findOrFail($id);
+        if (!(($user->can('scope:global') || $user->hasAnyRole(['superadmin', 'super-admin', 'admin'])) || $user->manages($sampleRequest->user_id))) {
+            return response()->json(['message' => "Cette demande n'appartient pas à un délégué de votre équipe."], 403);
+        }
 
         if ($sampleRequest->status !== 'pending') {
             return response()->json(['message' => 'Cette demande est déjà traitée.'], 400);
@@ -129,6 +134,9 @@ class SampleRequestController extends Controller
         }
 
         $sampleRequest = SampleRequest::findOrFail($id);
+        if (!(($user->can('scope:global') || $user->hasAnyRole(['superadmin', 'super-admin', 'admin'])) || $user->manages($sampleRequest->user_id))) {
+            return response()->json(['message' => "Cette demande n'appartient pas à un délégué de votre équipe."], 403);
+        }
 
         if ($sampleRequest->status !== 'pending') {
             return response()->json(['message' => 'Cette demande est déjà traitée.'], 400);

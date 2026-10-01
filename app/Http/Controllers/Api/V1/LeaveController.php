@@ -31,14 +31,10 @@ class LeaveController extends Controller
         if (!$isGlobal) {
             $query->where(function ($q) use ($user, $isManager) {
                 $q->where('user_id', $user->id);
-                if ($isManager) {
-                    $q->orWhereHas('delegue', function ($dq) use ($user) {
-                        $dq->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
-                            ->where('manager_id', $user->id);
-                        if ($user->team_id) {
-                            $dq->orWhere('team_id', $user->team_id);
-                        }
-                    });
+                // La hiérarchie voit aussi les congés de ses collaborateurs encadrés
+                $teamIds = $user->teamMemberIds();
+                if (!empty($teamIds)) {
+                    $q->orWhereIn('user_id', $teamIds);
                 }
             });
         }
@@ -195,6 +191,8 @@ class LeaveController extends Controller
     public function updateStatus(Request $request, string $id)
     {
         $activity = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($id);
+        $user = auth()->user();
+        abort_unless(($user->can('scope:global') || $user->hasAnyRole(['superadmin', 'super-admin', 'admin'])) || $user->manages($activity->user_id), 403, "Ce congé n'appartient pas à un délégué de votre équipe.");
 
         $validated = $request->validate([
             'status'           => 'nullable|string',

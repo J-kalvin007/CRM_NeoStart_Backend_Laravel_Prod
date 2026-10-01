@@ -140,31 +140,42 @@ class AnalyticsController extends Controller
     public function teamPerformance(Request $request)
     {
         $user = auth()->user();
-        $teamUsers = User::where('id', '!=', $user->id)
-            ->whereDoesntHave('roles', function($q) {
-                $q->whereIn('name', ['superadmin', 'admin']);
-            })
-            ->where(function($q) {
-                $q->whereHas('roles', function($r) {
-                    $r->whereIn('name', ['delegue_medical', 'delegue']);
-                })->orWhereDoesntHave('roles');
-            })
-            ->get();
+        $period = $request->get('period', 'monthly');
 
-        $data = $teamUsers->map(function ($delegue, $index) use ($request) {
-            $baseActivities = Activity::where('user_id', $delegue->id)
-                ->where('activity_type', 'visite');
+        // Objectif de visites paramétrable (settings), par défaut 12/jour sur 5 jours ouvrés
+        $visitsPerDay = (int) (DB::table('settings')->where('key', 'visits_per_day')->value('value') ?: 12);
+        $daysPerWeek = (int) (DB::table('settings')->where('key', 'working_days_per_week')->value('value') ?: 5);
+        $weeklyTarget = $visitsPerDay * $daysPerWeek;
 
-            $completedVisits = (clone $baseActivities)->whereIn('statut', ['realisee', 'effectuee', 'validee'])->count();
-            $inProgressVisits = (clone $baseActivities)->where('statut', 'en_cours')->count();
-            $noShowCount = (clone $baseActivities)->whereIn('statut', ['manquee', 'annulee'])->count();
+        // Période + objectif : semaine = 60, mois = 4 semaines (240), trimestre = 12 semaines, année = 48 semaines
+        $now = now();
+        [$start, $end, $target, $label] = match ($period) {
+            'weekly'    => [$now->copy()->startOfWeek(), $now->copy()->endOfWeek(), $weeklyTarget, 'Cette semaine'],
+            'quarterly' => [$now->copy()->startOfQuarter(), $now->copy()->endOfQuarter(), $weeklyTarget * 12, 'Ce trimestre'],
+            'yearly'    => [$now->copy()->startOfYear(), $now->copy()->endOfYear(), $weeklyTarget * 48, 'Cette année'],
+            default     => [$now->copy()->startOfMonth(), $now->copy()->endOfMonth(), $weeklyTarget * 4, 'Ce mois'],
+        };
 
-            $visitCount = $completedVisits > 0 ? $completedVisits : (28 - ($index * 2));
-            $target = 25;
-            $rate = min(100, round(($visitCount / max(1, $target)) * 100, 1));
+        // L'équipe = les collaborateurs encadrés (récursif via manager_id)
+        $teamUsers = $user->teamMembers()->orderBy('name')->get();
+
+        $completedStatuses = ['realisee', 'effectuee', 'validee'];
+        $excludedStatuses = ['annulee', 'refusee', 'brouillon'];
+
+        $data = $teamUsers->map(function ($delegue) use ($start, $end, $target, $completedStatuses, $excludedStatuses, $period, $label) {
+            $base = Activity::withoutGlobalScopes()
+                ->where('user_id', $delegue->id)
+                ->whereNull('deleted_at')
+                ->whereBetween('date_activite', [$start->toDateString(), $end->toDateString()]);
+
+            $planned = (clone $base)->whereNotIn('statut', $excludedStatuses)->count();
+            $completed = (clone $base)->whereIn('statut', $completedStatuses)->count();
+            $inProgress = (clone $base)->where('statut', 'en_cours')->count();
+            $noShow = (clone $base)->whereIn('statut', ['manquee', 'annulee'])->count();
 
             $revenue = Order::where('user_id', $delegue->id)
                 ->whereIn('status', ['confirmed', 'invoiced', 'validee', 'livree'])
+                ->whereBetween('created_at', [$start, $end])
                 ->sum('total_amount');
 
             return [
@@ -172,21 +183,35 @@ class AnalyticsController extends Controller
                     'id'   => (string) $delegue->id,
                     'name' => $delegue->name,
                 ],
-                'visit_count'        => (int) $visitCount,
-                'no_show_count'      => (int) $noShowCount,
-                'completed_visits'   => (int) ($completedVisits > 0 ? $completedVisits : max(1, $visitCount - 3)),
-                'in_progress_visits' => (int) $inProgressVisits,
-                'target_visits'      => (int) $target,
-                'objective_rate'     => (int) $rate,
+                'visit_count'        => $planned,
+                'completed_visits'   => $completed,
+                'in_progress_visits' => $inProgress,
+                'no_show_count'      => $noShow,
+                'target_visits'      => $target,
+                'objective_rate'     => (int) round($completed / max(1, $target) * 100),
                 'revenue'            => (float) $revenue,
-                'period'             => $request->get('period', 'monthly'),
+                'period'             => $period,
+                'period_label'       => $label,
             ];
-        })->sortByDesc('visit_count')->values()->map(function ($item, $index) {
+        })->sortByDesc('completed_visits')->values()->map(function ($item, $index) {
             $item['rank'] = $index + 1;
             return $item;
         });
 
-        return response()->json($data);
+        return response()->json([
+            'data' => $data,
+            'meta' => [
+                'period'          => $period,
+                'period_label'    => $label,
+                'start'           => $start->toDateString(),
+                'end'             => $end->toDateString(),
+                'visits_per_day'  => $visitsPerDay,
+                'target_visits'   => $target,
+                'team_target'     => $target * $data->count(),
+                'team_completed'  => $data->sum('completed_visits'),
+                'team_planned'    => $data->sum('visit_count'),
+            ],
+        ]);
     }
 
     #[OA\Get(
@@ -216,99 +241,61 @@ class AnalyticsController extends Controller
     )]
     public function usersLocations(Request $request)
     {
-        $currentUserId = auth()->id();
-        $currentUser = auth()->user();
+        $team = auth()->user()->teamMembers()->with('scopes')->orderBy('name')->get();
+        $today = now()->toDateString();
 
-        $users = \App\Models\User::where('manager_id', $currentUserId)->get();
-        if ($users->isEmpty() && $currentUser && $currentUser->team_id) {
-            $users = \App\Models\User::where('team_id', $currentUser->team_id)->where('id', '!=', $currentUserId)->get();
-        }
-        if ($users->isEmpty()) {
-            $users = \App\Models\User::where('id', '!=', $currentUserId ?? '')
-                ->whereDoesntHave('roles', function($q) {
-                    $q->whereIn('name', ['Manager', 'super_admin', 'Administrateur Groupe']);
-                })->get();
-        }
-
-        $baseCoords = [
-            ['lat' => 5.3582, 'lng' => -4.0045, 'sector' => 'Cocody'],
-            ['lat' => 5.3289, 'lng' => -4.0175, 'sector' => 'Plateau'],
-            ['lat' => 5.3850, 'lng' => -3.9870, 'sector' => 'Riviera'],
-            ['lat' => 5.3050, 'lng' => -3.9720, 'sector' => 'Marcory'],
-            ['lat' => 5.3400, 'lng' => -4.0500, 'sector' => 'Yopougon'],
-            ['lat' => 5.4100, 'lng' => -4.0200, 'sector' => 'Abobo'],
-        ];
-
-        $result = [];
-
-        foreach ($users->values() as $index => $u) {
-            $latestActivity = \App\Models\Activity::where('user_id', $u->id)
+        $result = $team->map(function ($u) use ($today) {
+            // Dernière position GPS connue (pointage début ou fin de visite)
+            $lastGps = Activity::withoutGlobalScopes()
+                ->where('user_id', $u->id)
                 ->whereNotNull('gps_debut_lat')
-                ->latest()
+                ->where('gps_debut_lat', '!=', 0)
+                ->latest('updated_at')
                 ->first();
 
-            $lat = ($latestActivity && $latestActivity->gps_debut_lat != 0)
-                ? $latestActivity->gps_debut_lat
-                : $baseCoords[$index % count($baseCoords)]['lat'];
-            $lng = ($latestActivity && $latestActivity->gps_debut_lng != 0)
-                ? $latestActivity->gps_debut_lng
-                : $baseCoords[$index % count($baseCoords)]['lng'];
-
-            $currentVisit = \App\Models\Activity::where('user_id', $u->id)
-                ->whereIn('statut', ['en_cours', 'en_visite', 'planifiee'])
+            $currentVisit = Activity::withoutGlobalScopes()
                 ->with(['contact', 'account'])
-                ->latest()
+                ->where('user_id', $u->id)
+                ->whereDate('date_activite', $today)
+                ->where('statut', 'en_cours')
+                ->latest('updated_at')
                 ->first();
 
-            // Status distribution: 3 en_visite, 2 disponible, 1 hors_ligne
-            $mod = $index % 6;
-            if ($mod < 3) {
-                $status = 'en_visite';
-            } elseif ($mod < 5) {
-                $status = 'disponible';
-            } else {
-                $status = 'hors_ligne';
-            }
+            $nextVisit = $currentVisit ?: Activity::withoutGlobalScopes()
+                ->with(['contact', 'account'])
+                ->where('user_id', $u->id)
+                ->whereDate('date_activite', $today)
+                ->where('statut', 'planifiee')
+                ->orderBy('heure_debut')
+                ->first();
 
-            $statusLabel = $status === 'en_visite' ? 'En visite' : ($status === 'disponible' ? 'Disponible' : 'Non pointé');
+            $loggedToday = $u->last_login_at && \Carbon\Carbon::parse($u->last_login_at)->isToday();
+            $status = $currentVisit ? 'en_visite' : ($loggedToday ? 'disponible' : 'hors_ligne');
+            $statusLabel = ['en_visite' => 'En visite', 'disponible' => 'Disponible', 'hors_ligne' => 'Non pointé'][$status];
 
-            $hcpName = ($currentVisit && $currentVisit->contact)
-                ? ('Dr. ' . $currentVisit->contact->prenom . ' ' . $currentVisit->contact->nom)
-                : ('Dr. ' . ['Marc Adjanohoun', 'Sophie Laurent', 'Jean-Marc Aka', 'Koffi Mensah', 'Fatou Ndiaye', 'Pierre Dupont'][$index % 6]);
+            $contact = $nextVisit?->contact;
+            $parts = array_values(array_filter(explode(' ', trim(preg_replace('/\(.*?\)/', '', $u->name)))));
 
-            $hcpSpec = ($currentVisit && $currentVisit->contact && $currentVisit->contact->specialite)
-                ? $currentVisit->contact->specialite
-                : ['Cardiologie', 'Pneumologie', 'Pédiatrie', 'Gynécologie', 'Médecine Générale', 'Dermatologie'][$index % 6];
-
-            $locName = ($currentVisit && $currentVisit->contact && $currentVisit->contact->etablissement)
-                ? ($currentVisit->contact->etablissement . ' • Abidjan')
-                : (['Polyclinique Sainte Anne', 'Cabinet Médical Riviera', 'Centre Médical Marcory', 'Clinique Internationale', 'CHU Cocody', 'Hôpital Militaire'][$index % 6] . ' • Abidjan');
-
-            $displayName = trim(($u->prenom ?? '') . ' ' . ($u->nom ?? '')) ?: $u->name ?: $u->email;
-            $nameParts = explode(' ', trim($displayName));
-            $initials = count($nameParts) >= 2
-                ? strtoupper(substr($nameParts[0], 0, 1) . substr($nameParts[1], 0, 1))
-                : strtoupper(substr($displayName, 0, 2));
-
-            $result[] = [
+            return [
                 'id' => (string) $u->id,
-                'name' => $displayName,
-                'initials' => $initials,
+                'name' => $u->name,
+                'initials' => strtoupper(implode('', array_map(fn ($p) => mb_substr($p, 0, 1), array_slice($parts, 0, 2)))) ?: 'DM',
                 'photo_url' => null,
                 'status' => $status,
                 'status_label' => $statusLabel,
-                'lat' => (float) $lat,
-                'lng' => (float) $lng,
-                'location_name' => $locName,
-                'hcp_name' => $hcpName,
-                'hcp_spec' => $hcpSpec,
-                'sector' => 'Secteur ' . $baseCoords[$index % count($baseCoords)]['sector'],
-                'phone' => $u->phone ?? '+225 07 00 00 00 00',
-                'last_seen' => $latestActivity ? $latestActivity->updated_at->toISOString() : now()->toISOString(),
-                'last_check_in' => $latestActivity ? $latestActivity->created_at->format('H:i') : '10:50 (il y a 2 min)',
-                'time_left' => $status === 'en_visite' ? '15 min' : null,
+                'has_position' => (bool) $lastGps,
+                'lat' => $lastGps ? (float) $lastGps->gps_debut_lat : null,
+                'lng' => $lastGps ? (float) $lastGps->gps_debut_lng : null,
+                'location_name' => $nextVisit?->account?->nom ?? '',
+                'hcp_name' => $contact ? trim(($contact->titre ?: 'Dr.') . ' ' . $contact->prenom . ' ' . $contact->nom) : '',
+                'hcp_spec' => '',
+                'sector' => (string) ($u->scopes->first()?->name ?? ''),
+                'phone' => $u->phone ?? '',
+                'last_seen' => ($lastGps?->updated_at ?? $u->last_login_at)?->toISOString(),
+                'last_check_in' => $lastGps?->updated_at?->format('H:i'),
+                'time_left' => null,
             ];
-        }
+        })->values();
 
         return response()->json($result);
     }
@@ -433,7 +420,7 @@ class AnalyticsController extends Controller
     public function alerts(Request $request)
     {
         $user = auth()->user();
-        $teamUserIds = User::pluck('id');
+        $teamUserIds = $user->teamMemberIds();
 
         // 1. late_delegates
         // Visites planifiées dont la date + heure de début sont dans le passé
@@ -442,7 +429,7 @@ class AnalyticsController extends Controller
             ->whereIn('user_id', $teamUserIds)
             ->where('statut', 'planifiee')
             ->where(function($query) use ($now) {
-                $query->whereDate('date_activite', '<', $now->toDateString())
+                $query->whereBetween('date_activite', [$now->copy()->subDays(7)->toDateString(), $now->copy()->subDay()->toDateString()])
                       ->orWhere(function($q) use ($now) {
                           $q->whereDate('date_activite', $now->toDateString())
                             ->whereNotNull('heure_debut')
@@ -482,7 +469,7 @@ class AnalyticsController extends Controller
         $urgentPharma = PharmacovigilanceReport::with('user')
             ->whereIn('user_id', $teamUserIds)
             ->where('severity', 'grave')
-            ->where('created_at', '>=', $now->subHours(48))
+            ->where('created_at', '>=', $now->copy()->subHours(48))
             ->get();
             
         $urgentPharmacovigilance = $urgentPharma->map(function($p) {
@@ -500,7 +487,7 @@ class AnalyticsController extends Controller
         // Assuming status = 'terminee' or 'en_attente_validation' but not 'validee'
         $pendingReportsActivities = Activity::with('delegue')
             ->whereIn('user_id', $teamUserIds)
-            ->whereIn('statut', ['realisee', 'en_attente']) // Assuming realisée requires validation
+            ->where('report_status', 'submitted')
             ->where('updated_at', '<=', now()->subHours(24))
             ->get();
             

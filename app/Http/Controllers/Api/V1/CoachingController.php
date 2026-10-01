@@ -28,12 +28,83 @@ class CoachingController extends Controller
     )]
     public function getSessions(string $id)
     {
-        $sessions = CoachingSession::with('supervisor')
+        $user = Auth::user();
+        abort_unless($id === $user->id || $user->manages($id), 403, "Ce délégué ne fait pas partie de votre équipe.");
+
+        $sessions = CoachingSession::with(['supervisor', 'activity'])
             ->where('delegate_id', $id)
             ->orderByDesc('created_at')
             ->get();
 
         return response()->json($sessions);
+    }
+
+    /**
+     * Sessions DUO visibles par l'utilisateur : celles qu'il anime (superviseur),
+     * celles de son équipe, ou celles où il est le délégué accompagné.
+     */
+    public function index(Request $request)
+    {
+        $user = Auth::user();
+        $teamIds = $user->teamMemberIds();
+
+        $sessions = CoachingSession::with(['supervisor', 'delegate', 'activity'])
+            ->where(function ($q) use ($user, $teamIds) {
+                $q->where('supervisor_id', $user->id)
+                  ->orWhere('delegate_id', $user->id)
+                  ->orWhereIn('delegate_id', $teamIds);
+            })
+            ->when($request->query('delegate_id'), fn ($q, $v) => $q->where('delegate_id', $v))
+            ->when($request->query('status'), fn ($q, $v) => $q->where('status', $v))
+            ->when($request->query('type'), fn ($q, $v) => $q->where('type', $v))
+            ->when($request->boolean('this_month'), fn ($q) => $q->whereBetween('date_duo', [now()->startOfMonth(), now()->endOfMonth()]))
+            ->orderByDesc('date_duo')
+            ->get();
+
+        return response()->json(['data' => $sessions]);
+    }
+
+    /**
+     * Refus d'une session DUO (par le délégué concerné ou son superviseur), motif obligatoire.
+     */
+    public function refuseSession(Request $request, string $id)
+    {
+        $user = Auth::user();
+        $session = CoachingSession::findOrFail($id);
+        abort_unless(
+            in_array($user->id, [$session->delegate_id, $session->supervisor_id], true) || $user->manages($session->delegate_id),
+            403,
+            "Vous n'êtes pas concerné par cette session."
+        );
+
+        $reason = trim((string) ($request->input('rejection_reason') ?? $request->input('motif')));
+        if (mb_strlen($reason) < 2) {
+            return response()->json(['message' => 'Le motif de refus est obligatoire.', 'errors' => ['rejection_reason' => ['Le motif de refus est obligatoire.']]], 422);
+        }
+
+        $session->update(['status' => 'refusee', 'commentaires_superviseur' => $reason]);
+
+        // La visite n'est plus accompagnée
+        if ($session->activity_id) {
+            \App\Models\Activity::withoutGlobalScopes()
+                ->where('id', $session->activity_id)
+                ->where('accompanying_user_id', $session->supervisor_id)
+                ->update(['accompanying_user_id' => null]);
+        }
+
+        $notify = User::withoutGlobalScopes()->find($user->id === $session->delegate_id ? $session->supervisor_id : $session->delegate_id);
+        if ($notify) {
+            NotificationController::sendNotification(
+                $notify,
+                'Visite DUO refusée',
+                "{$user->name} a refusé la visite DUO du " . $session->date_duo?->format('d/m/Y') . " : {$reason}",
+                'coaching',
+                $user->id === $session->delegate_id ? 'superviseur' : 'delegue',
+                ['session_id' => (string) $session->id]
+            );
+        }
+
+        return response()->json(['message' => 'Session DUO refusée.', 'data' => $session]);
     }
 
     #[OA\Post(
@@ -67,6 +138,8 @@ class CoachingController extends Controller
             'motif' => 'required|string',
             'objectifs_prevus' => 'required|array',
         ]);
+
+        abort_unless(Auth::user()->manages($validated['delegate_id']), 403, "Ce délégué ne fait pas partie de votre équipe.");
 
         $validated['supervisor_id'] = Auth::id();
         $validated['objectifs_prevus_json'] = $validated['objectifs_prevus'];
@@ -121,6 +194,7 @@ class CoachingController extends Controller
     public function completeSession(Request $request, string $id)
     {
         $session = CoachingSession::findOrFail($id);
+        abort_unless($session->supervisor_id === Auth::id(), 403, 'Seul le superviseur qui anime le duo peut le clôturer.');
 
         $validated = $request->validate([
             'resultats_constates' => 'required|array|min:1',
