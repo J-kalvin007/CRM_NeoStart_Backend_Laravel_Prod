@@ -469,9 +469,22 @@ class ActivityController extends Controller
         
         $isSuperAdmin = $user && ($user->hasAnyRole(['superadmin', 'admin']) || $user->can('scope:global'));
         $isOwner = $user && $activity->user_id === $user->id;
+        // Le superviseur peut supprimer les visites des délégués qu'il encadre
+        $isManager = $user && !$isOwner && $user->manages($activity->user_id);
 
-        if (!$isSuperAdmin && !$isOwner) {
+        if (!$isSuperAdmin && !$isOwner && !$isManager) {
             return response()->json(['message' => 'Vous n\'êtes pas autorisé à supprimer cette visite.'], 403);
+        }
+
+        if ($isManager && $activity->delegue) {
+            NotificationController::sendNotification(
+                $activity->delegue,
+                'Visite supprimée',
+                "{$user->name} a supprimé votre visite du " . $activity->date_activite?->format('d/m/Y') . ($activity->heure_debut ? ' à ' . substr($activity->heure_debut, 0, 5) : '') . '.',
+                'visite_supprimee',
+                'delegate',
+                ['activity_id' => (string) $activity->id]
+            );
         }
 
         if ($activity->is_locked && !$isSuperAdmin) {

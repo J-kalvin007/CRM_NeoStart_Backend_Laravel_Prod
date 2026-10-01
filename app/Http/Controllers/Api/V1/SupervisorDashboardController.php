@@ -263,6 +263,10 @@ class SupervisorDashboardController extends Controller
             'duo_delegue_status' => $act->is_duo ? $act->duo_delegue_status : null,
             'duo_delegue_rejection_reason' => $act->duo_delegue_rejection_reason,
             'can_duo' => !$act->hasActiveDuo() && $act->user_id !== $supervisor->id && !$isClosed && !$isPast,
+            // Le superviseur qui anime ce DUO peut le modifier ou l'annuler tant qu'il n'est pas passé
+            'can_manage_duo' => $act->hasActiveDuo() && $act->duo_user_id === $supervisor->id && !$isPast,
+            // Visite modifiable / reprogrammable / supprimable par le superviseur
+            'can_edit' => !$act->is_locked && !$isClosed,
         ];
     }
 

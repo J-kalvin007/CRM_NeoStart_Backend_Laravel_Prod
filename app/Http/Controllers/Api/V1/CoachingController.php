@@ -251,6 +251,7 @@ class CoachingController extends Controller
             'taux_atteinte_pct'        => 'nullable|numeric|min:0|max:100',
             'commentaires_superviseur' => 'nullable|string',
             'plan_action_recommande'   => 'nullable|string',
+            'action_plan'              => 'nullable|string',
             'strengths'                => 'nullable|string',
             'weaknesses'               => 'nullable|string',
             'next_review_date'         => 'nullable|date',
