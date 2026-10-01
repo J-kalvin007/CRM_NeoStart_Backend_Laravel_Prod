@@ -73,8 +73,7 @@ class PharmaSeeder extends Seeder
                 Product::firstOrCreate([
                     'code' => $p['code']
                 ], [
-                    'subsidiary_id' => $subsidiary->id,
-                    'product_type_id' => $prodType->id,
+                                        'product_type_id' => $prodType->id,
                     'laboratory_id' => $labsMap[$p['lab']]->id ?? null,
                     'therapeutic_class_id' => $classesMap[$p['class']]->id ?? null,
                     'nom' => $p['nom'],

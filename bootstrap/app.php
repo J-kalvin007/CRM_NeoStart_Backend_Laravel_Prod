@@ -14,6 +14,8 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
         // Middleware de filtrage dynamique du périmètre organisationnel (header X-Organizational-Unit-Id)
         $middleware->appendToGroup('api', \App\Http\Middleware\PerimeterScopeMiddleware::class);
+        // Écriture des données de référence réservée à l'administration / direction
+        $middleware->appendToGroup('api', \App\Http\Middleware\RestrictReferenceWrites::class);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         $exceptions->shouldRenderJsonWhen(function (\Illuminate\Http\Request $request, \Throwable $e) {

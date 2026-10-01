@@ -62,6 +62,9 @@ class User extends Authenticatable
             'password' => 'hashed',
             'status' => 'boolean',
             'last_login_at' => 'datetime',
+            'last_location_at' => 'datetime',
+            'last_lat' => 'float',
+            'last_lng' => 'float',
             'force_password_change' => 'boolean',
             'otp_enabled' => 'boolean',
         ];
@@ -70,6 +73,11 @@ class User extends Authenticatable
     public function scopes()
     {
         return $this->belongsToMany(OrganizationalUnit::class, 'user_scopes', 'user_id', 'organizational_unit_id')->withTimestamps();
+    }
+
+    public function locations()
+    {
+        return $this->hasMany(UserLocation::class);
     }
 
     public function manager()
@@ -95,6 +103,41 @@ class User extends Authenticatable
     public function accounts()
     {
         return $this->hasMany(Account::class, 'user_id');
+    }
+
+    /**
+     * IDs des collaborateurs encadrés (récursif via manager_id) :
+     * un superviseur obtient ses délégués, un directeur ses superviseurs et leurs délégués.
+     */
+    public function teamMemberIds(): array
+    {
+        $ids = [];
+        $current = [$this->id];
+
+        while (!empty($current)) {
+            $children = static::withoutGlobalScopes()
+                ->whereIn('manager_id', $current)
+                ->whereNotIn('id', array_merge($ids, [$this->id]))
+                ->pluck('id')
+                ->all();
+
+            $ids = array_merge($ids, $children);
+            $current = $children;
+        }
+
+        return $ids;
+    }
+
+    /** Collaborateurs encadrés (voir teamMemberIds). */
+    public function teamMembers()
+    {
+        return static::withoutGlobalScopes()->whereIn('id', $this->teamMemberIds());
+    }
+
+    /** Vrai si $userId fait partie de l'équipe encadrée. */
+    public function manages(string $userId): bool
+    {
+        return in_array($userId, $this->teamMemberIds(), true);
     }
 
     public function isAdminOrSupervisor(): bool

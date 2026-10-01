@@ -23,7 +23,18 @@ class UpdateObjectifRequest extends FormRequest
     public function rules(): array
     {
         return [
-            //
+            'user_id' => 'sometimes|nullable|exists:users,id',
+            'objectif_type_id' => 'sometimes|uuid|exists:objectif_types,id',
+            'indicator_id' => 'sometimes|nullable|uuid|exists:indicators,id',
+            'date_debut' => 'sometimes|date',
+            'date_fin' => 'sometimes|date',
+            'periode' => 'sometimes|nullable|string',
+            'valeur_cible' => 'sometimes|numeric|min:0',
+            'valeur_realisee' => 'sometimes|nullable|numeric|min:0',
+            'product_id' => 'sometimes|nullable|uuid|exists:products,id',
+            'description' => 'sometimes|nullable|string',
+            'statut' => 'sometimes|string|in:en_cours,actif,atteint,depasse,non_atteint,annule,en_attente,valide,rejete',
+            'motif_rejet' => 'sometimes|nullable|string',
         ];
     }
 }

@@ -112,6 +112,8 @@ Route::prefix('v1')->group(function () {
 
         // Utilisateurs, Rôles & Permissions
         Route::get('users/locations', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'usersLocations']);
+        Route::post('me/location', [\App\Http\Controllers\Api\V1\LocationController::class, 'store']);
+        Route::get('users/{id}/locations', [\App\Http\Controllers\Api\V1\LocationController::class, 'history']);
         Route::apiResource('users', UserController::class);
         Route::apiResource('roles', RoleController::class);
         Route::get('permissions', [PermissionController::class, 'index']);
@@ -207,10 +209,10 @@ Route::prefix('v1')->group(function () {
         // ── Superviseur ──────────────────────────────────────────
         Route::get('/supervisor/dashboard', [SupervisorDashboardController::class, 'dashboard']);
         Route::get('/supervisor/team-planning', [SupervisorDashboardController::class, 'teamPlanning']);
-        Route::get('/supervisor/alerts', [SupervisorDashboardController::class, 'alerts']);
 
         // ── Répertoire (Comptes & Contacts) ────────────────────
         Route::get('validations/pending', [ValidationController::class, 'index']);
+        Route::post('validations/bulk', [ValidationController::class, 'bulk']);
         Route::post('validations/{type}/{id}/approve', [ValidationController::class, 'approve']);
         Route::post('validations/{type}/{id}/reject', [ValidationController::class, 'reject']);
 
@@ -268,6 +270,9 @@ Route::prefix('v1')->group(function () {
         Route::post('duo', [ActivityController::class, 'storeDuo']);
         Route::post('activities/{activity}/accept-duo', [ActivityController::class, 'acceptDuo']);
         Route::post('activities/{activity}/refuse-duo', [ActivityController::class, 'refuseDuo']);
+        Route::post('activities/{activity}/join-duo', [ActivityController::class, 'joinDuo']);
+        Route::patch('activities/{activity}/duo', [ActivityController::class, 'updateDuo']);
+        Route::delete('activities/{activity}/duo', [ActivityController::class, 'cancelDuo']);
         Route::post('duo/{id}/accepter', [ActivityController::class, 'acceptDuo']);
         Route::post('duo/{id}/refuser', [ActivityController::class, 'refuseDuo']);
         Route::post('activities/{activity}/validate', [ActivityController::class, 'validateActivity']);
@@ -298,6 +303,8 @@ Route::prefix('v1')->group(function () {
         // Demandes de réassort d'échantillons
         Route::get('sample-requests', [\App\Http\Controllers\Api\V1\SampleRequestController::class, 'index']);
         Route::post('sample-requests', [\App\Http\Controllers\Api\V1\SampleRequestController::class, 'store']);
+        Route::put('sample-requests/{id}', [\App\Http\Controllers\Api\V1\SampleRequestController::class, 'update']);
+        Route::delete('sample-requests/{id}', [\App\Http\Controllers\Api\V1\SampleRequestController::class, 'destroy']);
         Route::post('sample-requests/{id}/approve', [\App\Http\Controllers\Api\V1\SampleRequestController::class, 'approve']);
         Route::post('sample-requests/{id}/reject', [\App\Http\Controllers\Api\V1\SampleRequestController::class, 'reject']);
 
@@ -320,7 +327,12 @@ Route::prefix('v1')->group(function () {
         // -- Coaching & Visites en Duo --
         Route::get('/coaching/delegates/{id}', [CoachingController::class, 'getSessions']);
         Route::post('/coaching-sessions', [CoachingController::class, 'storeSession']);
+        Route::get('/coaching-sessions', [CoachingController::class, 'index']);
         Route::put('/coaching-sessions/{id}/complete', [CoachingController::class, 'completeSession']);
+        Route::post('/coaching-sessions/{id}/refuse', [CoachingController::class, 'refuseSession']);
+        Route::get('/coaching-sessions/{id}', [CoachingController::class, 'show']);
+        Route::put('/coaching-sessions/{id}', [CoachingController::class, 'update']);
+        Route::delete('/coaching-sessions/{id}', [CoachingController::class, 'destroy']);
 
         // ── Notes de Frais (Expenses) ──────────────────────────
         Route::apiResource('expenses', ExpenseController::class);
@@ -348,6 +360,8 @@ Route::prefix('v1')->group(function () {
         // ── Congés (Leaves) ────────────────────────────────────
         Route::get('leaves', [LeaveController::class, 'index']);
         Route::post('leaves', [LeaveController::class, 'store']);
+        Route::put('leaves/{id}', [LeaveController::class, 'update']);
+        Route::delete('leaves/{id}', [LeaveController::class, 'destroy']);
         Route::patch('leaves/{id}/status', [LeaveController::class, 'updateStatus']);
         Route::post('leaves/{id}/validate', [LeaveController::class, 'validateLeave']);
         Route::post('leaves/{id}/reject', [LeaveController::class, 'rejectLeave']);

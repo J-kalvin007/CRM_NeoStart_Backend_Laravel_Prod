@@ -27,9 +27,6 @@ class UserSeeder extends Seeder
         ], [
             'name' => 'Super Administrateur',
             'password' => Hash::make('password'),
-            'country_id' => $country?->id,
-            'subsidiary_id' => $subsidiary?->id,
-            'team_id' => $team?->id,
             'phone' => '+225 07 00 00 00 00',
             'force_password_change' => false,
             'status' => true,
@@ -44,9 +41,6 @@ class UserSeeder extends Seeder
         ], [
             'name' => 'COZI Adom Moucharif (Manager)',
             'password' => Hash::make('password'),
-            'country_id' => $country?->id,
-            'subsidiary_id' => $subsidiary?->id,
-            'team_id' => $team?->id,
             'phone' => '+225 07 01 02 03 04',
             'force_password_change' => false,
             'status' => true,
@@ -100,16 +94,12 @@ class UserSeeder extends Seeder
             ], [
                 'name' => $dData['name'],
                 'password' => Hash::make('password'),
-                'country_id' => $country?->id,
-                'subsidiary_id' => $subsidiary?->id,
-                'team_id' => $team?->id,
                 'manager_id' => $manager?->id,
                 'force_password_change' => false,
                 'status' => true,
             ]);
             $user->update([
                 'manager_id' => $manager?->id,
-                'team_id' => $team?->id,
             ]);
             foreach ([$dData['role'], 'delegue', 'Délégué Médical'] as $r) {
                 if (\Spatie\Permission\Models\Role::where('name', $r)->exists() && !$user->hasRole($r)) {

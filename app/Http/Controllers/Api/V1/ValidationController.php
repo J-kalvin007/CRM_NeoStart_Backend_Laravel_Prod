@@ -23,10 +23,14 @@ class ValidationController extends Controller
     public function index(Request $request)
     {
         $user = auth()->user();
-        $teamIds = $user && $user->team_id ? [$user->team_id] : [];
+        // Admin/global : tout ; hiérarchie : uniquement les éléments soumis par les collaborateurs encadrés
+        $isGlobal = $user->can('scope:global') || $user->hasAnyRole(['superadmin', 'super-admin', 'admin']);
+        $teamIds = $user->teamMemberIds();
+        $inTeam = fn ($q) => $isGlobal ? $q : $q->whereIn('user_id', $teamIds);
 
         $pendingContacts = Contact::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
             ->with(['account', 'user', 'owner'])
+            ->tap($inTeam)
             ->where(function ($q) use ($teamIds) {
                 $q->whereIn('statut_validation', ['en_attente', 'pending'])
                   ->orWhereIn('statut', ['en_attente', 'en_attente_validation', 'inactif', 'pending']);
@@ -51,6 +55,7 @@ class ValidationController extends Controller
 
         $pendingAccounts = Account::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
             ->with(['user', 'owner'])
+            ->tap($inTeam)
             ->where(function ($q) use ($teamIds) {
                 $q->whereIn('statut_validation', ['en_attente', 'pending'])
                   ->orWhereIn('statut', ['en_attente', 'en_attente_validation', 'inactif', 'pending']);
@@ -75,6 +80,7 @@ class ValidationController extends Controller
 
         $pendingActivities = \App\Models\Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
             ->with(['contact', 'account', 'delegue', 'user'])
+            ->tap($inTeam)
             ->where(function ($q) {
                 $q->whereIn('report_status', ['submitted', 'soumis', 'en_attente'])
                   ->orWhere(function ($q2) {
@@ -107,6 +113,7 @@ class ValidationController extends Controller
 
         $pendingTourPlans = \App\Models\TourPlan::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
             ->with(['user', 'delegue'])
+            ->tap($inTeam)
             ->whereIn('statut', ['soumis', 'en_attente_validation', 'en_attente'])
             ->get()
             ->map(function ($plan) {
@@ -122,6 +129,7 @@ class ValidationController extends Controller
 
         $pendingExpenses = \App\Models\Expense::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)
             ->with(['user'])
+            ->tap($inTeam)
             ->whereIn('status', ['submitted', 'en_attente'])
             ->get()
             ->map(function ($exp) {
@@ -142,6 +150,7 @@ class ValidationController extends Controller
 
         $pendingSampleRequests = \App\Models\SampleRequest::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)
             ->with(['product', 'user'])
+            ->tap($inTeam)
             ->whereIn('status', ['pending', 'en_attente'])
             ->get()
             ->map(function ($sr) {
@@ -161,6 +170,7 @@ class ValidationController extends Controller
 
         $pendingDelegateRequests = \App\Models\DelegateRequest::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)
             ->with(['user', 'contact'])
+            ->tap($inTeam)
             ->whereIn('status', ['pending_manager_approval', 'en_attente', 'pending', 'soumis'])
             ->get()
             ->map(function ($req) {
@@ -216,6 +226,7 @@ class ValidationController extends Controller
 
         if (in_array($type, ['visit', 'activity_report'])) {
             $activity = \App\Models\Activity::findOrFail($id);
+            $this->ensureManaged($activity->user_id);
             $activity->update([
                 'statut' => 'validee',
                 'report_status' => 'validated',
@@ -240,6 +251,7 @@ class ValidationController extends Controller
 
         if ($type === 'tour_plan') {
             $plan = \App\Models\TourPlan::findOrFail($id);
+            $this->ensureManaged($plan->user_id);
             $plan->update([
                 'statut' => 'valide',
                 'valide_par' => auth()->id(),
@@ -265,6 +277,7 @@ class ValidationController extends Controller
 
         if ($type === 'expense') {
             $expense = \App\Models\Expense::findOrFail($id);
+            $this->ensureManaged($expense->user_id);
             $expense->update([
                 'status' => 'approved',
                 'approved_by' => auth()->id(),
@@ -288,6 +301,7 @@ class ValidationController extends Controller
 
         if (in_array($type, ['sample', 'sample_request'])) {
             $sampleRequest = \App\Models\SampleRequest::findOrFail($id);
+            $this->ensureManaged($sampleRequest->user_id);
             $sampleRequest->update([
                 'status' => 'approved',
                 'approved_by' => auth()->id(),
@@ -335,6 +349,7 @@ class ValidationController extends Controller
 
         if (in_array($type, ['request', 'delegate_request'])) {
             $req = \App\Models\DelegateRequest::findOrFail($id);
+            $this->ensureManaged($req->user_id);
             $req->update([
                 'status' => 'approved',
             ]);
@@ -411,6 +426,7 @@ class ValidationController extends Controller
 
         if (in_array($type, ['visit', 'activity_report'])) {
             $activity = \App\Models\Activity::findOrFail($id);
+            $this->ensureManaged($activity->user_id);
             $activity->update([
                 'statut' => 'refusee',
                 'report_status' => 'rejected',
@@ -436,6 +452,7 @@ class ValidationController extends Controller
 
         if ($type === 'tour_plan') {
             $plan = \App\Models\TourPlan::findOrFail($id);
+            $this->ensureManaged($plan->user_id);
             $plan->update([
                 'statut' => 'rejete',
                 'valide_par' => auth()->id(),
@@ -459,6 +476,7 @@ class ValidationController extends Controller
 
         if ($type === 'expense') {
             $expense = \App\Models\Expense::findOrFail($id);
+            $this->ensureManaged($expense->user_id);
             $expense->update([
                 'status' => 'rejected',
                 'rejection_reason' => $reason ?? 'Non conforme',
@@ -482,6 +500,7 @@ class ValidationController extends Controller
 
         if (in_array($type, ['sample', 'sample_request'])) {
             $sampleRequest = \App\Models\SampleRequest::findOrFail($id);
+            $this->ensureManaged($sampleRequest->user_id);
             $sampleRequest->update([
                 'status' => 'rejected',
                 'approved_by' => auth()->id(),
@@ -504,6 +523,7 @@ class ValidationController extends Controller
 
         if (in_array($type, ['request', 'delegate_request'])) {
             $req = \App\Models\DelegateRequest::findOrFail($id);
+            $this->ensureManaged($req->user_id);
             $req->update([
                 'status' => 'rejected',
             ]);
@@ -563,5 +583,71 @@ class ValidationController extends Controller
             return Account::findOrFail($id);
         }
         abort(400, "Type invalide");
+    }
+
+    /**
+     * Validation / rejet par lot.
+     * Corps : { action: approve|reject, rejection_reason?, items: [ {type, id}, ... ] }
+     * Chaque élément passe par approve()/reject() (mêmes contrôles d'équipe et notifications) ;
+     * un échec n'interrompt pas le lot. Réponse : compte des réussites + détail par élément.
+     */
+    public function bulk(Request $request)
+    {
+        $validated = $request->validate([
+            'action' => 'required|in:approve,reject',
+            'rejection_reason' => 'required_if:action,reject|nullable|string|min:2',
+            'items' => 'required|array|min:1|max:200',
+            'items.*.type' => 'required|string|in:contact,account,visit,activity_report,tour_plan,expense,sample,sample_request,request,delegate_request',
+            'items.*.id' => 'required|string',
+        ], [
+            'rejection_reason.required_if' => 'Le motif du rejet est obligatoire.',
+        ]);
+
+        $results = [];
+        foreach ($validated['items'] as $item) {
+            $sub = $request->duplicate();
+            $sub->replace(['rejection_reason' => $validated['rejection_reason'] ?? null]);
+
+            try {
+                $response = \Illuminate\Support\Facades\DB::transaction(fn () => $validated['action'] === 'approve'
+                    ? $this->approve($sub, $item['type'], $item['id'])
+                    : $this->reject($sub, $item['type'], $item['id']));
+                $ok = $response->getStatusCode() < 300;
+                $message = $response->getData(true)['message'] ?? null;
+            } catch (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e) {
+                $ok = false;
+                $message = $e->getMessage();
+            } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+                $ok = false;
+                $message = 'Élément introuvable ou hors de votre périmètre.';
+            } catch (\Throwable $e) {
+                report($e);
+                $ok = false;
+                $message = 'Erreur lors du traitement.';
+            }
+
+            $results[] = ['type' => $item['type'], 'id' => $item['id'], 'success' => $ok, 'message' => $message];
+        }
+
+        $done = collect($results)->where('success', true)->count();
+
+        return response()->json([
+            'message' => "{$done} / " . count($results) . ' élément(s) ' . ($validated['action'] === 'approve' ? 'validé(s)' : 'rejeté(s)') . '.',
+            'processed' => $done,
+            'failed' => count($results) - $done,
+            'results' => $results,
+        ], $done > 0 || empty($results) ? 200 : 422);
+    }
+
+    /**
+     * Un validateur ne peut traiter que les éléments de ses collaborateurs (sauf admin/global).
+     */
+    private function ensureManaged(?string $ownerId): void
+    {
+        $user = auth()->user();
+        if ($user->can('scope:global') || $user->hasAnyRole(['superadmin', 'super-admin', 'admin'])) {
+            return;
+        }
+        abort_unless($ownerId && $user->manages($ownerId), 403, "Cet élément n'appartient pas à un délégué de votre équipe.");
     }
 }

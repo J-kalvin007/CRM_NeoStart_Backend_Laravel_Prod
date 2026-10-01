@@ -117,6 +117,13 @@ class ActivityReportController extends Controller
     )]
     public function validateReport(Request $request, Activity $activity)
     {
+        $user = $request->user();
+        abort_unless(
+            $user->can('scope:global') || $user->hasAnyRole(['superadmin', 'super-admin', 'admin']) || $user->manages($activity->user_id),
+            403,
+            "Ce compte-rendu n'appartient pas à un délégué de votre équipe."
+        );
+
         $status = $request->input('status') ?? ($request->input('action') === 'validate' || $request->input('action') === 'validated' ? 'validated' : ($request->input('action') === 'reject' || $request->input('action') === 'rejected' ? 'rejected' : null));
         $request->merge(['status' => $status]);
 

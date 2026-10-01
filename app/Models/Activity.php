@@ -20,6 +20,13 @@ class Activity extends Model
         'campaign_id',
         'user_id',
         'accompanying_user_id',
+        'is_duo',
+        'duo_user_id',
+        'duo_activity_type_id',
+        'duo_status',
+        'duo_rejection_reason',
+        'duo_delegue_status',
+        'duo_delegue_rejection_reason',
         'contact_id',
         'account_id',
         'activity_type',
@@ -80,6 +87,7 @@ class Activity extends Model
         'locked_at'       => 'datetime',
         'gps_flagged'     => 'boolean',
         'validation_date' => 'datetime',
+        'is_duo'          => 'boolean',
     ];
 
     /* ─── Relations ──────────────────────────────────────────── */
@@ -107,6 +115,24 @@ class Activity extends Model
     public function accompanyingUser()
     {
         return $this->belongsTo(User::class, 'accompanying_user_id');
+    }
+
+    /** Superviseur / manager participant à la visite DUO */
+    public function duoUser()
+    {
+        return $this->belongsTo(User::class, 'duo_user_id');
+    }
+
+    /** Nature du DUO (activity_types : coaching, formation) */
+    public function duoActivityType()
+    {
+        return $this->belongsTo(ActivityType::class, 'duo_activity_type_id');
+    }
+
+    /** DUO actif : proposé/accepté et non refusé par le délégué */
+    public function hasActiveDuo(): bool
+    {
+        return (bool) $this->is_duo && $this->duo_delegue_status !== 'rejected';
     }
 
     public function validatedBy()

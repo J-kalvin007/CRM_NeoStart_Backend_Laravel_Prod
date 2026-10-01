@@ -3,287 +3,205 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
-use App\Models\User;
 use App\Models\Activity;
+use App\Models\Contact;
+use App\Models\Expense;
+use App\Models\SampleRequest;
+use App\Models\TourPlan;
+use App\Models\User;
+use Carbon\Carbon;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
+/**
+ * Tableau de bord & planning du superviseur.
+ * Toutes les données sont restreintes aux délégués qu'il encadre (User::teamMemberIds()).
+ */
 class SupervisorDashboardController extends Controller
 {
+    private const COMPLETED = ['realisee', 'effectuee', 'validee'];
+    private const LEAVE_TYPES = ['conge', 'absence', 'indisponibilite', 'leave', 'Congé Annuel', 'Congé Maladie'];
+
     public function dashboard(Request $request)
     {
         $user = auth()->user();
-        $teamUsers = User::where('id', '!=', $user->id)
-            ->whereDoesntHave('roles', function($q) {
-                $q->whereIn('name', ['superadmin', 'admin']);
-            })
-            ->where(function($q) {
-                $q->whereHas('roles', function($r) {
-                    $r->whereIn('name', ['delegue_medical', 'delegue']);
-                })->orWhereDoesntHave('roles');
-            })
-            ->get();
+        $team = $user->teamMembers()->with('scopes')->get();
+        $teamIds = $team->pluck('id')->all();
+        $count = $team->count();
 
-        $activeDelegatesCount = max(1, $teamUsers->count());
-        $teamUserIds = $teamUsers->pluck('id')->toArray();
+        $start = now()->startOfMonth()->toDateString();
+        $end = now()->endOfMonth()->toDateString();
 
-        $startOfMonth = now()->startOfMonth()->toDateString();
-        $endOfMonth = now()->endOfMonth()->toDateString();
-
-        $completedVisitsMtd = Activity::whereIn('user_id', $teamUserIds)
-            ->where('activity_type', 'visite')
-            ->whereBetween('date_activite', [$startOfMonth, $endOfMonth])
-            ->whereIn('statut', ['realisee', 'effectuee', 'validee'])
+        $completed = $this->visitQuery($teamIds)
+            ->whereBetween('date_activite', [$start, $end])
+            ->whereIn('statut', self::COMPLETED)
             ->count();
+        $target = $this->weeklyTarget() * 4 * $count;
+        $progress = $target > 0 ? round($completed / $target, 2) : 0;
 
-        $targetVisitsMtd = max(40, $activeDelegatesCount * 40);
-        $progressMtd = min(1.0, round($completedVisitsMtd / max(1, $targetVisitsMtd), 2));
+        $coverage = $this->coverageRate($teamIds, $start, $end);
+        $pending = $this->pendingValidationsCount($teamIds);
 
-        $pendingValidations = \App\Models\Expense::whereIn('user_id', $teamUserIds)->where('status', 'submitted')->count()
-            + \App\Models\TourPlan::whereIn('user_id', $teamUserIds)->where('statut', 'soumis')->count();
+        $connectedToday = $team->filter(fn ($u) => $u->last_login_at && Carbon::parse($u->last_login_at)->isToday())->count();
+        $connectedPct = $count > 0 ? (int) round($connectedToday / $count * 100) : 0;
 
-        $coverage = 88;
-
-        $todayVisits = Activity::with(['delegue', 'contact', 'account'])
-            ->whereIn('user_id', $teamUserIds)
+        $liveActivities = $this->visitQuery($teamIds)
+            ->with(['delegue.scopes', 'contact', 'account'])
             ->whereDate('date_activite', now()->toDateString())
-            ->get();
+            ->orderBy('heure_debut')
+            ->get()
+            ->map(fn ($act) => [
+                'name' => $act->delegue?->name ?? 'Délégué',
+                'sector' => $this->delegateSector($act->delegue),
+                'statusBadgeText' => $this->statusLabel($act->statut),
+                'subText' => trim($this->contactName($act) . ($act->account ? " ({$act->account->nom})" : '')),
+            ])->values();
 
-        $liveActivities = $todayVisits->map(function($act) {
-            $contactName = $act->contact?->name ?? 'Dr. Praticien';
-            $accountName = $act->account?->name ?? 'Hôpital';
-            return [
-                'name' => $act->delegue?->name ?? 'Délégué Médical',
-                'sector' => $act->delegue?->sector?->name ?? 'Secteur principal',
-                'statusBadgeText' => ucfirst($act->statut ?? 'En visite'),
-                'subText' => "{$contactName} ({$accountName})",
-            ];
-        })->toArray();
-
-        if (empty($liveActivities)) {
-            $liveActivities = [
-                [
-                    'name' => 'Alice Delegue',
-                    'sector' => 'Abidjan Est',
-                    'statusBadgeText' => 'En visite (CHU Cocody)',
-                    'subText' => 'Dr. Marcel Mensah (Cardiologie)',
-                ],
-                [
-                    'name' => 'Afi Mensah',
-                    'sector' => 'Abidjan Est',
-                    'statusBadgeText' => 'Disponible',
-                    'subText' => 'Pharmacie Saint-Jean',
-                ],
-                [
-                    'name' => 'Koffi Agbeko',
-                    'sector' => 'Abidjan Sud',
-                    'statusBadgeText' => 'En tournée GPS',
-                    'subText' => 'CHU Treichville',
-                ],
-            ];
-        }
+        $validations = Expense::withoutGlobalScopes()
+            ->with('user')
+            ->whereIn('user_id', $teamIds)
+            ->where('status', 'submitted')
+            ->latest()
+            ->take(5)
+            ->get()
+            ->map(fn ($e) => [
+                'id' => (string) $e->id,
+                'title' => $e->title ?: ucfirst((string) $e->type),
+                'submittedBy' => 'Soumis par ' . ($e->user?->name ?? 'Délégué') . ' • ' . $e->created_at?->format('d/m/Y'),
+                'amountLocal' => number_format((float) $e->amount, 0, ',', ' ') . ' ' . ($e->currency ?: 'FCFA'),
+                'receipt' => $e->receipt_file_path ? 'Justificatif joint' : 'Sans justificatif',
+            ])->values();
 
         return response()->json([
             'supervision' => [
-                'region' => 'SUPERVISION RÉGIONALE',
-                'team' => 'Équipe Délégués Médicaux',
-                'activeDelegates' => $activeDelegatesCount,
-                'connectedPercentage' => 100,
+                'region' => $this->delegateSector($user) ?: 'SUPERVISION',
+                'team' => 'Équipe de ' . $user->name,
+                'activeDelegates' => $count,
+                'connectedPercentage' => $connectedPct,
             ],
             'kpis' => [
                 [
                     'title' => 'VISITES MTD',
-                    'value' => (string) max(32, $completedVisitsMtd),
-                    'subtitle' => "/{$targetVisitsMtd}",
-                    'progress' => $progressMtd > 0 ? $progressMtd : 0.82,
-                    'bottomLabel' => '↗ ' . (int)(($progressMtd > 0 ? $progressMtd : 0.82) * 100) . '% de l\'objectif',
+                    'value' => (string) $completed,
+                    'subtitle' => "/{$target}",
+                    'progress' => min(1, $progress),
+                    'bottomLabel' => '↗ ' . (int) round($progress * 100) . "% de l'objectif",
                 ],
                 [
                     'title' => 'COUVERTURE',
                     'value' => $coverage . '%',
                     'progress' => $coverage / 100,
-                    'bottomLabel' => 'Cible A/B prioritaire',
+                    'bottomLabel' => 'Prescripteurs visités ce mois',
                 ],
                 [
                     'title' => 'VALIDATIONS EN COURS',
-                    'value' => (string) max(4, $pendingValidations),
+                    'value' => (string) $pending,
                     'subtitleText' => 'À valider',
-                    'bottomBadge' => $pendingValidations > 0 ? '⏳ Action requise' : '✅ À jour',
+                    'bottomBadge' => $pending > 0 ? '⏳ Action requise' : '✅ À jour',
                 ],
                 [
                     'title' => 'DÉLÉGUÉS ACTIFS',
-                    'value' => (string) $activeDelegatesCount,
-                    'subtitleText' => 'Sur le terrain',
-                    'bottomBadge' => '100% Connectés',
+                    'value' => (string) $count,
+                    'subtitleText' => 'Dans mon équipe',
+                    'bottomBadge' => "{$connectedPct}% connectés aujourd'hui",
                 ],
             ],
             'liveActivities' => $liveActivities,
-            'validations' => [
-                [
-                    'title' => 'Frais carburant tournée',
-                    'submittedBy' => 'Soumis par Jean Dupont • Aujourd\'hui',
-                    'amountEur' => '65,50 €',
-                    'amountLocal' => '42 900 FCFA',
-                    'receipt' => 'Justificatif TotalEnergies',
-                ]
-            ]
+            'validations' => $validations,
         ]);
     }
 
     public function teamPlanning(Request $request)
     {
+        $user = auth()->user();
         $sectorFilter = $request->query('sector', 'Tous les secteurs');
         $delegateFilter = $request->query('delegate', 'Tous');
+        $delegateIdFilter = $request->query('delegate_id');
         $temporality = $request->query('temporality', 'Jour');
-        $dateStr = $request->query('date', date('Y-m-d'));
-
-        $sectorsFromDb = [];
-        try {
-            if (class_exists('\App\Models\Sector')) {
-                $sectorsFromDb = \App\Models\Sector::pluck('name')->filter()->unique()->values()->toArray();
-            }
-            if (empty($sectorsFromDb)) {
-                $sectorsFromDb = \Illuminate\Support\Facades\DB::table('sectors')->pluck('nom')->filter()->unique()->values()->toArray();
-            }
-        } catch (\Throwable $e) {}
-
-        if (empty($sectorsFromDb)) {
-            $sectorsFromDb = ['Abidjan Est', 'Abidjan Sud', 'Abidjan Centre', 'Abidjan Nord', 'Abidjan Ouest'];
-        }
-        $sectors = array_merge(['Tous les secteurs'], $sectorsFromDb);
-
-        $delegates = [
-            [
-                'id' => 'del-all',
-                'name' => 'Tous',
-                'avatar' => 'ALL',
-                'role' => 'Équipe au complet',
-                'sector' => 'Tous les secteurs',
-                'coverage' => '85%',
-                'status' => 'Validée',
-                'planned_visits' => '24/28',
-            ]
-        ];
 
         try {
-            $user = auth()->user();
-            $dbUsers = User::where('id', '!=', $user?->id)
-                ->where(function($q) use ($user) {
-                    if ($user) {
-                        $q->where('manager_id', $user->id);
-                    }
-                    $q->orWhereHas('roles', function($r) {
-                        $r->whereIn('name', ['Delegue_medicale', 'delegue_medicale', 'delegue_medical', 'delegue', 'délégué', 'Délégué Médical', 'superviseur']);
-                    })->orWhereDoesntHave('roles');
-                })->get();
-
-            if ($dbUsers->isEmpty()) {
-                $dbUsers = User::where('id', '!=', $user?->id)->get();
-            }
-
-            foreach ($dbUsers as $index => $u) {
-                if (!empty($u->name)) {
-                    $parts = explode(' ', $u->name);
-                    $initials = '';
-                    foreach ($parts as $p) {
-                        if (!empty($p)) $initials .= strtoupper($p[0]);
-                    }
-                    if (strlen($initials) > 2) $initials = substr($initials, 0, 2);
-
-                    $secName = $this->getDelegateSector($u);
-
-                    $delegates[] = [
-                        'id' => (string) $u->id,
-                        'name' => $u->name,
-                        'avatar' => !empty($initials) ? $initials : 'DM',
-                        'role' => "Délégué Médical • {$secName}",
-                        'sector' => $secName,
-                        'coverage' => (75 + (($index % 5) * 5)) . '%',
-                        'status' => 'Validée',
-                        'planned_visits' => '4/4 prévues',
-                    ];
-                }
-            }
+            $date = Carbon::parse($request->query('date', now()->toDateString()));
         } catch (\Throwable $e) {
-            // Error querying users
+            $date = now();
         }
 
-        // Query activities for schedule
-        $schedules = [];
-        try {
-            $actQuery = Activity::with(['delegue', 'contact', 'account']);
+        [$start, $end, $workingDays] = match ($temporality) {
+            'Semaine' => [$date->copy()->startOfWeek(), $date->copy()->endOfWeek(), $this->daysPerWeek()],
+            'Mois' => [$date->copy()->startOfMonth(), $date->copy()->endOfMonth(), $this->daysPerWeek() * 4],
+            default => [$date->copy()->startOfDay(), $date->copy()->endOfDay(), 1],
+        };
+        $targetPerDelegate = $this->visitsPerDay() * $workingDays;
 
-            if ($delegateFilter !== 'Tous' && !empty($delegateFilter)) {
-                $actQuery->whereHas('delegue', function($q) use ($delegateFilter) {
-                    $q->where('name', 'like', "%{$delegateFilter}%");
-                });
-            }
+        $team = $user->teamMembers()->with('scopes')->orderBy('name')->get();
+        $teamIds = $team->pluck('id')->all();
 
-            // Filter by date / temporality
-            try {
-                if ($temporality === 'Jour') {
-                    $actQuery->whereDate('date_activite', $dateStr);
-                } elseif ($temporality === 'Semaine') {
-                    $dateObj = \Carbon\Carbon::parse($dateStr);
-                    $actQuery->whereBetween('date_activite', [
-                        $dateObj->copy()->startOfWeek()->toDateString(),
-                        $dateObj->copy()->endOfWeek()->toDateString()
-                    ]);
-                } elseif ($temporality === 'Mois') {
-                    $dateObj = \Carbon\Carbon::parse($dateStr);
-                    $actQuery->whereYear('date_activite', $dateObj->year)
-                             ->whereMonth('date_activite', $dateObj->month);
-                }
-            } catch (\Throwable $e) {
-                // Ignore date parse errors
-            }
+        // Planifiées / réalisées par délégué sur la période affichée
+        $stats = $this->visitQuery($teamIds)
+            ->whereBetween('date_activite', [$start->toDateString(), $end->toDateString()])
+            ->selectRaw('user_id, COUNT(*) as planned, SUM(CASE WHEN statut IN (?, ?, ?) THEN 1 ELSE 0 END) as completed', self::COMPLETED)
+            ->groupBy('user_id')
+            ->get()
+            ->keyBy('user_id');
 
-            $activities = $actQuery->orderBy('heure_debut', 'asc')->get();
+        $monthStart = $date->copy()->startOfMonth()->toDateString();
+        $monthEnd = $date->copy()->endOfMonth()->toDateString();
+        $teamCoverage = $this->coverageRate($teamIds, $monthStart, $monthEnd);
 
-            foreach ($activities as $act) {
-                $delName = $act->delegue?->name ?? 'Délégué Médical';
-                $secName = $act->delegue?->sector?->name ?? 'Abidjan Centre';
+        $delegates = [[
+            'id' => 'del-all',
+            'name' => 'Tous',
+            'avatar' => 'ALL',
+            'role' => 'Équipe au complet',
+            'sector' => 'Tous les secteurs',
+            'coverage' => $teamCoverage . '%',
+            'status' => '',
+            'planned_visits' => (int) $stats->sum('planned') . '/' . ($targetPerDelegate * count($teamIds)) . ' prévues',
+        ]];
 
-                // Sector filter check if specific sector selected
-                if ($sectorFilter !== 'Tous les secteurs' && !empty($sectorFilter)) {
-                    if (stripos($secName, $sectorFilter) === false && stripos($act->notes ?? '', $sectorFilter) === false) {
-                        continue;
-                    }
-                }
-
-                $timeStr = !empty($act->heure_debut) ? substr($act->heure_debut, 0, 5) : '09:00';
-                $contactName = $act->contact?->name ?? 'Dr. Praticien';
-                $accountName = $act->account?->name ?? 'Établissement';
-                $actType = !empty($act->activity_type) ? ucfirst($act->activity_type) : 'Visite médicale';
-                if (strtolower($actType) === 'visite') $actType = 'Visite médicale';
-
-                $schedules[] = [
-                    'id' => (string) $act->id,
-                    'delegate' => $delName,
-                    'dateActivite' => $act->date_activite ? $act->date_activite->toDateString() : $dateStr,
-                    'time' => $timeStr,
-                    'title' => "{$actType} — {$contactName}",
-                    'specialty' => "{$accountName} • " . ($act->notes ?? ''),
-                    'type' => $actType,
-                    'status' => !empty($act->statut) ? ucfirst($act->statut) : 'Effectuée',
-                    'isDuo' => stripos($act->notes ?? '', 'duo') !== false || stripos($actType, 'duo') !== false,
-                    'sector' => $secName,
-                    'color' => '#00816E',
-                ];
-            }
-        } catch (\Throwable $e) {
-            // Activity query fallback
+        foreach ($team as $member) {
+            $planned = (int) ($stats[$member->id]->planned ?? 0);
+            $sector = $this->delegateSector($member);
+            $delegates[] = [
+                'id' => (string) $member->id,
+                'name' => $member->name,
+                'avatar' => $this->initials($member->name),
+                'role' => 'Délégué Médical' . ($sector ? " • {$sector}" : ''),
+                'sector' => $sector,
+                'coverage' => $this->coverageRate([$member->id], $monthStart, $monthEnd) . '%',
+                'status' => $this->tourPlanStatus($member->id, $date),
+                'planned_visits' => "{$planned}/{$targetPerDelegate} prévues",
+            ];
         }
 
-        // If no activities found for selected delegate & date, provide tailored delegate activities from backend
-        if (empty($schedules)) {
-            $schedules = $this->getDelegateTailoredSchedules($delegateFilter, $sectorFilter, $dateStr, $temporality);
-        }
+        $sectors = array_values(array_unique(array_filter(array_column(array_slice($delegates, 1), 'sector'))));
+        array_unshift($sectors, 'Tous les secteurs');
 
-        $totalCount = max(1, count($delegates) - 1);
+        // Délégués retenus par les filtres (toujours à l'intérieur de l'équipe)
+        $filteredIds = $team->filter(function ($m) use ($delegateFilter, $delegateIdFilter, $sectorFilter) {
+            if ($delegateIdFilter) {
+                return $m->id === $delegateIdFilter;
+            }
+            if ($delegateFilter && $delegateFilter !== 'Tous' && $m->name !== $delegateFilter) {
+                return false;
+            }
+            if ($sectorFilter && $sectorFilter !== 'Tous les secteurs' && $this->delegateSector($m) !== $sectorFilter) {
+                return false;
+            }
+            return true;
+        })->pluck('id')->all();
+
+        $schedules = $this->visitQuery($filteredIds)
+            ->with(['delegue.scopes', 'contact', 'account', 'products', 'duoUser', 'duoActivityType'])
+            ->whereBetween('date_activite', [$start->toDateString(), $end->toDateString()])
+            ->orderBy('date_activite')
+            ->orderBy('heure_debut')
+            ->get()
+            ->map(fn ($act) => $this->formatSchedule($act, $user))
+            ->values();
 
         return response()->json([
             'status' => 'success',
-            'date' => $dateStr,
+            'date' => $date->toDateString(),
             'temporality' => $temporality,
             'selected_sector' => $sectorFilter,
             'selected_delegate' => $delegateFilter,
@@ -291,210 +209,189 @@ class SupervisorDashboardController extends Controller
             'delegates' => $delegates,
             'schedules' => $schedules,
             'summary' => [
-                'total_delegates' => $totalCount,
-                'validated_plannings' => max(1, $totalCount - 1),
-                'pending_plannings' => 1,
-                'global_coverage' => '88%',
-            ]
+                'total_delegates' => count($teamIds),
+                'validated_plannings' => collect($delegates)->where('status', 'Validée')->count(),
+                'pending_plannings' => collect($delegates)->where('status', 'Soumis')->count(),
+                'planned_visits' => (int) $stats->sum('planned'),
+                'completed_visits' => (int) $stats->sum('completed'),
+                'target_visits' => $targetPerDelegate * count($teamIds),
+                'global_coverage' => $teamCoverage . '%',
+            ],
         ]);
     }
 
-    private function getDelegateTailoredSchedules(string $delegate, string $sector, string $dateStr, string $temporality = 'Jour'): array
-    {
-        $all = [
-            [
-                'id' => 'plan-alice-1',
-                'delegate' => 'Alice Delegue',
-                'dateActivite' => $dateStr,
-                'time' => '09:00',
-                'title' => 'Visite médicale — Dr. Marcel Mensah',
-                'specialty' => 'CHU Cocody • Présentation DiaBex 500mg',
-                'type' => 'Visite médicale',
-                'status' => 'Effectuée',
-                'isDuo' => false,
-                'sector' => 'Abidjan Est',
-                'color' => '#00816E',
-            ],
-            [
-                'id' => 'plan-alice-2',
-                'delegate' => 'Alice Delegue',
-                'dateActivite' => $dateStr,
-                'time' => '11:30',
-                'title' => 'Visite médicale — Dr. Ablavi Lawson',
-                'specialty' => 'Polyclinique Sainte Anne • Gamme Neurologie',
-                'type' => 'Visite médicale',
-                'status' => 'Effectuée',
-                'isDuo' => true,
-                'sector' => 'Abidjan Est',
-                'color' => '#00816E',
-            ],
-            [
-                'id' => 'plan-alice-3',
-                'delegate' => 'Alice Delegue',
-                'dateActivite' => $dateStr,
-                'time' => '15:00',
-                'title' => 'Visite Officine — Pharmacie Principale Plateau',
-                'specialty' => 'Quartier Plateau • Réassort & Dotation',
-                'type' => 'Visite Officine',
-                'status' => 'En cours',
-                'isDuo' => false,
-                'sector' => 'Abidjan Est',
-                'color' => '#0050CB',
-            ],
-            [
-                'id' => 'plan-afi-1',
-                'delegate' => 'Afi Mensah',
-                'dateActivite' => $dateStr,
-                'time' => '08:30',
-                'title' => 'Visite médicale — Dr. Marcel Mensah',
-                'specialty' => 'CHU Cocody • Présentation DiaBex 500mg',
-                'type' => 'Visite médicale',
-                'status' => 'Effectuée',
-                'isDuo' => false,
-                'sector' => 'Abidjan Est',
-                'color' => '#00816E',
-            ],
-            [
-                'id' => 'plan-afi-2',
-                'delegate' => 'Afi Mensah',
-                'dateActivite' => $dateStr,
-                'time' => '10:15',
-                'title' => 'Visite médicale — Dr. Ablavi Lawson',
-                'specialty' => 'Polyclinique Sainte Anne • Gamme Neurologie',
-                'type' => 'Visite médicale',
-                'status' => 'Effectuée',
-                'isDuo' => true,
-                'sector' => 'Abidjan Est',
-                'color' => '#00816E',
-            ],
-            [
-                'id' => 'plan-afi-3',
-                'delegate' => 'Afi Mensah',
-                'dateActivite' => $dateStr,
-                'time' => '14:00',
-                'title' => 'Visite Officine — Pharmacie Saint-Jean',
-                'specialty' => 'Cocody Mermoz • Réassort DiaBex',
-                'type' => 'Visite Officine',
-                'status' => 'En cours',
-                'isDuo' => false,
-                'sector' => 'Abidjan Est',
-                'color' => '#0050CB',
-            ],
-            [
-                'id' => 'plan-koffi-1',
-                'delegate' => 'Koffi Agbeko',
-                'dateActivite' => $dateStr,
-                'time' => '09:00',
-                'title' => 'Visite médicale — Dr. Sow Ousmane',
-                'specialty' => 'CHU Treichville • Endocrinologie',
-                'type' => 'Visite médicale',
-                'status' => 'Effectuée',
-                'isDuo' => false,
-                'sector' => 'Abidjan Sud',
-                'color' => '#00816E',
-            ],
-            [
-                'id' => 'plan-koffi-2',
-                'delegate' => 'Koffi Agbeko',
-                'dateActivite' => $dateStr,
-                'time' => '11:00',
-                'title' => 'Visite Officine — Pharmacie de Treichville',
-                'specialty' => 'Avenue 16 • Contrôle de stock',
-                'type' => 'Visite Officine',
-                'status' => 'Effectuée',
-                'isDuo' => false,
-                'sector' => 'Abidjan Sud',
-                'color' => '#00816E',
-            ],
-            [
-                'id' => 'plan-sarah-1',
-                'delegate' => 'Sarah Lawson',
-                'dateActivite' => $dateStr,
-                'time' => '09:15',
-                'title' => 'Visite médicale — Dr. Marie Aka',
-                'specialty' => 'Clinique de la Madeleine • Pédiatrie',
-                'type' => 'Visite médicale',
-                'status' => 'Effectuée',
-                'isDuo' => false,
-                'sector' => 'Abidjan Centre',
-                'color' => '#00816E',
-            ],
-            [
-                'id' => 'plan-sarah-2',
-                'delegate' => 'Sarah Lawson',
-                'dateActivite' => $dateStr,
-                'time' => '11:45',
-                'title' => 'Visite Officine — Pharmacie Principale Plateau',
-                'specialty' => 'Rue du Commerce • Commande directe',
-                'type' => 'Visite Officine',
-                'status' => 'Effectuée',
-                'isDuo' => false,
-                'sector' => 'Abidjan Centre',
-                'color' => '#00816E',
-            ],
-            [
-                'id' => 'plan-mk-1',
-                'delegate' => 'Mamadou Kane',
-                'dateActivite' => $dateStr,
-                'time' => '09:30',
-                'title' => 'Visite médicale — Dr. Issiaka Bamba',
-                'specialty' => 'CHU Treichville • Neurologie',
-                'type' => 'Visite médicale',
-                'status' => 'Effectuée',
-                'isDuo' => false,
-                'sector' => 'Abidjan Nord',
-                'color' => '#00816E',
-            ],
-            [
-                'id' => 'plan-jd-1',
-                'delegate' => 'Jean Dupont',
-                'dateActivite' => $dateStr,
-                'time' => '10:00',
-                'title' => 'Visite médicale — Dr. Bernard Kotto',
-                'specialty' => 'Clinique de l\'Espérance Yopougon • Pédiatrie',
-                'type' => 'Visite médicale',
-                'status' => 'Effectuée',
-                'isDuo' => false,
-                'sector' => 'Abidjan Ouest',
-                'color' => '#00816E',
-            ],
-        ];
+    /* ─── Helpers ──────────────────────────────────────────────── */
 
-        return array_values(array_filter($all, function($item) use ($delegate, $sector) {
-            if ($delegate !== 'Tous' && stripos($item['delegate'], $delegate) === false) {
-                return false;
-            }
-            if ($sector !== 'Tous les secteurs' && stripos($item['sector'], $sector) === false) {
-                return false;
-            }
-            return true;
-        }));
+    private function formatSchedule(Activity $act, User $supervisor): array
+    {
+        $actType = !empty($act->activity_type) ? ucfirst($act->activity_type) : 'Visite médicale';
+        if (strtolower($actType) === 'visite') {
+            $actType = 'Visite médicale';
+        }
+        $statut = strtolower((string) $act->statut);
+        $isClosed = in_array($statut, ['realisee', 'effectuee', 'validee', 'terminee', 'annulee', 'manquee']);
+        $isPast = $act->date_activite && $act->date_activite->lt(now()->startOfDay());
+        $contactName = $this->contactName($act);
+        $address = $act->account
+            ? trim(implode(', ', array_filter([$act->account->adresse, $act->account->zone_quartier, $act->account->ville])))
+            : '';
+
+        return [
+            'id' => (string) $act->id,
+            'delegate' => $act->delegue?->name ?? 'Délégué',
+            'delegate_id' => (string) $act->user_id,
+            'dateActivite' => $act->date_activite?->toDateString(),
+            'time' => $act->heure_debut ? substr($act->heure_debut, 0, 5) : '--:--',
+            'heure_fin' => $act->heure_fin ? substr($act->heure_fin, 0, 5) : null,
+            'duree_minutes' => $act->duree_minutes,
+            'title' => "{$actType} — {$contactName}",
+            'specialty' => trim(($act->account?->nom ?? '') . ($act->notes ? ' • ' . $act->notes : ''), ' •'),
+            'type' => $actType,
+            'status' => $this->statusLabel($act->statut),
+            'isDuo' => $act->hasActiveDuo(),
+            'sector' => $this->delegateSector($act->delegue),
+            'color' => in_array($statut, self::COMPLETED) ? '#00816E' : ($statut === 'manquee' ? '#D32F2F' : '#0050CB'),
+            'contact_name' => $act->contact ? $contactName : null,
+            'account_name' => $act->account?->nom,
+            'address' => $address ?: null,
+            'notes' => $act->notes,
+            'motif' => $act->motif,
+            'products' => $act->products->map(fn ($p) => $p->nom)->filter()->values(),
+            'accompanying_user' => $act->hasActiveDuo() ? $act->duoUser?->name : null,
+            'duo_type' => $act->hasActiveDuo() ? $act->duoActivityType?->code : null,
+            // pending | accepted | rejected : réponse du délégué à l'accompagnement
+            'duo_delegue_status' => $act->is_duo ? $act->duo_delegue_status : null,
+            'duo_delegue_rejection_reason' => $act->duo_delegue_rejection_reason,
+            'can_duo' => !$act->hasActiveDuo() && $act->user_id !== $supervisor->id && !$isClosed && !$isPast,
+            // Le superviseur qui anime ce DUO peut le modifier ou l'annuler tant qu'il n'est pas passé
+            'can_manage_duo' => $act->hasActiveDuo() && $act->duo_user_id === $supervisor->id && !$isPast,
+            // Visite modifiable / reprogrammable / supprimable par le superviseur
+            'can_edit' => !$act->is_locked && !$isClosed,
+        ];
     }
 
-    private function getDelegateSector(User $u): string
+    /** Visites (hors congés/absences) des utilisateurs donnés ; la restriction d'équipe se fait par les IDs. */
+    private function visitQuery(array $userIds)
     {
-        if ($u->sector && !empty($u->sector->name)) {
-            return $u->sector->name;
+        return Activity::withoutGlobalScopes()
+            ->whereNull('deleted_at')
+            ->whereIn('user_id', $userIds)
+            ->whereNotIn('activity_type', self::LEAVE_TYPES);
+    }
+
+    /** % des prescripteurs du portefeuille visités (visite réalisée) sur la période. */
+    private function coverageRate(array $userIds, string $start, string $end): int
+    {
+        if (empty($userIds)) {
+            return 0;
         }
-        $name = strtolower($u->name ?? '');
-        $email = strtolower($u->email ?? '');
-        if (str_contains($name, 'alice') || str_contains($email, 'alice') || str_contains($name, 'afi') || str_contains($email, 'afi')) {
-            return 'Abidjan Est';
+        $portfolio = Contact::withoutGlobalScopes()->whereNull('deleted_at')->whereIn('user_id', $userIds)->count();
+        if ($portfolio === 0) {
+            return 0;
         }
-        if (str_contains($name, 'koffi') || str_contains($email, 'koffi')) {
-            return 'Abidjan Sud';
+        $visited = $this->visitQuery($userIds)
+            ->whereBetween('date_activite', [$start, $end])
+            ->whereIn('statut', self::COMPLETED)
+            ->whereNotNull('contact_id')
+            ->distinct()
+            ->count('contact_id');
+
+        return (int) min(100, round($visited / $portfolio * 100));
+    }
+
+    private function pendingValidationsCount(array $userIds): int
+    {
+        if (empty($userIds)) {
+            return 0;
         }
-        if (str_contains($name, 'sarah') || str_contains($email, 'sarah')) {
-            return 'Abidjan Centre';
+
+        return Expense::withoutGlobalScopes()->whereIn('user_id', $userIds)->where('status', 'submitted')->count()
+            + TourPlan::withoutGlobalScopes()->whereIn('user_id', $userIds)->where('statut', 'soumis')->count()
+            + SampleRequest::whereIn('user_id', $userIds)->where('status', 'pending')->count()
+            + Activity::withoutGlobalScopes()->whereNull('deleted_at')->whereIn('user_id', $userIds)
+                ->whereIn('activity_type', self::LEAVE_TYPES)->where('statut', 'en_attente')->count()
+            + Activity::withoutGlobalScopes()->whereNull('deleted_at')->whereIn('user_id', $userIds)
+                ->where('report_status', 'submitted')->count()
+            + Contact::withoutGlobalScopes()->whereNull('deleted_at')->whereIn('user_id', $userIds)
+                ->where(fn ($q) => $q->whereIn('statut_validation', ['en_attente', 'pending'])
+                    ->orWhereIn('statut', ['en_attente', 'en_attente_validation', 'inactif', 'pending']))->count()
+            + \App\Models\Account::withoutGlobalScopes()->whereNull('deleted_at')->whereIn('user_id', $userIds)
+                ->where(fn ($q) => $q->whereIn('statut_validation', ['en_attente', 'pending'])
+                    ->orWhereIn('statut', ['en_attente', 'en_attente_validation', 'inactif', 'pending']))->count();
+    }
+
+    private function tourPlanStatus(string $userId, Carbon $date): string
+    {
+        $plan = TourPlan::withoutGlobalScopes()
+            ->where('user_id', $userId)
+            ->whereDate('date_debut', '<=', $date->toDateString())
+            ->whereDate('date_fin', '>=', $date->toDateString())
+            ->latest()
+            ->first();
+
+        return match (strtolower((string) $plan?->statut)) {
+            'valide', 'validee' => 'Validée',
+            'soumis' => 'Soumis',
+            'rejete', 'refuse', 'refusee' => 'Refusée',
+            '' => 'Non soumis',
+            default => ucfirst($plan->statut),
+        };
+    }
+
+    /** Secteur = première unité organisationnelle rattachée à l'utilisateur (user_scopes). */
+    private function delegateSector(?User $u): string
+    {
+        if (!$u) {
+            return '';
         }
-        if (str_contains($name, 'mamadou') || str_contains($email, 'mamadou')) {
-            return 'Abidjan Nord';
+        $scopes = $u->relationLoaded('scopes') ? $u->scopes : $u->scopes()->get();
+
+        return (string) ($scopes->first()?->name ?? '');
+    }
+
+    private function contactName(Activity $act): string
+    {
+        if (!$act->contact) {
+            return 'Prescripteur non renseigné';
         }
-        if (str_contains($name, 'jean') || str_contains($email, 'jean')) {
-            return 'Abidjan Ouest';
-        }
-        return 'Abidjan Est';
+
+        return trim(($act->contact->titre ?: 'Dr.') . ' ' . $act->contact->prenom . ' ' . $act->contact->nom);
+    }
+
+    private function statusLabel(?string $statut): string
+    {
+        return match (strtolower((string) $statut)) {
+            'realisee', 'effectuee' => 'Réalisée',
+            'validee' => 'Validée',
+            'planifiee', '' => 'Planifiée',
+            'en_cours' => 'En cours',
+            'en_attente' => 'En attente',
+            'manquee' => 'Manquée',
+            'annulee' => 'Annulée',
+            'refusee' => 'Refusée',
+            default => ucfirst(str_replace('_', ' ', $statut)),
+        };
+    }
+
+    private function initials(string $name): string
+    {
+        $parts = array_values(array_filter(explode(' ', trim(preg_replace('/\(.*?\)/', '', $name)))));
+
+        return strtoupper(implode('', array_map(fn ($p) => mb_substr($p, 0, 1), array_slice($parts, 0, 2)))) ?: 'DM';
+    }
+
+    private function visitsPerDay(): int
+    {
+        return (int) (DB::table('settings')->where('key', 'visits_per_day')->value('value') ?: 12);
+    }
+
+    private function daysPerWeek(): int
+    {
+        return (int) (DB::table('settings')->where('key', 'working_days_per_week')->value('value') ?: 5);
+    }
+
+    private function weeklyTarget(): int
+    {
+        return $this->visitsPerDay() * $this->daysPerWeek();
     }
 }
-
-

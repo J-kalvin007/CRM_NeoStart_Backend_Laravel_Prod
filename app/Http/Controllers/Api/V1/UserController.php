@@ -33,12 +33,13 @@ class UserController extends Controller
     public function index(Request $request)
     {
         $query = User::with(['roles', 'scopes']);
-        
-        if ($request->has('team_id')) {
-            // Ignore legacy team_id 
+
+        // ?team=1 ou ?role=delegate : uniquement les collaborateurs encadrés (sans soi-même)
+        if ($request->boolean('team') || in_array($request->query('role'), ['delegate', 'delegue', 'delegue_medical'], true)) {
+            $query->whereIn('id', $request->user()->teamMemberIds());
         }
-        
-        return UserResource::collection($query->get());
+
+        return UserResource::collection($query->orderBy('name')->get());
     }
 
     #[OA\Post(

@@ -14,9 +14,21 @@ class DelegateRequest extends Model
         'user_id',
         'contact_id',
         'request_type',
+        'subject',
+        'justification',
         'reason',
         'priority',
         'status',
         'local_uuid',
     ];
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function contact()
+    {
+        return $this->belongsTo(Contact::class);
+    }
 }

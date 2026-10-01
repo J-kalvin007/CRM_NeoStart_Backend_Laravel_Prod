@@ -24,6 +24,13 @@ class ActivityResource extends JsonResource
             'prochain_rdv'   => $this->prochain_rdv,
             'statut'         => $this->statut,
             'meta'           => $this->meta ?? null,
+            // Visite DUO (superviseur participant, nature et réponses)
+            'is_duo'                       => (bool) $this->is_duo,
+            'duo_user'                     => $this->when($this->is_duo, fn () => $this->duoUser ? ['id' => (string) $this->duoUser->id, 'name' => $this->duoUser->name] : null),
+            'duo_type'                     => $this->when($this->is_duo, fn () => $this->duoActivityType?->code),
+            'duo_status'                   => $this->duo_status,
+            'duo_delegue_status'           => $this->duo_delegue_status,
+            'duo_delegue_rejection_reason' => $this->duo_delegue_rejection_reason,
             'is_locked'      => $this->is_locked,
             'report_status'  => $this->report_status,
             'report_content' => $this->report_content,

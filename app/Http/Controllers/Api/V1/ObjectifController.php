@@ -32,7 +32,7 @@ class ObjectifController extends Controller
             ->when($request->indicator_id, fn($q, $v) => $q->where('indicator_id', $v))
             ->when($request->statut, fn($q, $v) => $q->where('statut', $v))
             ->when($request->periode, fn($q, $v) => $q->where('periode', 'like', "%$v%"));
-        return ObjectifResource::collection($query->paginate(25));
+        return ObjectifResource::collection($query->latest('date_debut')->paginate(min(200, max(1, $request->integer('per_page', 25)))));
     }
 
     #[OA\Post(path: '/api/v1/objectifs', summary: 'Créer un objectif de performance', security: [['bearerAuth' => []]], tags: ['Objectifs'],
@@ -62,9 +62,28 @@ class ObjectifController extends Controller
             return response()->json(['message' => 'Non autorisé. Seul un superviseur ou directeur peut créer des objectifs.'], 403);
         }
         $data = $request->validated();
+        // Un objectif ne peut être attribué qu'à un collaborateur encadré (sauf admin)
+        $user = auth()->user();
+        if (!empty($data['user_id']) && !($user->can('scope:global') || $user->hasAnyRole(['superadmin', 'super-admin', 'admin'])) && !$user->manages($data['user_id'])) {
+            return response()->json(['message' => "Ce délégué ne fait pas partie de votre équipe."], 403);
+        }
         $data['assigned_by_user_id'] = auth()->id();
         $objectif = Objectif::create($data);
         $objectif->recalculerTaux();
+
+        $delegate = !empty($data['user_id']) ? \App\Models\User::withoutGlobalScopes()->find($data['user_id']) : null;
+        if ($delegate) {
+            $objectif->loadMissing('type');
+            NotificationController::sendNotification(
+                $delegate,
+                'Nouvel objectif attribué',
+                "{$user->name} vous a attribué un objectif : " . ($objectif->type?->name ?? 'objectif')
+                    . " — {$objectif->valeur_cible} " . ($objectif->type?->unit ?? '') . ($objectif->periode ? " ({$objectif->periode})" : '') . '.',
+                'objective',
+                'delegate',
+                ['objectif_id' => (string) $objectif->id]
+            );
+        }
         return new ObjectifResource($objectif->load(['user', 'team', 'product', 'indicator', 'type', 'organizationalUnit']));
     }
 
@@ -91,7 +110,17 @@ class ObjectifController extends Controller
         // mettre à jour que la valeur réalisée (contrôlé par le frontend/form request).
         // On n'empêche pas l'accès ici pour permettre l'enregistrement de la valeur réalisée.
         $objectif = Objectif::findOrFail($id);
-        $objectif->update($request->validated());
+        $data = $request->validated();
+        unset($data['motif_rejet']); // pas de colonne dédiée : conservé dans la description si fourni
+
+        // Le délégué ne peut saisir que sa valeur réalisée ; le reste est fixé par la hiérarchie
+        if (!auth()->user()->isAdminOrSupervisor()) {
+            $data = array_intersect_key($data, array_flip(['valeur_realisee']));
+        } elseif ($request->filled('motif_rejet')) {
+            $data['description'] = trim(($objectif->description ? $objectif->description . "\n" : '') . 'Motif du rejet : ' . $request->input('motif_rejet'));
+        }
+
+        $objectif->update($data);
         $objectif->recalculerTaux();
         return new ObjectifResource($objectif->load(['user', 'team', 'product', 'indicator', 'type', 'organizationalUnit']));
     }

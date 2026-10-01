@@ -43,6 +43,21 @@ class DynamicPerimeterScope implements Scope
         $this->applyHierarchyFiltering($builder, $table, $user, $userScopes);
     }
 
+    /** @var array<string, array> Équipe encadrée, mise en cache le temps de la requête */
+    protected static array $teamIdsCache = [];
+
+    /**
+     * Collaborateurs encadrés (récursif via manager_id) d'un utilisateur de la hiérarchie.
+     */
+    public static function teamIdsFor(User $user): array
+    {
+        if (!$user->hasAnyRole(['superviseur', 'directeur_regional', 'directeur_commercial', 'directeur_marketing'])) {
+            return [];
+        }
+
+        return self::$teamIdsCache[$user->id] ??= $user->teamMemberIds();
+    }
+
     /**
      * Get user's active organizational scopes with hierarchy information
      */
@@ -69,10 +84,13 @@ class DynamicPerimeterScope implements Scope
             'expenses', 'events', 'tasks', 'indicators'
         ];
 
+        // Sans périmètre configuré, la hiérarchie voit au moins les délégués qu'elle encadre directement
+        $teamIds = self::teamIdsFor($user);
+
         if ($table === 'users') {
-            $builder->where('id', $user->id);
+            $builder->whereIn('users.id', array_merge([$user->id], $teamIds));
         } elseif (in_array($table, $operationalTables)) {
-            $builder->where($table . '.user_id', $user->id);
+            $builder->whereIn($table . '.user_id', array_merge([$user->id], $teamIds));
         } elseif (in_array($table, ['products', 'categories', 'product_types', 'specialities', 'galenic_forms'])) {
             // Reference catalogs are accessible to all authenticated users
             return;
@@ -172,15 +190,7 @@ class DynamicPerimeterScope implements Scope
     {
         // Supervisors and managers can see their team members
         if ($user->hasAnyRole(['superviseur', 'directeur_regional', 'directeur_commercial', 'directeur_marketing'])) {
-            $builder->where(function($query) use ($user) {
-                $query->where('id', $user->id); // Always include self
-                
-                if ($user->team_id) {
-                    $query->orWhere('team_id', $user->team_id);
-                }
-                
-                $query->orWhere('manager_id', $user->id);
-            });
+            $builder->whereIn('users.id', array_merge([$user->id], self::teamIdsFor($user)));
             return;
         }
 
@@ -254,30 +264,17 @@ class DynamicPerimeterScope implements Scope
                 
                 // Supervisors and managers can see their team members' records
                 if ($user->hasAnyRole(['superviseur', 'directeur_regional', 'directeur_commercial', 'directeur_marketing'])) {
-                    $query->orWhereIn($table . '.user_id', function ($subQuery) use ($user) {
-                        $subQuery->select('id')
-                                 ->from('users')
-                                 ->where('manager_id', $user->id);
-                        if ($user->team_id) {
-                            $subQuery->orWhere('team_id', $user->team_id);
-                        }
-                    });
+                    $teamIds = self::teamIdsFor($user);
+                    if (!empty($teamIds)) {
+                        $query->orWhereIn($table . '.user_id', $teamIds);
+                    }
 
                     // For supervisors managing accounts: also include establishments linked to their team's contacts
                     if ($table === 'accounts') {
                         $query->orWhereIn('accounts.id', function ($sub) use ($user) {
                             $sub->select('account_id')
                                 ->from('contacts')
-                                ->where(function ($q) use ($user) {
-                                    $q->whereIn('user_id', function ($s) use ($user) {
-                                        $s->select('id')->from('users')->where('manager_id', $user->id);
-                                    });
-                                    if ($user->team_id) {
-                                        $q->orWhereIn('user_id', function ($s) use ($user) {
-                                            $s->select('id')->from('users')->where('team_id', $user->team_id);
-                                        });
-                                    }
-                                })
+                                ->whereIn('user_id', self::teamIdsFor($user))
                                 ->whereNotNull('account_id');
                         });
                     }

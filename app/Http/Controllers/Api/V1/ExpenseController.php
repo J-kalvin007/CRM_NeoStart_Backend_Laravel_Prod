@@ -43,10 +43,14 @@ class ExpenseController extends Controller
             ->when($request->filled('date_from'), fn($q) => $q->whereDate('expense_date', '>=', $request->date_from))
             ->when($request->filled('date_to'), fn($q) => $q->whereDate('expense_date', '<=', $request->date_to));
 
-        if ($request->filled('user_id') && $user->hasAnyRole(['super-admin', 'admin-pays', 'dir-general', 'dir-commercial', 'manager'])) {
+        // Admin : tout ; hiérarchie : les siennes + celles de son équipe ; délégué : les siennes
+        $isGlobal = ($user->can('scope:global') || $user->hasAnyRole(['superadmin', 'super-admin', 'admin']));
+        $visibleIds = array_merge([$user->id], $user->teamMemberIds());
+        if (!$isGlobal) {
+            $query->whereIn('user_id', $visibleIds);
+        }
+        if ($request->filled('user_id') && ($isGlobal || in_array($request->user_id, $visibleIds, true))) {
             $query->where('user_id', $request->user_id);
-        } elseif (!$user->hasAnyRole(['super-admin', 'admin-pays', 'dir-general', 'dir-commercial', 'manager'])) {
-            $query->where('user_id', $user->id);
         }
 
         $expenses = $query->latest('expense_date')->paginate($request->integer('per_page', 15));
@@ -114,7 +118,7 @@ class ExpenseController extends Controller
     {
         $user = Auth::user();
 
-        if ($expense->user_id !== $user->id && !$user->hasAnyRole(['super-admin', 'admin-pays', 'dir-general', 'dir-commercial', 'manager'])) {
+        if ($expense->user_id !== $user->id && !($user->can('scope:global') || $user->hasAnyRole(['superadmin', 'super-admin', 'admin'])) && !$user->manages($expense->user_id)) {
             return response()->json(['message' => 'Accès non autorisé à cette note de frais.'], 403);
         }
 
@@ -187,7 +191,8 @@ class ExpenseController extends Controller
 
         // Notification manager
         $user = Auth::user();
-        $manager = $user?->manager ?? \App\Models\User::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)->where('id', '!=', $user->id)->first();
+        // La note est adressée au supérieur direct du délégué
+        $manager = $user?->manager;
         if ($manager && $user) {
             NotificationController::sendNotification(
                 $manager,
@@ -260,6 +265,9 @@ class ExpenseController extends Controller
             'status'           => 'required|in:approved,rejected,pending',
             'rejection_reason' => 'nullable|string|max:500',
         ]);
+
+        $user = Auth::user();
+        abort_unless(($user->can('scope:global') || $user->hasAnyRole(['superadmin', 'super-admin', 'admin'])) || $user->manages($expense->user_id), 403, "Cette note n'appartient pas à un délégué de votre équipe.");
 
         $expense->update([
             'status'           => $v['status'],

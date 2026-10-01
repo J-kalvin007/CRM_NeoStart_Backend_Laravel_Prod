@@ -44,7 +44,7 @@ class ProductController extends Controller
                   ->orWhere('marque', 'like', "%$v%");
             }));
 
-        return ProductResource::collection($query->paginate(25));
+        return ProductResource::collection($query->paginate(min(1000, max(1, $request->integer('per_page', 25)))));
     }
 
     #[OA\Post(

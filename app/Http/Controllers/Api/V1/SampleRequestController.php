@@ -17,9 +17,10 @@ class SampleRequestController extends Controller
         $query = SampleRequest::with(['product', 'user', 'approver'])
             ->orderBy('created_at', 'desc');
 
-        if (!$user->isAdminOrSupervisor()) {
-            $query->where('user_id', $user->id);
-        } 
+        // Délégué : ses demandes ; hiérarchie : les siennes + celles de son équipe ; admin : tout
+        if (!($user->can('scope:global') || $user->hasAnyRole(['superadmin', 'super-admin', 'admin']))) {
+            $query->whereIn('user_id', array_merge([$user->id], $user->teamMemberIds()));
+        }
 
         return response()->json($query->get());
     }
@@ -46,7 +47,8 @@ class SampleRequestController extends Controller
         ]);
 
         // Envoyer une notification au Manager / Superviseur
-        $manager = $user?->manager ?? \App\Models\User::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)->where('id', '!=', $user->id)->first();
+        // La demande est adressée au supérieur direct du délégué
+        $manager = $user?->manager;
         if ($manager) {
             NotificationController::sendNotification(
                 $manager,
@@ -70,6 +72,9 @@ class SampleRequestController extends Controller
         }
 
         $sampleRequest = SampleRequest::findOrFail($id);
+        if (!(($user->can('scope:global') || $user->hasAnyRole(['superadmin', 'super-admin', 'admin'])) || $user->manages($sampleRequest->user_id))) {
+            return response()->json(['message' => "Cette demande n'appartient pas à un délégué de votre équipe."], 403);
+        }
 
         if ($sampleRequest->status !== 'pending') {
             return response()->json(['message' => 'Cette demande est déjà traitée.'], 400);
@@ -129,6 +134,9 @@ class SampleRequestController extends Controller
         }
 
         $sampleRequest = SampleRequest::findOrFail($id);
+        if (!(($user->can('scope:global') || $user->hasAnyRole(['superadmin', 'super-admin', 'admin'])) || $user->manages($sampleRequest->user_id))) {
+            return response()->json(['message' => "Cette demande n'appartient pas à un délégué de votre équipe."], 403);
+        }
 
         if ($sampleRequest->status !== 'pending') {
             return response()->json(['message' => 'Cette demande est déjà traitée.'], 400);
@@ -151,5 +159,42 @@ class SampleRequestController extends Controller
         }
 
         return response()->json($sampleRequest->load(['product', 'user', 'approver']));
+    }
+
+    /**
+     * Modifier sa demande d'échantillons tant qu'elle est en attente.
+     */
+    public function update(Request $request, $id)
+    {
+        $sampleRequest = $this->ownPendingRequest($id);
+
+        $validated = $request->validate([
+            'product_id' => 'nullable|uuid|exists:products,id',
+            'quantity'   => 'nullable|integer|min:1',
+            'notes'      => 'nullable|string',
+        ]);
+
+        $sampleRequest->update(array_filter($validated, fn ($v) => $v !== null));
+
+        return response()->json(['message' => "Demande d'échantillons modifiée.", 'data' => $sampleRequest->fresh(['product'])]);
+    }
+
+    /**
+     * Annuler sa demande d'échantillons tant qu'elle est en attente.
+     */
+    public function destroy($id)
+    {
+        $this->ownPendingRequest($id)->delete();
+
+        return response()->json(['message' => "Demande d'échantillons annulée."]);
+    }
+
+    private function ownPendingRequest($id): SampleRequest
+    {
+        $sampleRequest = SampleRequest::findOrFail($id);
+        abort_unless($sampleRequest->user_id === auth()->id(), 403, 'Vous ne pouvez modifier que vos propres demandes.');
+        abort_unless($sampleRequest->status === 'pending', 422, 'Cette demande a déjà été traitée et ne peut plus être modifiée.');
+
+        return $sampleRequest;
     }
 }

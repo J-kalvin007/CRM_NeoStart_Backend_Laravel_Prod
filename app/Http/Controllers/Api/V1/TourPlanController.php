@@ -26,8 +26,14 @@ class TourPlanController extends Controller
             ->when($request->statut, fn($q, $v) => $q->where('statut', $v))
             ->when($request->date_debut, fn($q, $v) => $q->where('date_debut', '>=', $v))
             ->when($request->date_fin, fn($q, $v) => $q->where('date_fin', '<=', $v))
+            ->when($request->user_id, fn($q, $v) => $q->where('user_id', $v))
             ->withCount('activities')
             ->orderByDesc('created_at');
+
+        // Délégué : ses plannings ; hiérarchie : les siens + ceux de son équipe ; admin : tout
+        if (!($user->can('scope:global') || $user->hasAnyRole(['superadmin', 'super-admin', 'admin']))) {
+            $query->whereIn('user_id', array_merge([$user->id], $user->teamMemberIds()));
+        }
 
         return TourPlanResource::collection($query->paginate(30));
     }
@@ -67,12 +73,7 @@ class TourPlanController extends Controller
         if ($user?->manager) {
             $managers->push($user->manager);
         }
-        $otherManagers = User::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)->whereHas('roles', fn($q) => $q->whereIn('name', ['superviseur', 'supervisor', 'manager', 'Manager', 'super_admin']))->get();
-        $managers = $managers->concat($otherManagers)->unique('id');
-        if ($managers->isEmpty()) {
-            $fallback = User::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)->where('id', '!=', $user->id)->first();
-            if ($fallback) $managers->push($fallback);
-        }
+        // Seul le supérieur direct du délégué est notifié
 
         NotificationController::sendNotification(
             $managers,
@@ -106,6 +107,8 @@ class TourPlanController extends Controller
         }
 
         if (isset($data['statut']) && in_array($data['statut'], ['valide', 'rejete'])) {
+            $user = auth()->user();
+            abort_unless(($user->can('scope:global') || $user->hasAnyRole(['superadmin', 'super-admin', 'admin'])) || $user->manages($plan->user_id), 403, "Ce planning n'appartient pas à un délégué de votre équipe.");
             $data['valide_par'] = auth()->id();
             $data['valide_le'] = now();
 
