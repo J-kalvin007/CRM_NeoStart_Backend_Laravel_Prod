@@ -32,7 +32,7 @@ class ObjectifController extends Controller
             ->when($request->indicator_id, fn($q, $v) => $q->where('indicator_id', $v))
             ->when($request->statut, fn($q, $v) => $q->where('statut', $v))
             ->when($request->periode, fn($q, $v) => $q->where('periode', 'like', "%$v%"));
-        return ObjectifResource::collection($query->paginate(25));
+        return ObjectifResource::collection($query->latest('date_debut')->paginate(min(200, max(1, $request->integer('per_page', 25)))));
     }
 
     #[OA\Post(path: '/api/v1/objectifs', summary: 'Créer un objectif de performance', security: [['bearerAuth' => []]], tags: ['Objectifs'],
@@ -91,7 +91,17 @@ class ObjectifController extends Controller
         // mettre à jour que la valeur réalisée (contrôlé par le frontend/form request).
         // On n'empêche pas l'accès ici pour permettre l'enregistrement de la valeur réalisée.
         $objectif = Objectif::findOrFail($id);
-        $objectif->update($request->validated());
+        $data = $request->validated();
+        unset($data['motif_rejet']); // pas de colonne dédiée : conservé dans la description si fourni
+
+        // Le délégué ne peut saisir que sa valeur réalisée ; le reste est fixé par la hiérarchie
+        if (!auth()->user()->isAdminOrSupervisor()) {
+            $data = array_intersect_key($data, array_flip(['valeur_realisee']));
+        } elseif ($request->filled('motif_rejet')) {
+            $data['description'] = trim(($objectif->description ? $objectif->description . "\n" : '') . 'Motif du rejet : ' . $request->input('motif_rejet'));
+        }
+
+        $objectif->update($data);
         $objectif->recalculerTaux();
         return new ObjectifResource($objectif->load(['user', 'team', 'product', 'indicator', 'type', 'organizationalUnit']));
     }

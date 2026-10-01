@@ -20,6 +20,20 @@ class StoreObjectifRequest extends FormRequest
      *
      * @return array<string, ValidationRule|array<mixed>|string>
      */
+    /**
+     * L'application envoie le code du type (type_objectif / type) : on le résout en objectif_type_id.
+     */
+    protected function prepareForValidation(): void
+    {
+        $code = $this->input('type_objectif') ?? (is_string($this->input('type')) ? $this->input('type') : null);
+        if (!$this->filled('objectif_type_id') && $code) {
+            $id = \Illuminate\Support\Facades\DB::table('objectif_types')->where('code', $code)->value('id');
+            if ($id) {
+                $this->merge(['objectif_type_id' => $id]);
+            }
+        }
+    }
+
     public function rules(): array
     {
         return [

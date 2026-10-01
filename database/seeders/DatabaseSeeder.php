@@ -113,6 +113,8 @@ class DatabaseSeeder extends Seeder
             EventFormatSeeder::class,
             RoleAndPermissionSeeder::class,
             SettingSeeder::class,
+            ObjectifTypeSeeder::class,
+            DuoActivityTypesSeeder::class,
             PharmaSeeder::class,
             UserSeeder::class,
             AccountSeeder::class,

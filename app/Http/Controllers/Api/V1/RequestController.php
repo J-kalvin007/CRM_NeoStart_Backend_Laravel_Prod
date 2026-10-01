@@ -59,7 +59,8 @@ class RequestController extends Controller
         ]);
 
         // Notify supervisor / manager
-        $manager = $user?->manager ?? \App\Models\User::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)->where('id', '!=', $user->id)->first();
+        // La demande est adressée au supérieur direct du délégué
+        $manager = $user?->manager;
         if ($manager) {
             NotificationController::sendNotification(
                 $manager,
@@ -92,16 +93,16 @@ class RequestController extends Controller
         $user = Auth::user();
         $isManager = $user && $user->isAdminOrSupervisor();
 
-        if ($isManager) {
-            $requests = DelegateRequest::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)
-                ->with(['user', 'contact'])
-                ->latest()
-                ->get();
-        } else {
-            $requests = DelegateRequest::where('user_id', Auth::id())
-                ->latest()
-                ->get();
-        }
+        $isGlobal = $user->can('scope:global') || $user->hasAnyRole(['superadmin', 'super-admin', 'admin']);
+
+        // Délégué : ses demandes ; hiérarchie : les siennes + celles de son équipe ; admin : tout
+        $requests = DelegateRequest::with(['user', 'contact'])
+            ->when(!$isGlobal, fn ($q) => $q->whereIn('user_id', $isManager
+                ? array_merge([$user->id], $user->teamMemberIds())
+                : [$user->id]))
+            ->latest()
+            ->get()
+            ->map(fn ($r) => $r->toArray() + ['objet' => $r->subject, 'description' => $r->reason]);
 
         return response()->json($requests);
     }
@@ -132,17 +133,29 @@ class RequestController extends Controller
     )]
     public function update(Request $request, $id)
     {
-        $delegateRequest = DelegateRequest::where('user_id', Auth::id())->findOrFail($id);
+        $delegateRequest = $this->ownPendingRequest($id);
 
+        // Le statut est fixé par le validateur, jamais par le demandeur
         $data = $request->validate([
             'request_type' => 'sometimes|required|string',
+            'type_demande' => 'sometimes|string',
+            'subject' => 'sometimes|nullable|string|max:255',
+            'objet' => 'sometimes|nullable|string|max:255',
             'contact_id' => 'nullable|uuid|exists:contacts,id',
             'reason' => 'nullable|string',
+            'description' => 'nullable|string',
+            'justification' => 'nullable|string',
             'priority' => 'sometimes|required|in:low,normal,high',
-            'status' => 'nullable|string',
         ]);
 
-        $delegateRequest->update($data);
+        $delegateRequest->update(array_filter([
+            'request_type' => $data['request_type'] ?? $data['type_demande'] ?? null,
+            'subject' => $data['subject'] ?? $data['objet'] ?? null,
+            'contact_id' => $data['contact_id'] ?? null,
+            'reason' => $data['reason'] ?? $data['description'] ?? null,
+            'justification' => $data['justification'] ?? null,
+            'priority' => $data['priority'] ?? null,
+        ], fn ($v) => $v !== null));
 
         return response()->json([
             'status' => 'success',
@@ -164,12 +177,24 @@ class RequestController extends Controller
     )]
     public function destroy($id)
     {
-        $delegateRequest = DelegateRequest::where('user_id', Auth::id())->findOrFail($id);
+        $delegateRequest = $this->ownPendingRequest($id);
         $delegateRequest->delete();
 
         return response()->json([
             'status' => 'success',
             'message' => 'Demande supprimée.'
         ]);
+    }
+
+    private function ownPendingRequest($id): DelegateRequest
+    {
+        $delegateRequest = DelegateRequest::where('user_id', Auth::id())->findOrFail($id);
+        abort_unless(
+            in_array($delegateRequest->status, ['pending_manager_approval', 'pending', 'en_attente', 'soumis'], true),
+            422,
+            'Cette demande a déjà été traitée et ne peut plus être modifiée.'
+        );
+
+        return $delegateRequest;
     }
 }
