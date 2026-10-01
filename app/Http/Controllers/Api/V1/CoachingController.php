@@ -134,13 +134,24 @@ class CoachingController extends Controller
     )]
     public function storeSession(Request $request)
     {
+        // Deux usages : planification d'un DUO (date, zone, motif, objectifs)
+        // ou fiche d'évaluation individuelle (points forts, axes de progrès, plan d'action)
         $validated = $request->validate([
             'delegate_id' => 'required|uuid|exists:users,id',
-            'date_duo' => 'required|date',
-            'zone' => 'required|string',
-            'motif' => 'required|string',
-            'objectifs_prevus' => 'required|array',
+            'date_duo' => 'nullable|date',
+            'zone' => 'nullable|string',
+            'motif' => 'nullable|string',
+            'objectifs_prevus' => 'nullable|array',
+            'strengths' => 'nullable|string',
+            'weaknesses' => 'nullable|string',
+            'action_plan' => 'nullable|string',
+            'next_review_date' => 'nullable|date',
         ]);
+        $isEvaluation = empty($validated['date_duo']) && empty($validated['objectifs_prevus']);
+        $validated['date_duo'] ??= now()->toDateString();
+        $validated['zone'] ??= '';
+        $validated['motif'] ??= $isEvaluation ? 'Évaluation individuelle' : 'Visite DUO';
+        $validated['objectifs_prevus'] ??= [];
 
         abort_unless(Auth::user()->manages($validated['delegate_id']), 403, "Ce délégué ne fait pas partie de votre équipe.");
 
@@ -155,8 +166,10 @@ class CoachingController extends Controller
         if ($delegate) {
             NotificationController::sendNotification(
                 $delegate,
-                'Visite en Duo programmée',
-                'Votre manager a planifié une visite conjointe avec vous.',
+                $isEvaluation ? 'Nouveau plan d\'action de coaching' : 'Visite en Duo programmée',
+                $isEvaluation
+                    ? Auth::user()->name . ' a enregistré votre évaluation et votre plan d\'action.'
+                    : 'Votre manager a planifié une visite conjointe avec vous.',
                 'coaching',
                 'delegue',
                 ['session_id' => $session->id]
