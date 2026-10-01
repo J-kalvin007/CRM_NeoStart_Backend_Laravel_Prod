@@ -284,4 +284,55 @@ class LeaveController extends Controller
         $request->merge(['statut' => 'rejetee']);
         return $this->updateStatus($request, $id);
     }
+
+    /**
+     * Modifier sa demande de congé tant qu'elle est en attente (dates, horaires, motif, type).
+     */
+    public function update(Request $request, string $id)
+    {
+        $leave = $this->ownPendingLeave($id);
+
+        $validated = $request->validate([
+            'type'          => 'nullable|string',
+            'activity_type' => 'nullable|string',
+            'date_activite' => 'nullable|date',
+            'heure_debut'   => 'nullable|string',
+            'heure_fin'     => 'nullable|string',
+            'reason'        => 'nullable|string',
+            'motif'         => 'nullable|string',
+            'notes'         => 'nullable|string',
+        ]);
+
+        $leave->update(array_filter([
+            'activity_type' => $validated['activity_type'] ?? $validated['type'] ?? null,
+            'date_activite' => $validated['date_activite'] ?? null,
+            'heure_debut'   => $validated['heure_debut'] ?? null,
+            'heure_fin'     => $validated['heure_fin'] ?? null,
+            'notes'         => $validated['reason'] ?? $validated['motif'] ?? $validated['notes'] ?? null,
+        ], fn ($v) => $v !== null));
+
+        return response()->json(['message' => 'Demande de congé modifiée.', 'data' => $leave->fresh()]);
+    }
+
+    /**
+     * Annuler (supprimer) sa demande de congé tant qu'elle est en attente.
+     */
+    public function destroy(string $id)
+    {
+        $this->ownPendingLeave($id)->delete();
+
+        return response()->json(['message' => 'Demande de congé annulée.']);
+    }
+
+    private function ownPendingLeave(string $id): Activity
+    {
+        $leave = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
+            ->whereIn('activity_type', ['conge', 'absence', 'indisponibilite', 'leave', 'Congé Annuel', 'Congé Maladie'])
+            ->findOrFail($id);
+
+        abort_unless($leave->user_id === auth()->id(), 403, 'Vous ne pouvez modifier que vos propres demandes.');
+        abort_unless($leave->statut === 'en_attente', 422, 'Cette demande a déjà été traitée et ne peut plus être modifiée.');
+
+        return $leave;
+    }
 }

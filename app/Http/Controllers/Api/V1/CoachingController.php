@@ -220,4 +220,72 @@ class CoachingController extends Controller
             'data' => $session
         ], 200);
     }
+
+    public function show(string $id)
+    {
+        $session = CoachingSession::with(['supervisor', 'delegate', 'activity'])->findOrFail($id);
+        $user = Auth::user();
+        abort_unless(
+            in_array($user->id, [$session->supervisor_id, $session->delegate_id], true) || $user->manages($session->delegate_id),
+            403,
+            "Vous n'êtes pas concerné par cette session."
+        );
+
+        return response()->json(['data' => $session]);
+    }
+
+    /**
+     * Modifier une session (superviseur qui l'anime) : date, zone, motif, objectifs, plan d'action…
+     */
+    public function update(Request $request, string $id)
+    {
+        $session = CoachingSession::findOrFail($id);
+        abort_unless($session->supervisor_id === Auth::id(), 403, 'Seul le superviseur qui anime la session peut la modifier.');
+
+        $validated = $request->validate([
+            'date_duo'                 => 'nullable|date',
+            'zone'                     => 'nullable|string',
+            'motif'                    => 'nullable|string',
+            'objectifs_prevus'         => 'nullable|array',
+            'resultats_constates'      => 'nullable|array',
+            'taux_atteinte_pct'        => 'nullable|numeric|min:0|max:100',
+            'commentaires_superviseur' => 'nullable|string',
+            'plan_action_recommande'   => 'nullable|string',
+            'strengths'                => 'nullable|string',
+            'weaknesses'               => 'nullable|string',
+            'next_review_date'         => 'nullable|date',
+        ]);
+
+        if (array_key_exists('objectifs_prevus', $validated)) {
+            $validated['objectifs_prevus_json'] = $validated['objectifs_prevus'];
+            unset($validated['objectifs_prevus']);
+        }
+        if (array_key_exists('resultats_constates', $validated)) {
+            $validated['resultats_constates_json'] = $validated['resultats_constates'];
+            unset($validated['resultats_constates']);
+        }
+
+        $session->update(array_filter($validated, fn ($v) => $v !== null));
+
+        return response()->json(['message' => 'Session mise à jour.', 'data' => $session->fresh(['supervisor', 'delegate', 'activity'])]);
+    }
+
+    /**
+     * Supprimer une session (superviseur qui l'anime). Si elle est liée à une visite DUO, le DUO est annulé.
+     */
+    public function destroy(string $id)
+    {
+        $session = CoachingSession::findOrFail($id);
+        abort_unless($session->supervisor_id === Auth::id(), 403, 'Seul le superviseur qui anime la session peut la supprimer.');
+
+        if ($session->activity_id) {
+            Activity::withoutGlobalScopes()
+                ->where('id', $session->activity_id)
+                ->where('duo_user_id', $session->supervisor_id)
+                ->update(['is_duo' => false, 'duo_status' => 'cancelled']);
+        }
+        $session->delete();
+
+        return response()->json(['message' => 'Session supprimée.']);
+    }
 }

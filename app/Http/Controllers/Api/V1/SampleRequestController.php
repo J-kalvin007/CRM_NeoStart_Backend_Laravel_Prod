@@ -160,4 +160,41 @@ class SampleRequestController extends Controller
 
         return response()->json($sampleRequest->load(['product', 'user', 'approver']));
     }
+
+    /**
+     * Modifier sa demande d'échantillons tant qu'elle est en attente.
+     */
+    public function update(Request $request, $id)
+    {
+        $sampleRequest = $this->ownPendingRequest($id);
+
+        $validated = $request->validate([
+            'product_id' => 'nullable|uuid|exists:products,id',
+            'quantity'   => 'nullable|integer|min:1',
+            'notes'      => 'nullable|string',
+        ]);
+
+        $sampleRequest->update(array_filter($validated, fn ($v) => $v !== null));
+
+        return response()->json(['message' => "Demande d'échantillons modifiée.", 'data' => $sampleRequest->fresh(['product'])]);
+    }
+
+    /**
+     * Annuler sa demande d'échantillons tant qu'elle est en attente.
+     */
+    public function destroy($id)
+    {
+        $this->ownPendingRequest($id)->delete();
+
+        return response()->json(['message' => "Demande d'échantillons annulée."]);
+    }
+
+    private function ownPendingRequest($id): SampleRequest
+    {
+        $sampleRequest = SampleRequest::findOrFail($id);
+        abort_unless($sampleRequest->user_id === auth()->id(), 403, 'Vous ne pouvez modifier que vos propres demandes.');
+        abort_unless($sampleRequest->status === 'pending', 422, 'Cette demande a déjà été traitée et ne peut plus être modifiée.');
+
+        return $sampleRequest;
+    }
 }

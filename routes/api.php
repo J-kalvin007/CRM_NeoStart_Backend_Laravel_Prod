@@ -271,6 +271,8 @@ Route::prefix('v1')->group(function () {
         Route::post('activities/{activity}/accept-duo', [ActivityController::class, 'acceptDuo']);
         Route::post('activities/{activity}/refuse-duo', [ActivityController::class, 'refuseDuo']);
         Route::post('activities/{activity}/join-duo', [ActivityController::class, 'joinDuo']);
+        Route::patch('activities/{activity}/duo', [ActivityController::class, 'updateDuo']);
+        Route::delete('activities/{activity}/duo', [ActivityController::class, 'cancelDuo']);
         Route::post('duo/{id}/accepter', [ActivityController::class, 'acceptDuo']);
         Route::post('duo/{id}/refuser', [ActivityController::class, 'refuseDuo']);
         Route::post('activities/{activity}/validate', [ActivityController::class, 'validateActivity']);
@@ -300,6 +302,8 @@ Route::prefix('v1')->group(function () {
         // Demandes de réassort d'échantillons
         Route::get('sample-requests', [\App\Http\Controllers\Api\V1\SampleRequestController::class, 'index']);
         Route::post('sample-requests', [\App\Http\Controllers\Api\V1\SampleRequestController::class, 'store']);
+        Route::put('sample-requests/{id}', [\App\Http\Controllers\Api\V1\SampleRequestController::class, 'update']);
+        Route::delete('sample-requests/{id}', [\App\Http\Controllers\Api\V1\SampleRequestController::class, 'destroy']);
         Route::post('sample-requests/{id}/approve', [\App\Http\Controllers\Api\V1\SampleRequestController::class, 'approve']);
         Route::post('sample-requests/{id}/reject', [\App\Http\Controllers\Api\V1\SampleRequestController::class, 'reject']);
 
@@ -325,6 +329,9 @@ Route::prefix('v1')->group(function () {
         Route::get('/coaching-sessions', [CoachingController::class, 'index']);
         Route::put('/coaching-sessions/{id}/complete', [CoachingController::class, 'completeSession']);
         Route::post('/coaching-sessions/{id}/refuse', [CoachingController::class, 'refuseSession']);
+        Route::get('/coaching-sessions/{id}', [CoachingController::class, 'show']);
+        Route::put('/coaching-sessions/{id}', [CoachingController::class, 'update']);
+        Route::delete('/coaching-sessions/{id}', [CoachingController::class, 'destroy']);
 
         // ── Notes de Frais (Expenses) ──────────────────────────
         Route::apiResource('expenses', ExpenseController::class);
@@ -352,6 +359,8 @@ Route::prefix('v1')->group(function () {
         // ── Congés (Leaves) ────────────────────────────────────
         Route::get('leaves', [LeaveController::class, 'index']);
         Route::post('leaves', [LeaveController::class, 'store']);
+        Route::put('leaves/{id}', [LeaveController::class, 'update']);
+        Route::delete('leaves/{id}', [LeaveController::class, 'destroy']);
         Route::patch('leaves/{id}/status', [LeaveController::class, 'updateStatus']);
         Route::post('leaves/{id}/validate', [LeaveController::class, 'validateLeave']);
         Route::post('leaves/{id}/reject', [LeaveController::class, 'rejectLeave']);

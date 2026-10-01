@@ -1050,4 +1050,71 @@ class ActivityController extends Controller
             );
         }
     }
+
+    /**
+     * PATCH activities/{id}/duo — le superviseur modifie le type d'activité ou l'objectif de son DUO.
+     */
+    public function updateDuo(Request $request, string $id)
+    {
+        $activity = $this->ownDuo($id);
+        $validated = $request->validate([
+            'type'     => 'nullable|in:formation,coaching',
+            'objectif' => 'nullable|string|max:1000',
+        ]);
+
+        if (!empty($validated['type'])) {
+            $activity->update(['duo_activity_type_id' => $this->duoTypeId($validated['type'])]);
+        }
+        if (array_key_exists('objectif', $validated)) {
+            \App\Models\CoachingSession::where('activity_id', $activity->id)
+                ->where('supervisor_id', auth()->id())
+                ->whereIn('status', ['draft', 'active'])
+                ->update(['objectifs_prevus_json' => json_encode(array_values(array_filter([$validated['objectif']])))]);
+        }
+
+        $this->notifyDuoDelegate($activity, 'Visite DUO modifiée', auth()->user()->name . ' a modifié la visite DUO du ' . $activity->date_activite?->format('d/m/Y') . '.');
+
+        return response()->json(['message' => 'Visite DUO modifiée.', 'data' => new ActivityResource($activity->fresh(['delegue', 'duoUser', 'duoActivityType']))]);
+    }
+
+    /**
+     * DELETE activities/{id}/duo — le superviseur annule son DUO.
+     * Proposition créée de toutes pièces (statut en_attente) : la visite est supprimée ;
+     * visite planifiée par le délégué : seule la participation est retirée.
+     */
+    public function cancelDuo(string $id)
+    {
+        $activity = $this->ownDuo($id);
+
+        \App\Models\CoachingSession::where('activity_id', $activity->id)
+            ->where('supervisor_id', auth()->id())
+            ->whereIn('status', ['draft', 'active'])
+            ->delete();
+
+        $this->notifyDuoDelegate($activity, 'Visite DUO annulée', auth()->user()->name . ' a annulé la visite DUO du ' . $activity->date_activite?->format('d/m/Y') . '.');
+
+        if ($activity->statut === 'en_attente') {
+            $activity->delete();
+        } else {
+            $activity->update(['is_duo' => false, 'duo_status' => 'cancelled', 'duo_delegue_status' => null]);
+        }
+
+        return response()->json(['message' => 'Visite DUO annulée.']);
+    }
+
+    private function ownDuo(string $id): Activity
+    {
+        $activity = Activity::withoutGlobalScopes()->whereNull('deleted_at')->with(['delegue'])->findOrFail($id);
+        abort_unless($activity->is_duo && $activity->duo_user_id === auth()->id(), 403, "Vous n'animez pas ce DUO.");
+        abort_if(in_array($activity->statut, ['realisee', 'effectuee', 'validee', 'terminee'], true) && $activity->date_activite?->lt(now()->startOfDay()), 422, 'Ce DUO est déjà passé.');
+
+        return $activity;
+    }
+
+    private function notifyDuoDelegate(Activity $activity, string $title, string $message): void
+    {
+        if ($activity->delegue) {
+            NotificationController::sendNotification($activity->delegue, $title, $message, 'nouveau_duo', 'delegate', ['activity_id' => (string) $activity->id]);
+        }
+    }
 }
