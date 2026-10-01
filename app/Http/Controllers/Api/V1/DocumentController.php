@@ -69,6 +69,9 @@ class DocumentController extends Controller
 
     public function store(Request $request)
     {
+        if (Auth::user() && Auth::user()->hasRole(['delegue', 'delegue_medical'])) {
+            return response()->json(['message' => 'Action non autorisée pour votre rôle.'], 403);
+        }
         $data = $request->validate([
             'documentable_id' => 'required|uuid',
             'documentable_type' => 'required|string',
@@ -100,16 +103,33 @@ class DocumentController extends Controller
         if ($document->type === 'video') $mappedType = 'VIDEO';
         if ($document->type === 'pdf') $mappedType = 'BROCHURE';
 
+        $status = 'VALIDE';
+        if (!$document->is_active) $status = 'ARCHIVE';
+        if ($document->expiration_date && \Carbon\Carbon::parse($document->expiration_date)->isPast()) {
+            $status = 'EXPIRE';
+        }
+
+        $sizeFormatted = '1.5 MB';
+        if ($document->file_size) {
+            $sizeFormatted = round($document->file_size / (1024 * 1024), 1) . ' MB';
+        } elseif (\Illuminate\Support\Facades\Storage::disk('public')->exists($document->file_path ?? '')) {
+            $bytes = \Illuminate\Support\Facades\Storage::disk('public')->size($document->file_path);
+            $sizeFormatted = round($bytes / (1024 * 1024), 1) . ' MB';
+        }
+
         $formatted = [
             'id' => $document->id,
             'reference' => 'DOC-' . substr($document->id, 0, 6),
             'titre' => $document->title,
             'type' => $mappedType,
-            'produit' => $document->documentable_type === 'App\\Models\\Product' ? ($document->documentable->nom ?? 'Produit') : 'Général',
-            'version' => 'v' . $document->version,
-            'taille' => '2.4 MB',
+            'produit' => $document->documentable_type === 'App\\Models\\Product' ? ($document->documentable->nom ?? 'Produit Associé') : 'Général',
+            'version' => 'v' . ($document->version ?? '1.0'),
+            'taille' => $sizeFormatted,
             'dateExpiration' => $document->expiration_date ? \Carbon\Carbon::parse($document->expiration_date)->format('Y-m-d') : 'N/A',
-            'statut' => 'VALIDE',
+            'statut' => $status,
+            'paysAutorises' => ['FR', 'CI', 'SN'],
+            'documentable_id' => $document->documentable_id,
+            'documentable_type' => $document->documentable_type,
             'url' => config('app.url') . \Illuminate\Support\Facades\Storage::url(preg_replace('/^\/?storage\//', '', $document->file_path)),
             'folder' => $mappedType === 'E-DETAILING' ? 'E-Detailing' : ($mappedType === 'VIDEO' ? 'Vidéos' : 'Brochures')
         ];
@@ -124,6 +144,9 @@ class DocumentController extends Controller
 
     public function update(Request $request, Document $document)
     {
+        if (Auth::user() && Auth::user()->hasRole(['delegue', 'delegue_medical'])) {
+            return response()->json(['message' => 'Action non autorisée pour votre rôle.'], 403);
+        }
         $data = $request->validate([
             'is_active' => 'sometimes|boolean',
             'version' => 'sometimes|string|max:50',
@@ -155,20 +178,35 @@ class DocumentController extends Controller
         if ($document->type === 'video') $mappedType = 'VIDEO';
         if ($document->type === 'pdf') $mappedType = 'BROCHURE';
 
+        $status = 'VALIDE';
+        if (!$document->is_active) $status = 'ARCHIVE';
+        if ($document->expiration_date && \Carbon\Carbon::parse($document->expiration_date)->isPast()) {
+            $status = 'EXPIRE';
+        }
+
+        $sizeFormatted = '1.5 MB';
+        if ($document->file_size) {
+            $sizeFormatted = round($document->file_size / (1024 * 1024), 1) . ' MB';
+        } elseif (\Illuminate\Support\Facades\Storage::disk('public')->exists($document->file_path ?? '')) {
+            $bytes = \Illuminate\Support\Facades\Storage::disk('public')->size($document->file_path);
+            $sizeFormatted = round($bytes / (1024 * 1024), 1) . ' MB';
+        }
+
         $formatted = [
             'id' => $document->id,
             'reference' => 'DOC-' . substr($document->id, 0, 6),
             'titre' => $document->title,
             'type' => $mappedType,
-            'produit' => $document->documentable_type === 'App\\Models\\Product' ? ($document->documentable->nom ?? 'Produit') : 'Général',
-            'version' => 'v' . $document->version,
-            'taille' => '2.4 MB',
+            'produit' => $document->documentable_type === 'App\\Models\\Product' ? ($document->documentable->nom ?? 'Produit Associé') : 'Général',
+            'version' => 'v' . ($document->version ?? '1.0'),
+            'taille' => $sizeFormatted,
             'dateExpiration' => $document->expiration_date ? \Carbon\Carbon::parse($document->expiration_date)->format('Y-m-d') : 'N/A',
-            'statut' => $document->is_active ? 'VALIDE' : 'ARCHIVE',
-            'url' => config('app.url') . \Illuminate\Support\Facades\Storage::url(preg_replace('/^\/?storage\//', '', $document->file_path)),
-            'folder' => $mappedType === 'E-DETAILING' ? 'E-Detailing' : ($mappedType === 'VIDEO' ? 'Vidéos' : 'Brochures'),
+            'statut' => $status,
+            'paysAutorises' => ['FR', 'CI', 'SN'],
             'documentable_id' => $document->documentable_id,
             'documentable_type' => $document->documentable_type,
+            'url' => config('app.url') . \Illuminate\Support\Facades\Storage::url(preg_replace('/^\/?storage\//', '', $document->file_path)),
+            'folder' => $mappedType === 'E-DETAILING' ? 'E-Detailing' : ($mappedType === 'VIDEO' ? 'Vidéos' : 'Brochures')
         ];
 
         return response()->json($formatted);
@@ -176,6 +214,9 @@ class DocumentController extends Controller
 
     public function destroy(Document $document)
     {
+        if (Auth::user() && Auth::user()->hasRole(['delegue', 'delegue_medical'])) {
+            return response()->json(['message' => 'Action non autorisée pour votre rôle.'], 403);
+        }
         $document->delete();
         return response()->json(null, 204);
     }

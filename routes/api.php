@@ -115,6 +115,9 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('users', UserController::class);
         Route::apiResource('roles', RoleController::class);
         Route::get('permissions', [PermissionController::class, 'index']);
+        Route::get('permissions/grouped', [PermissionController::class, 'grouped']);
+        Route::post('roles/{roleId}/permissions', [PermissionController::class, 'assignToRole']);
+        Route::get('roles/{roleId}/permissions', [PermissionController::class, 'getRolePermissions']);
 
 
         // Configuration (Tables paramétrables par l'Admin/Manager)

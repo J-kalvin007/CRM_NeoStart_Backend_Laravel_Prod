@@ -76,12 +76,23 @@ class ContactController extends Controller
             }));
 
         $user = auth()->user();
-        if ($user && $user->hasRole('delegue_medical')) {
-            $query->where('contacts.user_id', $user->id);
-        }
+        if ($user) {
+            $isGlobalAdminLocal = $user->can('scope:global') || $user->hasAnyRole(['superadmin', 'admin', 'Administrateur Groupe', 'Administrateur Pays', 'Direction Générale']);
+            $isSupervisor = $user->hasAnyRole(['superviseur', 'Manager', 'supervisor', 'manager', 'directeur-commercial', 'directeur_commercial', 'directeur-marketing', 'directeur_marketing']);
+            
+            if (!$isGlobalAdminLocal) {
+                if ($isSupervisor) {
+                    $subordinateIds = $user->subordinates()->pluck('id')->toArray();
+                    $subordinateIds[] = $user->id;
+                    $query->whereIn('contacts.user_id', $subordinateIds);
+                } elseif ($user->hasRole('delegue_medical')) {
+                    $query->where('contacts.user_id', $user->id);
+                }
+            }
 
-        if ($user && !$user->isAdminOrSupervisor()) {
-            $query->whereIn('statut', ['actif', 'valide']);
+            if (!$user->isAdminOrSupervisor()) {
+                $query->whereIn('statut', ['actif', 'valide']);
+            }
         }
 
         // Filtrage additionnel par périmètre organisationnel sélectionné (header X-Organizational-Unit-Id)

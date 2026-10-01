@@ -43,17 +43,37 @@ class AccountController extends Controller
             }));
 
         $user = auth()->user();
-        if ($user && !$user->isAdminOrSupervisor()) {
-            $query->where(function ($q) use ($user) {
-                $q->whereIn('statut', ['actif', 'valide'])
-                  ->orWhere('accounts.user_id', $user->id)
-                  ->orWhere('accounts.delegue_id', $user->id)
-                  ->orWhere('accounts.created_by', $user->id);
-            });
+        $isGlobalAdmin = false;
+        
+        if ($user) {
+            $isGlobalAdmin = $user->can('scope:global') || $user->hasAnyRole(['superadmin', 'admin', 'Administrateur Groupe', 'Administrateur Pays', 'Direction Générale']);
+            $isSupervisor = $user->hasAnyRole(['superviseur', 'Manager', 'supervisor', 'manager', 'directeur-commercial', 'directeur_commercial', 'directeur-marketing', 'directeur_marketing']);
+
+            if (!$isGlobalAdmin) {
+                $userIds = [$user->id];
+                if ($isSupervisor) {
+                    $subordinateIds = $user->subordinates()->pluck('id')->toArray();
+                    $userIds = array_merge($userIds, $subordinateIds);
+                }
+
+                $query->where(function ($q) use ($userIds) {
+                    $q->whereIn('accounts.user_id', $userIds)
+                      ->orWhereIn('accounts.delegue_id', $userIds)
+                      ->orWhereIn('accounts.id', function ($sub) use ($userIds) {
+                          $sub->select('account_id')
+                              ->from('contacts')
+                              ->whereIn('user_id', $userIds)
+                              ->whereNotNull('account_id');
+                      });
+                });
+            }
+
+            if (!$user->isAdminOrSupervisor()) {
+                $query->whereIn('statut', ['actif', 'valide']);
+            }
         }
 
         $perimeterUnitId = app()->bound('active_perimeter_unit_id') ? app('active_perimeter_unit_id') : null;
-        $isGlobalAdmin   = $user && ($user->can('scope:global') || $user->hasAnyRole(['superadmin', 'admin']));
 
         if ($perimeterUnitId && $user && !$isGlobalAdmin) {
             $allUnitIds = $this->getDescendantUnitIds([$perimeterUnitId]);
@@ -65,9 +85,9 @@ class AccountController extends Controller
                 ->toArray();
 
             if (!empty($userIdsInUnit)) {
+                // For perimeter, we just intersect with the previous userIds filter
                 $query->where(function ($q) use ($userIdsInUnit) {
                     $q->whereIn('accounts.user_id', $userIdsInUnit)
-                    // Établissements créés par un utilisateur du périmètre
                       ->orWhereIn('accounts.delegue_id', $userIdsInUnit)
                       ->orWhereIn('accounts.id', function ($sub) use ($userIdsInUnit) {
                           $sub->select('account_id')
@@ -79,17 +99,6 @@ class AccountController extends Controller
             } else {
                 $query->whereRaw('1 = 0');
             }
-        } elseif (!$isGlobalAdmin && !$perimeterUnitId) {
-            // Pas de périmètre sélectionné mais non-admin : voir ses propres établissements + ceux de ses contacts
-            $query->where(function ($q) use ($user) {
-                $q->where('accounts.user_id', $user->id)
-                  ->orWhereIn('accounts.id', function ($sub) use ($user) {
-                      $sub->select('account_id')
-                          ->from('contacts')
-                          ->where('user_id', $user->id)
-                          ->whereNotNull('account_id');
-                  });
-            });
         }
 
         // Ordre par défaut pour éviter les sauts de pagination lors des mises à jour
