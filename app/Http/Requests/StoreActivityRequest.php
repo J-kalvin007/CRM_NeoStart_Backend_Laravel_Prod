@@ -61,8 +61,9 @@ class StoreActivityRequest extends FormRequest
             'account_id'     => 'nullable|string|exists:accounts,id',
             'activity_type'  => 'required|string',
             'date_activite'  => 'required|date',
-            'heure_debut'    => 'nullable|string',
-            'heure_fin'      => 'nullable|string',
+            'heure_debut'    => 'required|string',
+            'heure_fin'      => 'required_without:duree_minutes|nullable|string',
+            'duree_minutes'  => 'required_without:heure_fin|nullable|integer',
             'motif'          => 'nullable|string',
             'notes'          => 'nullable|string',
             'niveau_interet' => 'nullable|integer',
@@ -85,5 +86,34 @@ class StoreActivityRequest extends FormRequest
             'products.*.customer_interest' => 'nullable|string',
             'products.*.remarques'  => 'nullable|string',
         ];
+    }
+
+    public function withValidator($validator): void
+    {
+        $validator->after(function ($validator) {
+            if ($this->filled('contact_id')) {
+                $contact = \App\Models\Contact::withoutGlobalScopes()->find($this->contact_id);
+                if ($contact) {
+                    $valStatus = strtolower($contact->statut_validation ?? '');
+                    $mainStatus = strtolower($contact->statut ?? '');
+                    $isValid = in_array($valStatus, ['valide', 'validated', 'approuve']) || in_array($mainStatus, ['valide', 'actif']);
+                    if (!$isValid) {
+                        $validator->errors()->add('contact_id', 'Le prescripteur sélectionné n\'est pas encore validé par la hiérarchie.');
+                    }
+                }
+            }
+
+            if ($this->filled('account_id')) {
+                $account = \App\Models\Account::withoutGlobalScopes()->find($this->account_id);
+                if ($account) {
+                    $valStatus = strtolower($account->statut_validation ?? '');
+                    $mainStatus = strtolower($account->statut ?? '');
+                    $isValid = in_array($valStatus, ['valide', 'validated', 'approuve']) || in_array($mainStatus, ['valide', 'actif']);
+                    if (!$isValid) {
+                        $validator->errors()->add('account_id', 'L\'établissement sélectionné n\'est pas encore validé par la hiérarchie.');
+                    }
+                }
+            }
+        });
     }
 }

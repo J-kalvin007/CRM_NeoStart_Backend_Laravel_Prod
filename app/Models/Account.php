@@ -22,7 +22,7 @@ class Account extends Model
         'gps_lat', 'gps_lng', 'telephone', 'whatsapp', 'email',
         'potential_id', 'score', 'potentiel_commande_mois',
         'grossiste_principal', 'produits_disponibles',
-        'statut', 'statut_validation', 'meta', 'local_uuid', 'code_externe',
+        'statut', 'statut_validation', 'rejection_reason', 'meta', 'local_uuid', 'code_externe',
     ];
 
     protected $casts = [

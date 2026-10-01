@@ -26,7 +26,7 @@ class Contact extends Model
         'nb_patients_cible_mois', 'nb_visites_recommandees_mois',
         'produit_prioritaire', 'produit_secondaire', 'autre_produit_interet',
         'canal_prefere', 'statut_relation',
-        'statut', 'statut_validation', 'meta', 'local_uuid', 'code_externe',
+        'statut', 'statut_validation', 'rejection_reason', 'meta', 'local_uuid', 'code_externe',
     ];
 
     protected $casts = [
@@ -38,6 +38,7 @@ class Contact extends Model
     ];
 
     public function account()      { return $this->belongsTo(Account::class); }
+    public function accounts()     { return $this->belongsToMany(Account::class, 'account_contact')->withPivot('is_primary')->withTimestamps(); }
     public function owner()        { return $this->belongsTo(User::class, 'user_id'); }
     public function user()         { return $this->belongsTo(User::class, 'user_id'); }
     public function delegue()      { return $this->belongsTo(User::class, 'user_id'); }

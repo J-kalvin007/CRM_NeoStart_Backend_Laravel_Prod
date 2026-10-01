@@ -17,8 +17,8 @@ class StoreAccountRequest extends FormRequest
             'adresse'         => 'nullable|string',
             'ville'           => 'nullable|string|max:100',
             'quartier'        => 'nullable|string|max:100',
-            'gps_lat'         => 'nullable|numeric|between:-90,90',
-            'gps_lng'         => 'nullable|numeric|between:-180,180',
+            'gps_lat'         => 'required|numeric|between:-90,90',
+            'gps_lng'         => 'required|numeric|between:-180,180',
             'telephone'       => 'nullable|string|max:30',
             'email'           => 'nullable|email|max:255',
             'responsable'     => 'nullable|string|max:255',
@@ -26,6 +26,14 @@ class StoreAccountRequest extends FormRequest
             'statut'          => 'in:en_attente,actif,inactif,suspendu,rejete',
             'meta'            => 'nullable|array',
             'local_uuid'      => 'nullable|uuid|unique:accounts,local_uuid',
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'gps_lat.required' => 'Les coordonnées GPS (latitude) sont obligatoires.',
+            'gps_lng.required' => 'Les coordonnées GPS (longitude) sont obligatoires.',
         ];
     }
 }

@@ -16,37 +16,41 @@ class IndicatorCalculationEngine
      */
     public function updateObjectivesForModel(Model $model): void
     {
-        // 1. Trouver les indicateurs qui se basent sur ce modèle
-        $modelClass = get_class($model);
-        
-        $indicators = Indicator::where('is_active', true)
-            ->where('data_source_model', $modelClass)
-            ->get();
-
-        if ($indicators->isEmpty()) {
-            return;
-        }
-
-        // 2. Déterminer l'utilisateur responsable de cette donnée
-        $userId = $model->user_id ?? null;
-        $dateSource = $this->getDateFromModel($model);
-
-        if (!$userId || !$dateSource) {
-            return;
-        }
-
-        // 3. Pour chaque indicateur, trouver les objectifs en cours qui couvrent cette date
-        foreach ($indicators as $indicator) {
-            $objectifs = Objectif::where('indicator_id', $indicator->id)
-                ->where('user_id', $userId)
-                ->where('statut', 'actif')
-                ->whereDate('date_debut', '<=', $dateSource)
-                ->whereDate('date_fin', '>=', $dateSource)
+        try {
+            // 1. Trouver les indicateurs qui se basent sur ce modèle
+            $modelClass = get_class($model);
+            
+            $indicators = Indicator::where('is_active', true)
+                ->where('data_source_model', $modelClass)
                 ->get();
 
-            foreach ($objectifs as $objectif) {
-                $this->recalculateObjective($objectif, $indicator);
+            if ($indicators->isEmpty()) {
+                return;
             }
+
+            // 2. Déterminer l'utilisateur responsable de cette donnée
+            $userId = $model->user_id ?? null;
+            $dateSource = $this->getDateFromModel($model);
+
+            if (!$userId || !$dateSource) {
+                return;
+            }
+
+            // 3. Pour chaque indicateur, trouver les objectifs en cours qui couvrent cette date
+            foreach ($indicators as $indicator) {
+                $objectifs = Objectif::where('indicator_id', $indicator->id)
+                    ->where('user_id', $userId)
+                    ->where('statut', 'actif')
+                    ->whereDate('date_debut', '<=', $dateSource)
+                    ->whereDate('date_fin', '>=', $dateSource)
+                    ->get();
+
+                foreach ($objectifs as $objectif) {
+                    $this->recalculateObjective($objectif, $indicator);
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning("IndicatorCalculationEngine error: " . $e->getMessage());
         }
     }
 

@@ -269,6 +269,22 @@ class ContactController extends Controller
             ]
         ));
 
+        $accountsInput = $request->input('accounts') ?? $request->input('account_ids') ?? null;
+        if (!empty($accountsInput)) {
+            $accountIds = (array) $accountsInput;
+            $primaryAccountId = $request->input('primary_account_id');
+            $syncData = [];
+            foreach ($accountIds as $index => $accId) {
+                $isPrimary = $primaryAccountId ? ($accId === $primaryAccountId) : ($index === 0);
+                $syncData[$accId] = ['id' => \Illuminate\Support\Str::uuid()->toString(), 'is_primary' => $isPrimary];
+            }
+            $contact->accounts()->sync($syncData);
+        } elseif ($contact->account_id) {
+            $contact->accounts()->sync([
+                $contact->account_id => ['id' => \Illuminate\Support\Str::uuid()->toString(), 'is_primary' => true]
+            ]);
+        }
+
         if ($isDelegue) {
             $supervisors = \App\Models\User::role('superviseur')->where('team_id', $user->team_id)->get();
             if ($supervisors->isNotEmpty()) {
@@ -507,6 +523,53 @@ class ContactController extends Controller
             'message' => "{$deletedCount} prescripteur(s) supprimé(s) avec succès.",
             'deleted' => $deletedCount,
             'skipped' => $skipped,
+        ]);
+    }
+
+    public function validateContact(Request $request, string $id)
+    {
+        $contact = Contact::withoutGlobalScopes()->findOrFail($id);
+        $user = auth()->user();
+
+        if ($user && $user->hasRole('delegue_medical')) {
+            return response()->json(['message' => 'Action non autorisée.'], 403);
+        }
+
+        $contact->update([
+            'statut_validation' => 'valide',
+            'statut'            => 'actif',
+        ]);
+
+        return response()->json([
+            'message' => 'Prescripteur validé avec succès.',
+            'data'    => new ContactResource($contact->load(['account', 'categories']))
+        ]);
+    }
+
+    public function rejectContact(Request $request, string $id)
+    {
+        $contact = Contact::withoutGlobalScopes()->findOrFail($id);
+        $user = auth()->user();
+
+        if ($user && $user->hasRole('delegue_medical')) {
+            return response()->json(['message' => 'Action non autorisée.'], 403);
+        }
+
+        $validated = $request->validate([
+            'motif' => 'required|string|min:2',
+        ], [
+            'motif.required' => 'Le motif du rejet est obligatoire.'
+        ]);
+
+        $contact->update([
+            'statut_validation' => 'rejete',
+            'statut'            => 'inactif',
+            'rejection_reason'  => $validated['motif'],
+        ]);
+
+        return response()->json([
+            'message' => 'Prescripteur rejeté avec enregistrement du motif.',
+            'data'    => new ContactResource($contact->load(['account', 'categories']))
         ]);
     }
 }

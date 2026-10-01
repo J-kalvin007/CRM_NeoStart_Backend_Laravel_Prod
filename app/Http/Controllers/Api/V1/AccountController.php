@@ -396,4 +396,51 @@ class AccountController extends Controller
 
         return array_unique($allIds);
     }
+
+    public function validateAccount(Request $request, string $id)
+    {
+        $account = Account::withoutGlobalScopes()->findOrFail($id);
+        $user = auth()->user();
+
+        if ($user && $user->hasRole('delegue_medical')) {
+            return response()->json(['message' => 'Action non autorisée.'], 403);
+        }
+
+        $account->update([
+            'statut_validation' => 'valide',
+            'statut'            => 'actif',
+        ]);
+
+        return response()->json([
+            'message' => 'Établissement validé avec succès.',
+            'data'    => new AccountResource($account->load(['organizationalUnit', 'categories']))
+        ]);
+    }
+
+    public function rejectAccount(Request $request, string $id)
+    {
+        $account = Account::withoutGlobalScopes()->findOrFail($id);
+        $user = auth()->user();
+
+        if ($user && $user->hasRole('delegue_medical')) {
+            return response()->json(['message' => 'Action non autorisée.'], 403);
+        }
+
+        $validated = $request->validate([
+            'motif' => 'required|string|min:2',
+        ], [
+            'motif.required' => 'Le motif du rejet est obligatoire.'
+        ]);
+
+        $account->update([
+            'statut_validation' => 'rejete',
+            'statut'            => 'inactif',
+            'rejection_reason'  => $validated['motif'],
+        ]);
+
+        return response()->json([
+            'message' => 'Établissement rejeté avec enregistrement du motif.',
+            'data'    => new AccountResource($account->load(['organizationalUnit', 'categories']))
+        ]);
+    }
 }

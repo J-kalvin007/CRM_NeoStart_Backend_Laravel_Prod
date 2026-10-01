@@ -212,6 +212,9 @@ Route::prefix('v1')->group(function () {
         Route::post('validations/{type}/{id}/reject', [ValidationController::class, 'reject']);
 
         Route::post('accounts/check-duplicates', [AccountController::class, 'checkDuplicates']);
+        Route::post('accounts/{account}/valider', [AccountController::class, 'validateAccount']);
+        Route::post('accounts/{account}/rejeter', [AccountController::class, 'rejectAccount']);
+        Route::post('accounts/{account}/validate', [AccountController::class, 'validateAccount']);
         Route::apiResource('accounts', AccountController::class);
         Route::apiResource('specialities', App\Http\Controllers\Api\V1\SpecialityController::class);
         Route::apiResource('segmentations', App\Http\Controllers\Api\V1\SegmentationController::class);
@@ -228,6 +231,9 @@ Route::prefix('v1')->group(function () {
         Route::post('contacts/import', [\App\Http\Controllers\Api\V1\ContactImportController::class, 'import']);
         Route::get('contacts/import/template', [\App\Http\Controllers\Api\V1\ContactImportController::class, 'downloadTemplate']);
         Route::delete('contacts/bulk-delete', [ContactController::class, 'bulkDelete']);
+        Route::post('contacts/{contact}/valider', [ContactController::class, 'validateContact']);
+        Route::post('contacts/{contact}/rejeter', [ContactController::class, 'rejectContact']);
+        Route::post('contacts/{contact}/validate', [ContactController::class, 'validateContact']);
         Route::apiResource('contacts', ContactController::class);
 
         // ── Import Établissements ──────────────────────────────────────────
@@ -249,7 +255,18 @@ Route::prefix('v1')->group(function () {
         // ── Opérationnel Terrain (Visites, Tâches, Agenda) ──────
         Route::post('tour-plans/optimize', [\App\Http\Controllers\Api\V1\TourPlanController::class, 'optimize']);
         Route::apiResource('tour-plans', TourPlanController::class);
+        Route::post('activities/trio', [ActivityController::class, 'storeTrio']);
+        Route::post('trio', [ActivityController::class, 'storeTrio']);
+        Route::post('activities/{activity}/validate-trio', [ActivityController::class, 'validateTrio']);
+        Route::post('activities/{activity}/reject-trio', [ActivityController::class, 'rejectTrio']);
+        Route::post('trio/{id}/valider', [ActivityController::class, 'validateTrio']);
+        Route::post('trio/{id}/rejeter', [ActivityController::class, 'rejectTrio']);
         Route::post('activities/duo', [ActivityController::class, 'storeDuo']);
+        Route::post('duo', [ActivityController::class, 'storeDuo']);
+        Route::post('activities/{activity}/accept-duo', [ActivityController::class, 'acceptDuo']);
+        Route::post('activities/{activity}/refuse-duo', [ActivityController::class, 'refuseDuo']);
+        Route::post('duo/{id}/accepter', [ActivityController::class, 'acceptDuo']);
+        Route::post('duo/{id}/refuser', [ActivityController::class, 'refuseDuo']);
         Route::post('activities/{activity}/validate', [ActivityController::class, 'validateActivity']);
         Route::post('activities/{activity}/reschedule', [ActivityController::class, 'reschedule']);
         Route::apiResource('activities', ActivityController::class);
@@ -328,6 +345,8 @@ Route::prefix('v1')->group(function () {
         Route::get('leaves', [LeaveController::class, 'index']);
         Route::post('leaves', [LeaveController::class, 'store']);
         Route::patch('leaves/{id}/status', [LeaveController::class, 'updateStatus']);
+        Route::post('leaves/{id}/validate', [LeaveController::class, 'validateLeave']);
+        Route::post('leaves/{id}/reject', [LeaveController::class, 'rejectLeave']);
 
         // ── Demandes & Escalade ────────────────────────────────
         Route::apiResource('requests', \App\Http\Controllers\Api\V1\RequestController::class)->except(['show']);

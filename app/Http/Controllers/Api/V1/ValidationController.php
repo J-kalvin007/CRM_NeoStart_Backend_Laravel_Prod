@@ -207,6 +207,13 @@ class ValidationController extends Controller
     )]
     public function approve(Request $request, string $type, string $id)
     {
+        $user = auth()->user();
+        if ($user && $user->hasAnyRole(['delegue', 'delegue_medical', 'delegate', 'Délégué', 'Délégué Médical'])) {
+            return response()->json([
+                'message' => 'Action non autorisée. Les délégués ne peuvent pas valider de fiches.'
+            ], 403);
+        }
+
         if (in_array($type, ['visit', 'activity_report'])) {
             $activity = \App\Models\Activity::findOrFail($id);
             $activity->update([
@@ -393,6 +400,13 @@ class ValidationController extends Controller
     )]
     public function reject(Request $request, string $type, string $id)
     {
+        $user = auth()->user();
+        if ($user && $user->hasAnyRole(['delegue', 'delegue_medical', 'delegate', 'Délégué', 'Délégué Médical'])) {
+            return response()->json([
+                'message' => 'Action non autorisée. Les délégués ne peuvent pas rejeter de fiches.'
+            ], 403);
+        }
+
         $reason = $request->input('rejection_reason') ?? $request->input('motif');
 
         if (in_array($type, ['visit', 'activity_report'])) {

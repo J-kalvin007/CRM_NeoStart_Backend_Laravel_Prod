@@ -25,7 +25,7 @@ class UpdateActivityRequest extends FormRequest
         return [
             'date_activite'  => 'nullable|date',
             'notes'          => 'nullable|string',
-            'statut'         => 'nullable|string|in:planifiee,en_cours,realisee,manquee,annulee,brouillon,soumis_definitif,en_attente,en attente de validation,soumis,validee,valide',
+            'statut'         => 'nullable|string|in:planifiee,en_cours,terminee,cloturee,realisee,manquee,annulee,brouillon,soumis_definitif,en_attente,en attente de validation,soumis,validee,valide',
             'report_content' => 'nullable|string',
             'report_status'  => 'nullable|string|in:draft,submitted,validated,rejected',
             'prochain_rdv'   => 'nullable|string',

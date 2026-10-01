@@ -157,5 +157,64 @@ class Activity extends Model
     {
         $this->update(['is_locked' => true, 'locked_at' => now()]);
     }
+
+    /**
+     * Détection de chevauchement horaire (partiel, identique ou total) pour un délégué.
+     * Exclut les visites annulées ou rejetées.
+     */
+    public static function checkOverlap(string $userId, mixed $date, ?string $startTime = null, ?string $endTime = null, ?int $durationMinutes = null, ?string $excludeId = null): bool
+    {
+        $dateStr = $date instanceof \DateTimeInterface ? $date->format('Y-m-d') : date('Y-m-d', strtotime((string)$date));
+
+        if (empty($startTime)) {
+            $startSec = strtotime("1970-01-01 00:00:00 UTC");
+            $endSec   = strtotime("1970-01-01 23:59:59 UTC");
+        } else {
+            $startSec = strtotime("1970-01-01 {$startTime} UTC");
+            if (!empty($endTime)) {
+                $endSec = strtotime("1970-01-01 {$endTime} UTC");
+            } elseif (!empty($durationMinutes)) {
+                $endSec = $startSec + ($durationMinutes * 60);
+            } else {
+                $endSec = $startSec + 3600; // Défaut 1h
+            }
+        }
+
+        $formattedStart = date('H:i:s', $startSec);
+        $formattedEnd   = date('H:i:s', $endSec);
+
+        $activities = static::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
+            ->where('user_id', $userId)
+            ->whereDate('date_activite', $dateStr)
+            ->whereNotIn('statut', ['annulee', 'rejetee', 'refusee', 'cancelled', 'rejected'])
+            ->when($excludeId, fn($q) => $q->where('id', '!=', $excludeId))
+            ->get();
+
+        foreach ($activities as $act) {
+            if (empty($act->heure_debut)) {
+                $actStartSec = strtotime("1970-01-01 00:00:00 UTC");
+                $actEndSec   = strtotime("1970-01-01 23:59:59 UTC");
+            } else {
+                $actStartSec = strtotime("1970-01-01 {$act->heure_debut} UTC");
+                if (!empty($act->heure_fin)) {
+                    $actEndSec = strtotime("1970-01-01 {$act->heure_fin} UTC");
+                } elseif (!empty($act->duree_minutes)) {
+                    $actEndSec = $actStartSec + ($act->duree_minutes * 60);
+                } else {
+                    $actEndSec = $actStartSec + 3600;
+                }
+            }
+
+            $actStart = date('H:i:s', $actStartSec);
+            $actEnd   = date('H:i:s', $actEndSec);
+
+            // Condition de chevauchement : DébutA < FinB ET FinA > DébutB
+            if ($formattedStart < $actEnd && $formattedEnd > $actStart) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }
 
