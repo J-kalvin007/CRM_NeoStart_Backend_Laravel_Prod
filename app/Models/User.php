@@ -62,6 +62,9 @@ class User extends Authenticatable
             'password' => 'hashed',
             'status' => 'boolean',
             'last_login_at' => 'datetime',
+            'last_location_at' => 'datetime',
+            'last_lat' => 'float',
+            'last_lng' => 'float',
             'force_password_change' => 'boolean',
             'otp_enabled' => 'boolean',
         ];
@@ -70,6 +73,11 @@ class User extends Authenticatable
     public function scopes()
     {
         return $this->belongsToMany(OrganizationalUnit::class, 'user_scopes', 'user_id', 'organizational_unit_id')->withTimestamps();
+    }
+
+    public function locations()
+    {
+        return $this->hasMany(UserLocation::class);
     }
 
     public function manager()

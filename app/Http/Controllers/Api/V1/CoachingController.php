@@ -56,7 +56,7 @@ class CoachingController extends Controller
             })
             ->when($request->query('delegate_id'), fn ($q, $v) => $q->where('delegate_id', $v))
             ->when($request->query('status'), fn ($q, $v) => $q->where('status', $v))
-            ->when($request->query('type'), fn ($q, $v) => $q->where('type', $v))
+            ->when($request->query('type'), fn ($q, $v) => $q->whereHas('activity.duoActivityType', fn ($t) => $t->where('code', $v)))
             ->when($request->boolean('this_month'), fn ($q) => $q->whereBetween('date_duo', [now()->startOfMonth(), now()->endOfMonth()]))
             ->orderByDesc('date_duo')
             ->get();
@@ -82,14 +82,17 @@ class CoachingController extends Controller
             return response()->json(['message' => 'Le motif de refus est obligatoire.', 'errors' => ['rejection_reason' => ['Le motif de refus est obligatoire.']]], 422);
         }
 
-        $session->update(['status' => 'refusee', 'commentaires_superviseur' => $reason]);
+        $session->update(['status' => 'refused', 'commentaires_superviseur' => $reason]);
 
-        // La visite n'est plus accompagnée
+        // L'accompagnement de la visite est refusé (la visite reste planifiée)
         if ($session->activity_id) {
+            $refusedByDelegate = $user->id === $session->delegate_id;
             \App\Models\Activity::withoutGlobalScopes()
                 ->where('id', $session->activity_id)
-                ->where('accompanying_user_id', $session->supervisor_id)
-                ->update(['accompanying_user_id' => null]);
+                ->where('duo_user_id', $session->supervisor_id)
+                ->update($refusedByDelegate
+                    ? ['duo_delegue_status' => 'rejected', 'duo_delegue_rejection_reason' => $reason]
+                    : ['duo_status' => 'rejected', 'duo_rejection_reason' => $reason, 'is_duo' => false]);
         }
 
         $notify = User::withoutGlobalScopes()->find($user->id === $session->delegate_id ? $session->supervisor_id : $session->delegate_id);
@@ -208,7 +211,7 @@ class CoachingController extends Controller
             'taux_atteinte_pct' => $validated['taux_atteinte_pct'],
             'commentaires_superviseur' => $validated['commentaires_superviseur'],
             'plan_action_recommande' => $validated['plan_action_recommande'] ?? null,
-            'status' => 'cloture',
+            'status' => 'completed',
         ]);
 
         return response()->json([

@@ -245,7 +245,7 @@ class AnalyticsController extends Controller
         $today = now()->toDateString();
 
         $result = $team->map(function ($u) use ($today) {
-            // Dernière position GPS connue (pointage début ou fin de visite)
+            // Position : suivi GPS en direct (users.last_*), à défaut le dernier pointage de visite
             $lastGps = Activity::withoutGlobalScopes()
                 ->where('user_id', $u->id)
                 ->whereNotNull('gps_debut_lat')
@@ -269,9 +269,17 @@ class AnalyticsController extends Controller
                 ->orderBy('heure_debut')
                 ->first();
 
-            $loggedToday = $u->last_login_at && \Carbon\Carbon::parse($u->last_login_at)->isToday();
-            $status = $currentVisit ? 'en_visite' : ($loggedToday ? 'disponible' : 'hors_ligne');
-            $statusLabel = ['en_visite' => 'En visite', 'disponible' => 'Disponible', 'hors_ligne' => 'Non pointé'][$status];
+            $liveAt = $u->last_location_at;
+            $checkInAt = $lastGps?->updated_at;
+            $useLive = $u->last_lat !== null && (!$checkInAt || ($liveAt && $liveAt->gte($checkInAt)));
+            $lat = $useLive ? $u->last_lat : ($lastGps ? (float) $lastGps->gps_debut_lat : null);
+            $lng = $useLive ? $u->last_lng : ($lastGps ? (float) $lastGps->gps_debut_lng : null);
+            $positionAt = $useLive ? $liveAt : $checkInAt;
+
+            // Position reçue il y a moins de 15 min : le délégué est suivi en temps réel
+            $isLive = $liveAt && $liveAt->gt(now()->subMinutes(15));
+            $status = $currentVisit ? 'en_visite' : ($isLive ? 'disponible' : 'hors_ligne');
+            $statusLabel = ['en_visite' => 'En visite', 'disponible' => 'En ligne', 'hors_ligne' => 'Hors ligne'][$status];
 
             $contact = $nextVisit?->contact;
             $parts = array_values(array_filter(explode(' ', trim(preg_replace('/\(.*?\)/', '', $u->name)))));
@@ -283,16 +291,19 @@ class AnalyticsController extends Controller
                 'photo_url' => null,
                 'status' => $status,
                 'status_label' => $statusLabel,
-                'has_position' => (bool) $lastGps,
-                'lat' => $lastGps ? (float) $lastGps->gps_debut_lat : null,
-                'lng' => $lastGps ? (float) $lastGps->gps_debut_lng : null,
+                'has_position' => $lat !== null,
+                'is_live' => (bool) $isLive,
+                'position_source' => $lat === null ? null : ($useLive ? 'gps_live' : 'check_in'),
+                'accuracy' => $useLive ? $u->last_accuracy : null,
+                'lat' => $lat,
+                'lng' => $lng,
                 'location_name' => $nextVisit?->account?->nom ?? '',
                 'hcp_name' => $contact ? trim(($contact->titre ?: 'Dr.') . ' ' . $contact->prenom . ' ' . $contact->nom) : '',
                 'hcp_spec' => '',
                 'sector' => (string) ($u->scopes->first()?->name ?? ''),
                 'phone' => $u->phone ?? '',
-                'last_seen' => ($lastGps?->updated_at ?? $u->last_login_at)?->toISOString(),
-                'last_check_in' => $lastGps?->updated_at?->format('H:i'),
+                'last_seen' => ($positionAt ?? $u->last_login_at)?->toISOString(),
+                'last_check_in' => $positionAt?->format('H:i'),
                 'time_left' => null,
             ];
         })->values();

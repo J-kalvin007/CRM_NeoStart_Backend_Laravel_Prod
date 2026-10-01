@@ -62,6 +62,12 @@ class PerformanceDemoSeeder extends Seeder
                         $statut = 'planifiee';
                     }
 
+                    // Comptes-rendus : validés, sauf ceux des 2 derniers jours encore en attente de validation
+                    $reportStatus = 'draft';
+                    if ($statut === 'realisee') {
+                        $reportStatus = $day->gte($today->copy()->subWeekdays(2)) ? 'submitted' : 'validated';
+                    }
+
                     $contact = $contacts->random();
                     $rows[] = [
                         'id'            => (string) Str::orderedUuid(),
@@ -74,6 +80,7 @@ class PerformanceDemoSeeder extends Seeder
                         'heure_fin'     => $startTime->copy()->addMinutes(30)->format('H:i'),
                         'duree_minutes' => 30,
                         'statut'        => $statut,
+                        'report_status' => $reportStatus,
                         'notes'         => $notes[array_rand($notes)],
                         'created_at'    => now(),
                         'updated_at'    => now(),

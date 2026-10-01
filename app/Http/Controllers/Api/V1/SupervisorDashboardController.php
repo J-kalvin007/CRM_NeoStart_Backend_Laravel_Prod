@@ -191,7 +191,7 @@ class SupervisorDashboardController extends Controller
         })->pluck('id')->all();
 
         $schedules = $this->visitQuery($filteredIds)
-            ->with(['delegue.scopes', 'contact', 'account', 'products', 'accompanyingUser', 'coachingSessions'])
+            ->with(['delegue.scopes', 'contact', 'account', 'products', 'duoUser', 'duoActivityType'])
             ->whereBetween('date_activite', [$start->toDateString(), $end->toDateString()])
             ->orderBy('date_activite')
             ->orderBy('heure_debut')
@@ -232,7 +232,6 @@ class SupervisorDashboardController extends Controller
         $isClosed = in_array($statut, ['realisee', 'effectuee', 'validee', 'terminee', 'annulee', 'manquee']);
         $isPast = $act->date_activite && $act->date_activite->lt(now()->startOfDay());
         $contactName = $this->contactName($act);
-        $duoSession = $act->coachingSessions->sortByDesc('created_at')->first();
         $address = $act->account
             ? trim(implode(', ', array_filter([$act->account->adresse, $act->account->zone_quartier, $act->account->ville])))
             : '';
@@ -249,7 +248,7 @@ class SupervisorDashboardController extends Controller
             'specialty' => trim(($act->account?->nom ?? '') . ($act->notes ? ' • ' . $act->notes : ''), ' •'),
             'type' => $actType,
             'status' => $this->statusLabel($act->statut),
-            'isDuo' => !empty($act->accompanying_user_id),
+            'isDuo' => $act->hasActiveDuo(),
             'sector' => $this->delegateSector($act->delegue),
             'color' => in_array($statut, self::COMPLETED) ? '#00816E' : ($statut === 'manquee' ? '#D32F2F' : '#0050CB'),
             'contact_name' => $act->contact ? $contactName : null,
@@ -258,9 +257,12 @@ class SupervisorDashboardController extends Controller
             'notes' => $act->notes,
             'motif' => $act->motif,
             'products' => $act->products->map(fn ($p) => $p->nom)->filter()->values(),
-            'accompanying_user' => $act->accompanyingUser?->name,
-            'duo_type' => $duoSession?->type,
-            'can_duo' => empty($act->accompanying_user_id) && $act->user_id !== $supervisor->id && !$isClosed && !$isPast,
+            'accompanying_user' => $act->hasActiveDuo() ? $act->duoUser?->name : null,
+            'duo_type' => $act->hasActiveDuo() ? $act->duoActivityType?->code : null,
+            // pending | accepted | rejected : réponse du délégué à l'accompagnement
+            'duo_delegue_status' => $act->is_duo ? $act->duo_delegue_status : null,
+            'duo_delegue_rejection_reason' => $act->duo_delegue_rejection_reason,
+            'can_duo' => !$act->hasActiveDuo() && $act->user_id !== $supervisor->id && !$isClosed && !$isPast,
         ];
     }
 
@@ -305,7 +307,13 @@ class SupervisorDashboardController extends Controller
             + Activity::withoutGlobalScopes()->whereNull('deleted_at')->whereIn('user_id', $userIds)
                 ->whereIn('activity_type', self::LEAVE_TYPES)->where('statut', 'en_attente')->count()
             + Activity::withoutGlobalScopes()->whereNull('deleted_at')->whereIn('user_id', $userIds)
-                ->where('report_status', 'submitted')->count();
+                ->where('report_status', 'submitted')->count()
+            + Contact::withoutGlobalScopes()->whereNull('deleted_at')->whereIn('user_id', $userIds)
+                ->where(fn ($q) => $q->whereIn('statut_validation', ['en_attente', 'pending'])
+                    ->orWhereIn('statut', ['en_attente', 'en_attente_validation', 'inactif', 'pending']))->count()
+            + \App\Models\Account::withoutGlobalScopes()->whereNull('deleted_at')->whereIn('user_id', $userIds)
+                ->where(fn ($q) => $q->whereIn('statut_validation', ['en_attente', 'pending'])
+                    ->orWhereIn('statut', ['en_attente', 'en_attente_validation', 'inactif', 'pending']))->count();
     }
 
     private function tourPlanStatus(string $userId, Carbon $date): string

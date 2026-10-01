@@ -112,6 +112,8 @@ Route::prefix('v1')->group(function () {
 
         // Utilisateurs, Rôles & Permissions
         Route::get('users/locations', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'usersLocations']);
+        Route::post('me/location', [\App\Http\Controllers\Api\V1\LocationController::class, 'store']);
+        Route::get('users/{id}/locations', [\App\Http\Controllers\Api\V1\LocationController::class, 'history']);
         Route::apiResource('users', UserController::class);
         Route::apiResource('roles', RoleController::class);
         Route::get('permissions', [PermissionController::class, 'index']);

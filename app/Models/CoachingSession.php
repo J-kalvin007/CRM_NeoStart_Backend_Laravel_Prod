@@ -15,7 +15,6 @@ class CoachingSession extends Model
         'supervisor_id',
         'delegate_id',
         'activity_id',
-        'type',
         'strengths',
         'weaknesses',
         'action_plan',
