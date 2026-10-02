@@ -232,13 +232,31 @@ class ActivityController extends Controller
             }
         }
 
-        // Définir le statut initial : En attente pour le délégué, Planifiée/Validée si par un manager
+        // Définir le statut initial selon le workflow
+        // - brouillon : quand le délégué crée une visite sans la soumettre
+        // - en_attente : quand le délégué soumet la visite pour validation
+        // - planifiee : quand le superviseur valide la visite
+        // - realisee : quand la visite est terminée (avec GPS debut et fin)
+        // - annulee : quand le délégué annule la visite
+        // - visite_duo : quand c'est une visite en duo
+
         if (!isset($data['statut']) || $data['statut'] === 'planifiee') {
-            if ($user->hasRole(['superadmin', 'admin', 'superviseur', 'manager'])) {
+            if (isset($data['is_draft']) && $data['is_draft'] === true) {
+                // Le délégué crée un brouillon
+                $data['statut'] = 'brouillon';
+            } elseif ($user->hasRole(['superadmin', 'admin', 'superviseur', 'manager'])) {
+                // Le superviseur valide directement la visite
                 $data['statut'] = 'planifiee';
             } else {
+                // Le délégué soumet pour validation
                 $data['statut'] = 'en_attente';
             }
+        }
+
+        // Si c'est une visite en duo, on peut ajouter un indicateur
+        if (isset($data['is_duo']) && $data['is_duo'] === true) {
+            // Le statut reste tel quel (en_attente ou planifiee)
+            // mais on peut avoir un champ is_duo à true
         }
 
         $activity = Activity::create(array_merge($data, ['user_id' => $targetUserId]));
@@ -598,7 +616,9 @@ class ActivityController extends Controller
         ]);
 
         $st = strtolower($request->statut);
-        $newStatut = ($st === 'validee' || $st === 'validated') ? 'validee' : 'refusee';
+        // Le superviseur valide : en_attente -> planifiee
+        // Le superviseur refuse : en_attente -> annulee
+        $newStatut = ($st === 'validee' || $st === 'validated') ? 'planifiee' : 'annulee';
         $rejectionReason = $request->rejection_reason ?? $request->motif ?? null;
 
         if (in_array($st, ['rejetee', 'refusee']) && (empty($rejectionReason) || strlen(trim($rejectionReason)) < 2)) {
@@ -623,9 +643,9 @@ class ActivityController extends Controller
 
         // Notifier le délégué de la décision du manager
         if ($activity->user) {
-            $title = $newStatut === 'validee' ? 'Visite Validée' : 'Visite Refusée';
+            $title = $newStatut === 'planifiee' ? 'Visite Validée' : 'Visite Refusée';
             $dateStr = $activity->date_activite ? \Illuminate\Support\Carbon::parse($activity->date_activite)->format('d/m/Y') : now()->format('d/m/Y');
-            $msg = $newStatut === 'validee'
+            $msg = $newStatut === 'planifiee'
                 ? "Votre visite prévue le {$dateStr} a été validée par votre responsable."
                 : "Votre visite prévue le {$dateStr} a été refusée par votre responsable.";
             
@@ -1459,5 +1479,105 @@ class ActivityController extends Controller
         if ($activity->delegue) {
             NotificationController::sendNotification($activity->delegue, $title, $message, 'nouveau_duo', 'delegate', ['activity_id' => (string) $activity->id]);
         }
+    }
+
+    /**
+     * POST /api/v1/activities/{id}/start - Démarrer une visite et enregistrer la position GPS
+     */
+    public function startVisit(Request $request, string $id)
+    {
+        $user = auth()->user();
+        $activity = Activity::withoutGlobalScopes()->findOrFail($id);
+
+        // Vérifier que l'utilisateur est le délégué assigné ou le superviseur en duo
+        abort_unless(
+            $activity->user_id === $user->id || $activity->duo_user_id === $user->id,
+            403,
+            "Vous n'êtes pas autorisé à démarrer cette visite."
+        );
+
+        // Vérifier que la visite n'est pas déjà en cours ou terminée
+        abort_if(
+            in_array($activity->statut, ['en_cours', 'realisee', 'terminee', 'annulee']),
+            422,
+            "Cette visite ne peut pas être démarrée dans son état actuel."
+        );
+
+        $validated = $request->validate([
+            'gps_lat' => 'required|numeric|between:-90,90',
+            'gps_lng' => 'required|numeric|between:-180,180',
+            'gps_accuracy' => 'nullable|numeric|min:0',
+        ]);
+
+        // Mettre à jour la visite avec la position GPS et le statut en_cours
+        $activity->update([
+            'statut' => 'en_cours',
+            'gps_debut_lat' => $validated['gps_lat'],
+            'gps_debut_lng' => $validated['gps_lng'],
+            'gps_debut_accuracy' => $validated['gps_accuracy'] ?? null,
+            'start_time' => now(),
+        ]);
+
+        return response()->json([
+            'message' => 'Visite démarrée avec succès',
+            'data' => new ActivityResource($activity->fresh(['delegue', 'contact', 'account']))
+        ]);
+    }
+
+    /**
+     * POST /api/v1/activities/{id}/complete - Terminer une visite et enregistrer la position GPS finale
+     */
+    public function completeVisit(Request $request, string $id)
+    {
+        $user = auth()->user();
+        $activity = Activity::withoutGlobalScopes()->findOrFail($id);
+
+        // Vérifier que l'utilisateur est le délégué assigné ou le superviseur en duo
+        abort_unless(
+            $activity->user_id === $user->id || $activity->duo_user_id === $user->id,
+            403,
+            "Vous n'êtes pas autorisé à terminer cette visite."
+        );
+
+        // Vérifier que la visite est en cours
+        abort_if(
+            !in_array($activity->statut, ['en_cours', 'planifiee', 'en_attente']),
+            422,
+            "Cette visite n'est pas en cours."
+        );
+
+        $validated = $request->validate([
+            'gps_lat' => 'required|numeric|between:-90,90',
+            'gps_lng' => 'required|numeric|between:-180,180',
+            'gps_accuracy' => 'nullable|numeric|min:0',
+            'notes' => 'nullable|string',
+            'report_content' => 'nullable|string',
+        ]);
+
+        // Calculer la durée si on a un start_time
+        $dureeMinutes = null;
+        if ($activity->start_time) {
+            $dureeMinutes = now()->diffInMinutes($activity->start_time);
+        }
+
+        // Mettre à jour la visite avec la position GPS finale et le statut réalisee
+        $activity->update([
+            'statut' => 'realisee',
+            'gps_fin_lat' => $validated['gps_lat'],
+            'gps_fin_lng' => $validated['gps_lng'],
+            'gps_fin_accuracy' => $validated['gps_accuracy'] ?? null,
+            'end_time' => now(),
+            'duree_minutes' => $dureeMinutes,
+            'notes' => $validated['notes'] ?? $activity->notes,
+            'report_content' => $validated['report_content'] ?? $activity->report_content,
+        ]);
+
+        // Verrouiller l'activité après réalisation
+        $activity->lock();
+
+        return response()->json([
+            'message' => 'Visite terminée avec succès',
+            'data' => new ActivityResource($activity->fresh(['delegue', 'contact', 'account']))
+        ]);
     }
 }

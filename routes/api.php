@@ -278,6 +278,8 @@ Route::prefix('v1')->group(function () {
         Route::post('activities/{activity}/validate', [ActivityController::class, 'validateActivity']);
         Route::post('activities/bulk-validate', [ActivityController::class, 'validateActivitiesBulk']);
         Route::post('activities/{activity}/reschedule', [ActivityController::class, 'reschedule']);
+        Route::post('activities/{activity}/start', [ActivityController::class, 'startVisit']);
+        Route::post('activities/{activity}/complete', [ActivityController::class, 'completeVisit']);
         Route::apiResource('activities', ActivityController::class);
         Route::post('activities/{activity}/clm-analytics', [ClmAnalyticController::class, 'store']);
         Route::post('activities/{activity}/objections', [ObjectionController::class, 'storeForActivity']);

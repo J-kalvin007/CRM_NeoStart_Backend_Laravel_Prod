@@ -99,8 +99,8 @@ class DatabaseSeeder extends Seeder
             'status' => true
         ]);
 
-        if (!$admin->hasRole('superadmin')) {
-            $admin->assignRole('superadmin');
+        if (!$admin->hasRole('super-admin')) {
+            $admin->assignRole('super-admin');
         }
 
         $this->call([
