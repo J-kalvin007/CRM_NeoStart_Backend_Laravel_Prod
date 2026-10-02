@@ -342,7 +342,8 @@ class AnalyticsController extends Controller
         
         // Filtrer par équipe si l'utilisateur n'est pas un administrateur global
         if (!$user->can('scope:global') && !$user->hasAnyRole(['superadmin', 'admin'])) {
-            $teamUsers = User::pluck('id');
+            // Ses propres présentations et celles de son équipe (hiérarchie manager_id)
+            $teamUsers = array_merge([$user->id], $user->teamMemberIds());
             $query->whereIn('user_id', $teamUsers);
         }
 

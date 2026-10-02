@@ -17,13 +17,17 @@ class DocumentController extends Controller
             $query->where('documentable_type', $request->documentable_type)
                   ->where('documentable_id', $request->documentable_id);
         }
+        if ($request->filled('type')) {
+            $query->where('type', $request->type);
+        }
+        if ($request->has('is_active')) {
+            $query->where('is_active', $request->boolean('is_active'));
+        }
 
-        \Illuminate\Support\Facades\Log::info('Document Query:', [
-            'sql' => $query->toSql(),
-            'bindings' => $query->getBindings(),
-        ]);
+        // Adresse des fichiers joignable par le client (et non localhost de APP_URL)
+        $host = $request->getSchemeAndHttpHost();
 
-        $documents = $query->get()->map(function ($doc) {
+        $documents = $query->with('documentable')->get()->map(function ($doc) use ($host) {
             // Map the internal types to frontend display types
             $mappedType = 'NOTICE';
             if ($doc->type === 'presentation') $mappedType = 'E-DETAILING';
@@ -36,32 +40,43 @@ class DocumentController extends Controller
                 $status = 'EXPIRE';
             }
 
-            $sizeFormatted = '1.5 MB';
-            if ($doc->file_size) {
-                $sizeFormatted = round($doc->file_size / (1024 * 1024), 1) . ' MB';
-            } elseif (\Illuminate\Support\Facades\Storage::disk('public')->exists($doc->file_path ?? '')) {
-                $bytes = \Illuminate\Support\Facades\Storage::disk('public')->size($doc->file_path);
+            $relative = preg_replace('/^\/?storage\//', '', $doc->file_path ?? '');
+            $sizeFormatted = null;
+            if ($relative !== '' && \Illuminate\Support\Facades\Storage::disk('public')->exists($relative)) {
+                $bytes = \Illuminate\Support\Facades\Storage::disk('public')->size($relative);
                 $sizeFormatted = round($bytes / (1024 * 1024), 1) . ' MB';
+            }
+
+            $url = null;
+            if ($doc->file_path) {
+                $url = preg_match('#^https?://#', $doc->file_path)
+                    ? $doc->file_path
+                    : $host . \Illuminate\Support\Facades\Storage::url($relative);
             }
 
             return [
                 'id' => $doc->id,
                 'reference' => 'DOC-' . substr($doc->id, 0, 6),
                 'titre' => $doc->title,
+                'title' => $doc->title,
+                'description' => $doc->description,
                 'type' => $mappedType,
-                'produit' => $doc->documentable_type === 'App\\Models\\Product' ? ($doc->documentable->nom ?? 'Produit Associé') : 'Général',
+                'raw_type' => $doc->type,
+                'produit' => $doc->documentable_type === 'App\\Models\\Product' ? ($doc->documentable->nom ?? null) : 'Général',
                 'version' => 'v' . ($doc->version ?? '1.0'),
                 'taille' => $sizeFormatted,
-                'dateExpiration' => $doc->expiration_date ? \Carbon\Carbon::parse($doc->expiration_date)->format('Y-m-d') : 'N/A',
+                'dateExpiration' => $doc->expiration_date ? \Carbon\Carbon::parse($doc->expiration_date)->format('Y-m-d') : null,
+                'expiration_date' => $doc->expiration_date ? \Carbon\Carbon::parse($doc->expiration_date)->format('Y-m-d') : null,
                 'statut' => $status,
-                'paysAutorises' => ['FR', 'CI', 'SN'],
+                'status' => $doc->status,
+                'is_active' => (bool) $doc->is_active,
                 'documentable_id' => $doc->documentable_id,
                 'documentable_type' => $doc->documentable_type,
-                'url' => config('app.url') . \Illuminate\Support\Facades\Storage::url(preg_replace('/^\/?storage\//', '', $doc->file_path)),
+                'url' => $url,
                 'folder' => $mappedType === 'E-DETAILING' ? 'E-Detailing' : ($mappedType === 'VIDEO' ? 'Vidéos' : 'Brochures')
             ];
         });
-        
+
         return response()->json([
             'data' => $documents
         ]);
