@@ -36,7 +36,36 @@ class CoachingController extends Controller
             ->orderByDesc('created_at')
             ->get();
 
-        return response()->json($sessions);
+        // Profil et indicateurs réels du mois du délégué (mêmes règles que le tableau de bord superviseur)
+        $delegate = User::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
+            ->with(['roles', 'scopes'])
+            ->findOrFail($id);
+        $dash = app(SupervisorDashboardController::class);
+        $start = now()->startOfMonth()->toDateString();
+        $end = now()->endOfMonth()->toDateString();
+        $month = fn () => $dash->visitQuery([$id])->whereBetween('date_activite', [$start, $end]);
+
+        $done = $month()->whereIn('statut', SupervisorDashboardController::COMPLETED)->count();
+        $planned = $month()->whereNotIn('statut', ['annulee', 'brouillon'])->count();
+        $missed = $month()->where('statut', 'manquee')->count();
+
+        $role = $delegate->roles->first()?->name;
+
+        return response()->json([
+            'sessions' => $sessions,
+            'delegate' => [
+                'id' => (string) $delegate->id,
+                'name' => $delegate->name,
+                'role' => $role ? ucfirst(str_replace(['_', '-'], ' ', $role)) : null,
+                'sector' => $dash->delegateSector($delegate),
+            ],
+            'kpis' => [
+                'visits_done' => $done,
+                'visits_target' => $dash->weeklyTarget() * 4,
+                'no_show_rate' => $planned > 0 ? round($missed / $planned * 100, 1) : 0,
+                'coverage_rate' => $dash->coverageRate([$id], $start, $end),
+            ],
+        ]);
     }
 
     /**

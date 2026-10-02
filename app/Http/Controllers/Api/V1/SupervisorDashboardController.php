@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\DB;
  */
 class SupervisorDashboardController extends Controller
 {
-    private const COMPLETED = ['realisee', 'effectuee', 'validee'];
+    public const COMPLETED = ['realisee', 'effectuee', 'validee'];
     private const LEAVE_TYPES = ['conge', 'absence', 'indisponibilite', 'leave', 'Congé Annuel', 'Congé Maladie'];
 
     public function dashboard(Request $request)
@@ -273,7 +273,7 @@ class SupervisorDashboardController extends Controller
     }
 
     /** Visites (hors congés/absences) des utilisateurs donnés ; la restriction d'équipe se fait par les IDs. */
-    private function visitQuery(array $userIds)
+    public function visitQuery(array $userIds)
     {
         return Activity::withoutGlobalScopes()
             ->whereNull('deleted_at')
@@ -282,7 +282,7 @@ class SupervisorDashboardController extends Controller
     }
 
     /** % des prescripteurs du portefeuille visités (visite réalisée) sur la période. */
-    private function coverageRate(array $userIds, string $start, string $end): int
+    public function coverageRate(array $userIds, string $start, string $end): int
     {
         if (empty($userIds)) {
             return 0;
@@ -341,7 +341,7 @@ class SupervisorDashboardController extends Controller
     }
 
     /** Secteur = première unité organisationnelle rattachée à l'utilisateur (user_scopes). */
-    private function delegateSector(?User $u): string
+    public function delegateSector(?User $u): string
     {
         if (!$u) {
             return '';
@@ -392,7 +392,7 @@ class SupervisorDashboardController extends Controller
         return (int) (DB::table('settings')->where('key', 'working_days_per_week')->value('value') ?: 5);
     }
 
-    private function weeklyTarget(): int
+    public function weeklyTarget(): int
     {
         return $this->visitsPerDay() * $this->daysPerWeek();
     }
