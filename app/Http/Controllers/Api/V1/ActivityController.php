@@ -1087,10 +1087,14 @@ class ActivityController extends Controller
         if ($activity->hasActiveDuo() && $activity->duo_user_id === $user->id) {
             return response()->json(['message' => 'Vous accompagnez déjà cette visite.'], 422);
         }
-        if (in_array(strtolower((string) $activity->statut), ['realisee', 'réalisée', 'effectuee', 'effectuée', 'validee', 'validée', 'terminee', 'annulee'])) {
+        // Bloquer uniquement les visites terminées ou annulées — pas les validées
+        // (une visite validée = planifiée + approuvée = état idéal pour un DUO coaching)
+        $blockedStatuts = ['realisee', 'réalisée', 'effectuee', 'effectuée', 'terminee', 'annulee', 'annulée', 'manquee'];
+        if (in_array(strtolower((string) $activity->statut), $blockedStatuts)) {
             return response()->json(['message' => 'Impossible de rejoindre une visite déjà réalisée ou annulée.'], 422);
         }
-        if ($activity->date_activite && $activity->date_activite->lt(now()->startOfDay())) {
+        // Bloquer les visites passées (date strictement avant aujourd'hui) sauf si déjà en cours d'exécution DUO
+        if ($activity->date_activite && $activity->date_activite->lt(now()->startOfDay()) && !$activity->is_duo) {
             return response()->json(['message' => 'Impossible de rejoindre une visite passée.'], 422);
         }
 
