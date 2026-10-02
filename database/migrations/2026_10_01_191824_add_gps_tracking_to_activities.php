@@ -12,15 +12,30 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('activities', function (Blueprint $table) {
-            // Pour le tracking GPS
-            $table->decimal('gps_start_lat', 10, 7)->nullable()->after('duo_delegue_rejection_reason');
-            $table->decimal('gps_start_lng', 10, 7)->nullable()->after('gps_start_lat');
-            $table->decimal('gps_start_accuracy', 10, 2)->nullable()->after('gps_start_lng');
-            $table->timestamp('start_time')->nullable()->after('gps_start_accuracy');
-            $table->decimal('gps_end_lat', 10, 7)->nullable()->after('start_time');
-            $table->decimal('gps_end_lng', 10, 7)->nullable()->after('gps_end_lat');
-            $table->decimal('gps_end_accuracy', 10, 2)->nullable()->after('gps_end_lng');
-            $table->timestamp('end_time')->nullable()->after('gps_end_accuracy');
+            if (!Schema::hasColumn('activities', 'gps_start_lat')) {
+                $table->decimal('gps_start_lat', 10, 7)->nullable();
+            }
+            if (!Schema::hasColumn('activities', 'gps_start_lng')) {
+                $table->decimal('gps_start_lng', 10, 7)->nullable();
+            }
+            if (!Schema::hasColumn('activities', 'gps_start_accuracy')) {
+                $table->decimal('gps_start_accuracy', 10, 2)->nullable();
+            }
+            if (!Schema::hasColumn('activities', 'start_time')) {
+                $table->timestamp('start_time')->nullable();
+            }
+            if (!Schema::hasColumn('activities', 'gps_end_lat')) {
+                $table->decimal('gps_end_lat', 10, 7)->nullable();
+            }
+            if (!Schema::hasColumn('activities', 'gps_end_lng')) {
+                $table->decimal('gps_end_lng', 10, 7)->nullable();
+            }
+            if (!Schema::hasColumn('activities', 'gps_end_accuracy')) {
+                $table->decimal('gps_end_accuracy', 10, 2)->nullable();
+            }
+            if (!Schema::hasColumn('activities', 'end_time')) {
+                $table->timestamp('end_time')->nullable();
+            }
         });
     }
 

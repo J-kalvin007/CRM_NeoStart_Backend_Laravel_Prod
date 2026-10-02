@@ -11,16 +11,15 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('activity_contact', function (Blueprint $table) {
-            $table->uuid('activity_id');
-            $table->uuid('contact_id');
-            $table->timestamps();
+        if (!Schema::hasTable('activity_contact')) {
+            Schema::create('activity_contact', function (Blueprint $table) {
+                $table->string('activity_id')->index();
+                $table->string('contact_id')->index();
+                $table->timestamps();
 
-            $table->foreign('activity_id')->references('id')->on('activities')->onDelete('cascade');
-            $table->foreign('contact_id')->references('id')->on('contacts')->onDelete('cascade');
-
-            $table->primary(['activity_id', 'contact_id']);
-        });
+                $table->primary(['activity_id', 'contact_id']);
+            });
+        }
     }
 
     /**

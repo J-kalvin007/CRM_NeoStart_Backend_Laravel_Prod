@@ -11,25 +11,35 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('user_locations', function (Blueprint $table) {
-            $table->uuid('id')->primary();
-            $table->foreignUuid('user_id')->constrained('users')->cascadeOnDelete();
-            $table->decimal('lat', 10, 7);
-            $table->decimal('lng', 10, 7);
-            $table->float('accuracy')->nullable();   // précision en mètres
-            $table->float('speed')->nullable();      // m/s
-            $table->unsignedTinyInteger('battery')->nullable(); // %
-            $table->timestamp('recorded_at');        // horodatage côté téléphone
-            $table->timestamps();
+        if (!Schema::hasTable('user_locations')) {
+            Schema::create('user_locations', function (Blueprint $table) {
+                $table->uuid('id')->primary();
+                $table->string('user_id')->index();
+                $table->decimal('lat', 10, 7);
+                $table->decimal('lng', 10, 7);
+                $table->float('accuracy')->nullable();   // précision en mètres
+                $table->float('speed')->nullable();      // m/s
+                $table->unsignedTinyInteger('battery')->nullable(); // %
+                $table->timestamp('recorded_at');        // horodatage côté téléphone
+                $table->timestamps();
 
-            $table->index(['user_id', 'recorded_at']);
-        });
+                $table->index(['user_id', 'recorded_at']);
+            });
+        }
 
         Schema::table('users', function (Blueprint $table) {
-            $table->decimal('last_lat', 10, 7)->nullable()->after('fcm_token');
-            $table->decimal('last_lng', 10, 7)->nullable()->after('last_lat');
-            $table->float('last_accuracy')->nullable()->after('last_lng');
-            $table->timestamp('last_location_at')->nullable()->after('last_accuracy');
+            if (!Schema::hasColumn('users', 'last_lat')) {
+                $table->decimal('last_lat', 10, 7)->nullable();
+            }
+            if (!Schema::hasColumn('users', 'last_lng')) {
+                $table->decimal('last_lng', 10, 7)->nullable();
+            }
+            if (!Schema::hasColumn('users', 'last_accuracy')) {
+                $table->float('last_accuracy')->nullable();
+            }
+            if (!Schema::hasColumn('users', 'last_location_at')) {
+                $table->timestamp('last_location_at')->nullable();
+            }
         });
     }
 
