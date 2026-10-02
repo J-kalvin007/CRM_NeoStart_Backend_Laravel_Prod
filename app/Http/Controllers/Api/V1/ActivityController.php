@@ -604,6 +604,10 @@ class ActivityController extends Controller
         if (!$isSuperAdmin && !$isOwner && !$isManager) {
             return response()->json(['message' => 'Vous n\'êtes pas autorisé à supprimer cette visite.'], 403);
         }
+        // L'historique des visites démarrées ou réalisées est conservé
+        if (!$isSuperAdmin && (in_array($activity->statut, ['en_cours', 'realisee'], true) || $activity->is_locked)) {
+            return response()->json(['message' => 'Une visite démarrée ou réalisée ne peut pas être supprimée.'], 422);
+        }
 
         if ($isManager && $activity->delegue) {
             NotificationController::sendNotification(

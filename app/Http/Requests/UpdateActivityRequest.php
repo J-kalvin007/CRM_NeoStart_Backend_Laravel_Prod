@@ -46,6 +46,12 @@ class UpdateActivityRequest extends FormRequest
             'gps_fin_lng'    => 'nullable|numeric|between:-180,180',
             'start_time'     => 'nullable|date',
             'end_time'       => 'nullable|date',
+            // Produits présentés pendant la visite (intérêt du praticien : faible / moyen / fort)
+            'products'                     => 'sometimes|array',
+            'products.*.product_id'        => 'required|uuid|exists:products,id',
+            'products.*.quantity'          => 'nullable|integer|min:0',
+            'products.*.customer_interest' => 'nullable|in:faible,moyen,fort',
+            'products.*.remarques'         => 'nullable|string',
             'samples' => 'sometimes|array',
             'samples.*.product_id' => 'required|uuid|exists:products,id',
             'samples.*.lot_number' => 'required|string|max:100',

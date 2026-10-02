@@ -33,9 +33,9 @@ class TourPlanResource extends JsonResource
                 $timeStr = $act->heure_debut ? substr($act->heure_debut, 0, 5) : '--:--';
                 $docName = $act->contact 
                     ? trim(($act->contact->titre ? $act->contact->titre . ' ' : '') . $act->contact->prenom . ' ' . $act->contact->nom)
-                    : ($act->contact_name ?? 'Dr. Praticien');
+                    : ($act->contact_name ?? '');
                 $hospName = $act->account ? $act->account->nom : ($act->establishment ?? '');
-                $line = $timeStr . ' • ' . $docName . ($hospName ? ' (' . $hospName . ')' : '');
+                $line = $timeStr . ($docName !== '' ? ' • ' . $docName : '') . ($hospName ? ' (' . $hospName . ')' : '');
 
                 if (!isset($groupedDays[$dateStr])) {
                     $groupedDays[$dateStr] = [
