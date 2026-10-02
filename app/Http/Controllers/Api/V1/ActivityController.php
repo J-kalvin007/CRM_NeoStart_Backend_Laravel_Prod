@@ -96,7 +96,7 @@ class ActivityController extends Controller
                             }
                         });
                     });
-                    // Voir aussi les visites où il est le duo_user_id (visites duo qu'il anime)
+                    // Voir aussi les visites où il est le duo_user_id (visites duo qu'il anime) - tous les statuts
                     $q->orWhere('activities.duo_user_id', $user->id);
                 }
             });
