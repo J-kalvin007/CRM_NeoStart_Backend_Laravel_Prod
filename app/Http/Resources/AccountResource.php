@@ -80,6 +80,8 @@ class AccountResource extends JsonResource
             ),
             'contacts'       => $this->whenLoaded('contacts', fn() => ContactResource::collection($this->contacts)),
             'contacts_count' => $this->whenCounted('contacts'),
+            'submitted_by'   => $this->whenLoaded('user', fn() => $this->user->name),
+            'delegue_name'   => $this->whenLoaded('delegue', fn() => $this->delegue->name),
             'created_at'     => $this->created_at,
             'updated_at'     => $this->updated_at,
             'deleted_at'     => $this->deleted_at,
