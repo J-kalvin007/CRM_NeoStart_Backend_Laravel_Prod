@@ -12,61 +12,43 @@ class DocumentSeeder extends Seeder
      */
     public function run(): void
     {
-        $docs = [
-            [
-                'id' => \Illuminate\Support\Str::uuid(),
-                'documentable_id' => \Illuminate\Support\Str::uuid(),
-                'documentable_type' => 'App\\Models\\Product',
-                'title' => 'Brochure Produit X - 2026',
-                'type' => 'pdf',
-                'file_path' => '/storage/docs/brochure_x.pdf',
-                'version' => '1.2',
-                'is_active' => true,
-                'expiration_date' => now()->addYear(),
-                'created_at' => now(),
-                'updated_at' => now()
-            ],
-            [
-                'id' => \Illuminate\Support\Str::uuid(),
-                'documentable_id' => \Illuminate\Support\Str::uuid(),
-                'documentable_type' => 'App\\Models\\Product',
-                'title' => 'E-Detailing Cardio Pro - Tablette',
-                'type' => 'presentation',
-                'file_path' => '/storage/docs/cardio_pro.zip',
-                'version' => '2.0',
-                'is_active' => true,
-                'expiration_date' => now()->addMonths(6),
-                'created_at' => now(),
-                'updated_at' => now()
-            ],
-            [
-                'id' => \Illuminate\Support\Str::uuid(),
-                'documentable_id' => \Illuminate\Support\Str::uuid(),
-                'documentable_type' => 'App\\Models\\Product',
-                'title' => 'Posologie et Contre-indications (Ancien)',
-                'type' => 'pdf',
-                'file_path' => '/storage/docs/poso_old.pdf',
-                'version' => '1.0',
-                'is_active' => true,
-                'expiration_date' => now()->subDays(10), // EXPIRE
-                'created_at' => now(),
-                'updated_at' => now()
-            ],
-            [
-                'id' => \Illuminate\Support\Str::uuid(),
-                'documentable_id' => \Illuminate\Support\Str::uuid(),
-                'documentable_type' => 'App\\Models\\Event',
-                'title' => 'Vidéo de Lancement - Q1 2026',
-                'type' => 'video',
-                'file_path' => '/storage/docs/launch.mp4',
-                'version' => '1.0',
-                'is_active' => true,
-                'expiration_date' => now()->addMonths(3),
-                'created_at' => now(),
-                'updated_at' => now()
-            ]
-        ];
+        $products = \App\Models\Product::all();
+        if ($products->isNotEmpty()) {
+            foreach ($products as $product) {
+                \App\Models\Document::firstOrCreate(
+                    [
+                        'documentable_id' => $product->id,
+                        'documentable_type' => 'App\\Models\\Product',
+                        'type' => 'presentation',
+                    ],
+                    [
+                        'title' => "E-Detailing {$product->nom} — Présentation Tablette",
+                        'description' => "Support e-Detailing officiel pour la présentation de {$product->nom}.",
+                        'file_path' => 'storage/docs/presentation_' . strtolower($product->code ?: 'prod') . '.pdf',
+                        'version' => '1.0',
+                        'is_active' => true,
+                        'expiration_date' => now()->addYears(2),
+                        'status' => 'approved',
+                    ]
+                );
 
-        \Illuminate\Support\Facades\DB::table('documents')->insert($docs);
+                \App\Models\Document::firstOrCreate(
+                    [
+                        'documentable_id' => $product->id,
+                        'documentable_type' => 'App\\Models\\Product',
+                        'type' => 'pdf',
+                    ],
+                    [
+                        'title' => "RCP & Notice Technique {$product->nom}",
+                        'description' => "Fiche Posologie et Résumé des Caractéristiques du Produit {$product->nom}.",
+                        'file_path' => 'storage/docs/rcp_' . strtolower($product->code ?: 'prod') . '.pdf',
+                        'version' => '1.0',
+                        'is_active' => true,
+                        'expiration_date' => now()->addYears(2),
+                        'status' => 'approved',
+                    ]
+                );
+            }
+        }
     }
 }

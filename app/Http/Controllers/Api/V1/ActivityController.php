@@ -769,12 +769,8 @@ class ActivityController extends Controller
             'motif'         => 'required|string', // Justificatif obligatoire
         ]);
 
-        $prevStatus = $activity->statut;
-        $isAlreadyValidated = in_array(strtolower($prevStatus), ['validee', 'validated']) ||
-            ($activity->tourPlan && in_array(strtolower($activity->tourPlan->statut), ['valide', 'validated', 'approuve']));
-
-        // Si le planning global avait déjà été validé, conserver le statut validé
-        $newStatus = $isAlreadyValidated ? 'validee' : ($prevStatus === 'manquee' ? 'planifiee' : $prevStatus);
+        // Une visite reprogrammée est directement validée et prête à démarrer sans ré-attendre de validation
+        $newStatus = 'validee';
 
         $justification = "[REPROGRAMMÉE]: " . $validated['motif'];
         $notes = $activity->notes ? $activity->notes . "\n" . $justification : $justification;

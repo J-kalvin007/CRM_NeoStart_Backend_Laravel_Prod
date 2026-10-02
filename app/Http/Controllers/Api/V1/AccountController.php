@@ -33,7 +33,8 @@ class AccountController extends Controller
     )]
     public function index(Request $request)
     {
-        $query = Account::with(['organizationalUnit', 'categories', 'accountType', 'user', 'delegue'])
+        $query = Account::with(['organizationalUnit', 'categories', 'accountType', 'potential', 'user', 'delegue'])
+            ->withCount('contacts')
             ->when($request->account_type, fn($q, $v) => $q->where('account_type', $v))
             ->when($request->statut, fn($q, $v) => $q->where('statut', $v))
             ->when($request->search, fn($q, $v) => $q->where(function ($q) use ($v) {

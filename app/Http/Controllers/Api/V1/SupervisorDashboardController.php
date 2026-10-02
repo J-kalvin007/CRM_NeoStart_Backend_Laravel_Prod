@@ -237,7 +237,7 @@ class SupervisorDashboardController extends Controller
             $actType = 'Visite médicale';
         }
         $statut = strtolower((string) $act->statut);
-        $isClosed = in_array($statut, ['realisee', 'effectuee', 'validee', 'terminee', 'annulee', 'manquee']);
+        $isClosed = in_array($statut, ['realisee', 'effectuee', 'terminee', 'annulee', 'manquee']);
         $isPast = $act->date_activite && $act->date_activite->lt(now()->startOfDay());
         $contactName = $this->contactName($act);
         $address = $act->account
