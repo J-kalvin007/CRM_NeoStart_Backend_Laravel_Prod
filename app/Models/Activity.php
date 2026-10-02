@@ -58,7 +58,6 @@ class Activity extends Model
         'meta',
         'is_duo',
         'duo_user_id',
-        'duo_activity_type',
         'duo_status',
         'duo_rejection_reason',
         'duo_delegue_status',
@@ -85,6 +84,8 @@ class Activity extends Model
         'duree_minutes'   => 'integer',
         'is_locked'       => 'boolean',
         'locked_at'       => 'datetime',
+        'start_time'      => 'datetime',
+        'end_time'        => 'datetime',
         'gps_flagged'     => 'boolean',
         'validation_date' => 'datetime',
         'is_duo'          => 'boolean',
@@ -133,6 +134,12 @@ class Activity extends Model
     public function hasActiveDuo(): bool
     {
         return (bool) $this->is_duo && $this->duo_delegue_status !== 'rejected';
+    }
+
+    public function isTrio(): bool
+    {
+        return $this->accompanying_user_id !== null
+            && str_starts_with((string) $this->notes, '[VISITE TRIO SALES MANAGER]');
     }
 
     public function validatedBy()

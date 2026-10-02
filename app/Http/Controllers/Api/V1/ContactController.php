@@ -78,13 +78,12 @@ class ContactController extends Controller
         $user = auth()->user();
         if ($user) {
             $isGlobalAdminLocal = $user->can('scope:global') || $user->hasAnyRole(['superadmin', 'admin', 'Administrateur Groupe', 'Administrateur Pays', 'Direction Générale']);
-            $isSupervisor = $user->hasAnyRole(['superviseur', 'Manager', 'supervisor', 'manager', 'directeur-commercial', 'directeur_commercial', 'directeur-marketing', 'directeur_marketing']);
+            $isSupervisor = $user->hasAnyRole(['superviseur', 'Manager', 'supervisor', 'manager', 'directeur-commercial', 'directeur_commercial', 'directeur-marketing', 'directeur_marketing', 'sales_manager']);
             
             if (!$isGlobalAdminLocal) {
                 if ($isSupervisor) {
-                    $subordinateIds = $user->subordinates()->pluck('id')->toArray();
-                    $subordinateIds[] = $user->id;
-                    $query->whereIn('contacts.user_id', $subordinateIds);
+                    $teamMemberIds = array_merge([$user->id], $user->teamMemberIds());
+                    $query->whereIn('contacts.user_id', $teamMemberIds);
                 } elseif ($user->hasRole('delegue_medical')) {
                     $query->where('contacts.user_id', $user->id);
                 }

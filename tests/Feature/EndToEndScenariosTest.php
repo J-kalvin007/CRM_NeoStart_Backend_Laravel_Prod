@@ -68,6 +68,26 @@ class EndToEndScenariosTest extends TestCase
         ]);
     }
 
+    public function test_sales_manager_team_is_limited_to_direct_supervisors_and_their_delegates(): void
+    {
+        $otherSupervisor = User::factory()->create();
+        $otherSupervisor->assignRole('superviseur');
+
+        $otherDelegate = User::factory()->create(['manager_id' => $otherSupervisor->id]);
+        $otherDelegate->assignRole('delegue_medical');
+
+        $deeperDelegate = User::factory()->create(['manager_id' => $this->delegate->id]);
+        $deeperDelegate->assignRole('delegue_medical');
+
+        $teamMemberIds = $this->salesManager->teamMemberIds();
+
+        $this->assertContains($this->supervisor->id, $teamMemberIds);
+        $this->assertContains($this->delegate->id, $teamMemberIds);
+        $this->assertNotContains($otherSupervisor->id, $teamMemberIds);
+        $this->assertNotContains($otherDelegate->id, $teamMemberIds);
+        $this->assertNotContains($deeperDelegate->id, $teamMemberIds);
+    }
+
     /**
      * Scénario 1: Planification et exécution d'une visite DUO, de la planification à la clôture (Superviseur puis Délégué)
      */

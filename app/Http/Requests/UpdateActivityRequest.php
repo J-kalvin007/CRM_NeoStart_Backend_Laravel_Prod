@@ -7,6 +7,14 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class UpdateActivityRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'gps_debut_lat' => $this->input('gps_debut_lat', $this->input('gps_start_lat')),
+            'gps_debut_lng' => $this->input('gps_debut_lng', $this->input('gps_start_lng')),
+        ]);
+    }
+
     /**
      * Determine if the user is authorized to make this request.
      */
@@ -36,6 +44,12 @@ class UpdateActivityRequest extends FormRequest
             'gps_debut_lng'  => 'nullable|numeric|between:-180,180',
             'gps_fin_lat'    => 'nullable|numeric|between:-90,90',
             'gps_fin_lng'    => 'nullable|numeric|between:-180,180',
+            'start_time'     => 'nullable|date',
+            'end_time'       => 'nullable|date',
+            'samples' => 'sometimes|array',
+            'samples.*.product_id' => 'required|uuid|exists:products,id',
+            'samples.*.lot_number' => 'required|string|max:100',
+            'samples.*.quantity' => 'required|integer|min:1',
             'signature'      => 'nullable|string',
             'motif'          => 'nullable|string',
         ];

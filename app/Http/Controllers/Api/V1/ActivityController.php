@@ -1,7 +1,6 @@
 <?php
 
 namespace App\Http\Controllers\Api\V1;
-
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ActivityResource;
 use App\Http\Requests\StoreActivityRequest;
@@ -38,8 +37,8 @@ class ActivityController extends Controller
 
         $user = auth()->user();
         $isGlobal = $user->hasAnyRole(['superadmin', 'admin', 'super-admin']) || $user->can('scope:global');
-        $isSalesManager = $user->hasAnyRole(['sales_manager', 'sales-manager', 'directeur_commercial']);
-        $isManager = $isSalesManager || $user->hasAnyRole(['superviseur', 'supervisor', 'directeur_regional', 'directeur_marketing', 'manager']);
+        $isCommercialDirector = $user->hasAnyRole(['directeur-commercial', 'directeur_commercial']);
+        $isManager = $isCommercialDirector || $user->hasAnyRole(['superviseur', 'supervisor', 'directeur_regional', 'directeur-marketing', 'directeur_marketing', 'sales_manager', 'manager']);
 
         $query = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
             ->with([
@@ -47,7 +46,9 @@ class ActivityController extends Controller
                 'contact' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account', 'speciality', 'potential', 'influence']),
                 'contacts' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account', 'speciality', 'potential', 'influence']),
                 'account' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class),
+                'accompanyingUser' => fn($q) => $q->withoutGlobalScopes(),
                 'products' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class),
+                'sampleMovements' => fn($q) => $q->where('movement_type', 'distribution')->with('product'),
             ])
             ->when($request->user_id, fn($q, $v) => $q->where('activities.user_id', $v))
             ->when($request->activity_type, fn($q, $v) => $q->where('activity_type', $v))
@@ -62,18 +63,26 @@ class ActivityController extends Controller
 
         // Restreindre la visibilité si pas d'accès global
         if (!$isGlobal) {
-            $query->where(function ($q) use ($user, $isManager, $isSalesManager) {
+            $query->where(function ($q) use ($user, $isManager, $isCommercialDirector) {
                 // Voit toujours ses propres visites ou là où il est accompagnant
                 $q->where('activities.user_id', $user->id)
                   ->orWhere('activities.accompanying_user_id', $user->id)
                   ->orWhere('activities.duo_user_id', $user->id);
 
-                if ($isSalesManager) {
+                if ($isCommercialDirector) {
                     // Le Sales Manager voit les plannings de tous les délégués (sauf brouillons)
                     $q->orWhere(function ($subQ) {
                         $subQ->whereNotNull('activities.user_id')
                              ->where('activities.statut', '!=', 'brouillon');
                     });
+                } elseif ($user->hasRole('sales_manager')) {
+                    $teamMemberIds = $user->teamMemberIds();
+                    if (!empty($teamMemberIds)) {
+                        $q->orWhere(function ($subQ) use ($teamMemberIds) {
+                            $subQ->where('activities.statut', '!=', 'brouillon')
+                                ->whereIn('activities.user_id', $teamMemberIds);
+                        });
+                    }
                 } elseif ($isManager) {
                     // S'il est superviseur/manager, voit les visites de son équipe ou des délégués sous lui (sauf brouillons)
                     $q->orWhere(function ($subQ) use ($user) {
@@ -374,10 +383,20 @@ class ActivityController extends Controller
 
         $validatedData = $request->validated();
         $targetStatus = $validatedData['statut'] ?? null;
+        if (in_array($targetStatus, ['en_cours', 'realisee'], true) && (string) $activity->user_id !== (string) auth()->id()) {
+            return response()->json([
+                'message' => 'Seul le délégué auquel cette visite est attribuée peut la démarrer ou la terminer.'
+            ], 403);
+        }
+        if ($activity->isTrio() && in_array($targetStatus, ['validee', 'rejetee', 'refusee'], true)) {
+            return response()->json(['message' => 'Une visite Trio doit être validée ou rejetée via son circuit dédié.'], 403);
+        }
         $products = $validatedData['products'] ?? null;
         if (array_key_exists('products', $validatedData)) {
             unset($validatedData['products']);
         }
+        $samples = $validatedData['samples'] ?? [];
+        unset($validatedData['samples']);
 
         // Contrôle de sécurité 1: Démarrer la visite (en_cours) nécessite que la visite ne soit pas annulée ou refusée
         if ($targetStatus === 'en_cours' && !in_array(strtolower($activity->statut), ['planifiee', 'planifiée', 'validee', 'validée', 'validated', 'en_attente_validation', 'en_cours', 'realisee'])) {
@@ -386,12 +405,27 @@ class ActivityController extends Controller
             ], 403);
         }
 
-        // Contrôle de sécurité 2: Passer au statut réalisé nécessite un Check-in GPS effectif (gps_debut_lat)
-        $hasGpsStart = !empty($activity->gps_debut_lat) || !empty($validatedData['gps_debut_lat']);
+        // Prevent starting a visit that can never pass the GPS check-out validation.
+        $gpsStartLat = $validatedData['gps_debut_lat'] ?? $activity->gps_debut_lat;
+        $gpsStartLng = $validatedData['gps_debut_lng'] ?? $activity->gps_debut_lng;
+        $hasGpsStart = $gpsStartLat !== null && $gpsStartLng !== null;
+        if ($targetStatus === 'en_cours' && $activity->statut !== 'en_cours' && !$hasGpsStart) {
+            return response()->json([
+                'message' => 'Démarrage impossible : le Check-in GPS est obligatoire.'
+            ], 422);
+        }
+
+        // Contrôle de sécurité 2: Passer au statut réalisé nécessite un Check-in GPS effectif.
         if ($targetStatus === 'realisee' && !$hasGpsStart) {
             return response()->json([
                 'message' => 'Finalisation impossible : Le Check-in GPS de début de visite est obligatoire.'
             ], 422);
+        }
+        if ($samples !== [] && ($targetStatus !== 'realisee' || $activity->statut !== 'en_cours')) {
+            return response()->json(['message' => 'Les échantillons peuvent être enregistrés uniquement lors de la fin de la visite en cours.'], 422);
+        }
+        if ($samples !== [] && !$activity->contact_id) {
+            return response()->json(['message' => 'Un prescripteur doit être associé à la visite pour enregistrer la remise d’échantillons.'], 422);
         }
 
         // Contrôle de chevauchement pour modification
@@ -432,35 +466,76 @@ class ActivityController extends Controller
             }
         }
 
-        $activity->update($validatedData);
+        \Illuminate\Support\Facades\DB::transaction(function () use ($activity, $validatedData, $products, $samples): void {
+            $activity->update($validatedData);
 
-        // Attach presented products
-        if ($products !== null) {
-            $existingPivot = \Illuminate\Support\Facades\DB::table('activity_product')
-                ->where('activity_id', $activity->id)
-                ->pluck('id', 'product_id')->toArray();
-                
-            $syncData = [];
-            foreach ($products as $p) {
-                $syncData[$p['product_id']] = [
-                    'id' => $existingPivot[$p['product_id']] ?? \Illuminate\Support\Str::uuid()->toString(),
-                    'quantity' => $p['quantity'] ?? 0,
-                    'customer_interest' => $p['customer_interest'] ?? null,
-                    'remarques' => $p['remarques'] ?? null,
-                ];
+            // Attach presented products
+            if ($products !== null) {
+                $existingPivot = \Illuminate\Support\Facades\DB::table('activity_product')
+                    ->where('activity_id', $activity->id)
+                    ->pluck('id', 'product_id')->toArray();
+
+                $syncData = [];
+                foreach ($products as $product) {
+                    $syncData[$product['product_id']] = [
+                        'id' => $existingPivot[$product['product_id']] ?? \Illuminate\Support\Str::uuid()->toString(),
+                        'quantity' => $product['quantity'] ?? 0,
+                        'customer_interest' => $product['customer_interest'] ?? null,
+                        'remarques' => $product['remarques'] ?? null,
+                    ];
+                }
+                $activity->products()->sync($syncData);
             }
-            $activity->products()->sync($syncData);
-        }
 
-        if ($activity->statut === 'realisee') {
-            $activity->lock();
-        }
+            foreach ($samples as $index => $sample) {
+                $sampleMovements = \App\Models\SampleMovement::where('user_id', $activity->user_id)
+                    ->where('product_id', $sample['product_id'])
+                    ->where('lot_number', $sample['lot_number'])
+                    ->lockForUpdate()
+                    ->get(['movement_type', 'quantity', 'expiry_date']);
+
+                $received = $sampleMovements->whereIn('movement_type', ['reception', 'attribution', 'retour'])->sum('quantity');
+                $distributed = $sampleMovements->whereIn('movement_type', ['distribution', 'destruction'])->sum('quantity');
+                $available = max(0, $received - $distributed);
+                $quantity = (int) $sample['quantity'];
+
+                if ($quantity > $available) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        "samples.{$index}.quantity" => "Stock insuffisant pour le lot {$sample['lot_number']}. Disponible : {$available}.",
+                    ]);
+                }
+
+                $newLotBalance = $available - $quantity;
+                \App\Models\SampleMovement::create([
+                    'user_id' => $activity->user_id,
+                    'product_id' => $sample['product_id'],
+                    'contact_id' => $activity->contact_id,
+                    'activity_id' => $activity->id,
+                    'movement_type' => 'distribution',
+                    'quantity' => $quantity,
+                    'lot_number' => $sample['lot_number'],
+                    'expiry_date' => $sampleMovements->first()?->expiry_date,
+                    'stock_apres' => $newLotBalance,
+                    'remarques' => 'Remis au prescripteur pendant la visite ' . $activity->id,
+                ]);
+
+                $product = \App\Models\Product::find($sample['product_id']);
+                if ($product && $product->stock_actuel >= $quantity) {
+                    $product->decrement('stock_actuel', $quantity);
+                }
+            }
+
+            if ($activity->statut === 'realisee') {
+                $activity->lock();
+            }
+        });
 
         return new ActivityResource($activity->load([
             'delegue', 
             'contact' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account', 'speciality', 'potential', 'influence']), 
             'account' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class), 
-            'products' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
+            'products' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class),
+            'sampleMovements' => fn($q) => $q->where('movement_type', 'distribution')->with('product'),
         ]));
     }
 
@@ -514,6 +589,7 @@ class ActivityController extends Controller
     public function validateActivity(Request $request, string $id)
     {
         $activity = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($id);
+        abort_unless(!$activity->isTrio(), 403, 'Une visite Trio doit être validée via son circuit dédié.');
         $this->ensureSupervises($activity->user_id);
 
         $request->validate([
@@ -594,6 +670,10 @@ class ActivityController extends Controller
         $activities = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
             ->whereIn('id', $activityIds)
             ->get();
+
+        if ($activities->contains(fn (Activity $activity) => $activity->isTrio())) {
+            return response()->json(['message' => 'Les visites Trio doivent être traitées individuellement via leur circuit dédié.'], 422);
+        }
 
         $validatedCount = 0;
         $groupedUsers = [];
@@ -717,6 +797,7 @@ class ActivityController extends Controller
         }
 
         $validated = $request->validate([
+            'activity_id'   => 'nullable|string|exists:activities,id',
             'user_id'       => 'nullable|string',
             'delegate_id'   => 'nullable|string',
             'contact_id'    => 'nullable|uuid',
@@ -731,11 +812,17 @@ class ActivityController extends Controller
         ]);
 
         $targetUserId = $validated['user_id'] ?? $validated['delegate_id'];
+        $existingActivityId = $validated['activity_id'] ?? null;
         if (!$targetUserId) {
             return response()->json(['message' => 'Le champ délégué est obligatoire.'], 422);
         }
         if (!$user->manages($targetUserId)) {
             return response()->json(['message' => "Ce délégué ne fait pas partie de votre équipe."], 403);
+        }
+
+        $existingActivity = $existingActivityId ? Activity::withoutGlobalScopes()->find($existingActivityId) : null;
+        if ($existingActivity && (string) $existingActivity->user_id !== (string) $targetUserId) {
+            return response()->json(['message' => 'Cette activité ne correspond pas au délégué sélectionné.'], 422);
         }
 
         // Vérification immédiate du conflit de planning
@@ -744,7 +831,8 @@ class ActivityController extends Controller
             $validated['date_activite'],
             $validated['heure_debut'],
             $validated['heure_fin'] ?? null,
-            $validated['duree_minutes'] ?? null
+            $validated['duree_minutes'] ?? null,
+            $existingActivityId
         );
 
         if ($hasOverlap) {
@@ -755,33 +843,68 @@ class ActivityController extends Controller
 
         $subsidiary = \App\Models\Subsidiary::first();
 
-        $activity = Activity::create([
-            'subsidiary_id' => $subsidiary?->id,
-            'user_id' => $targetUserId,
-            'contact_id' => $validated['contact_id'] ?? null,
-            'account_id' => $validated['account_id']
-                ?? (isset($validated['contact_id']) ? \App\Models\Contact::withoutGlobalScopes()->whereKey($validated['contact_id'])->value('account_id') : null),
-            'is_duo' => true,
-            'duo_user_id' => auth()->id(),
-            'duo_activity_type_id' => $this->duoTypeId($request->input('duo_type', 'coaching')),
-            'duo_status' => 'accepted',
-            'duo_delegue_status' => 'pending',
-            'date_activite' => $validated['date_activite'],
-            'heure_debut' => $validated['heure_debut'],
-            'heure_fin' => $validated['heure_fin'] ?? null,
-            'duree_minutes' => $validated['duree_minutes'] ?? null,
-            'activity_type' => 'visite',
-            'statut' => 'en_attente',
-            'notes' => '[VISITE DUO SUPERVISEUR] ' . ($validated['notes'] ?? $validated['objective'] ?? 'Visite conjointe DUO avec le superviseur.'),
-        ]);
+        if ($existingActivity) {
+            $existingActivity->update([
+                'subsidiary_id' => $subsidiary?->id ?? $existingActivity->subsidiary_id,
+                'contact_id' => $validated['contact_id'] ?? $existingActivity->contact_id,
+                'account_id' => $validated['account_id'] ?? $existingActivity->account_id,
+                'is_duo' => true,
+                'duo_user_id' => auth()->id(),
+                'duo_activity_type_id' => $this->duoTypeId($request->input('duo_type', 'coaching')),
+                'duo_status' => 'accepted',
+                'duo_delegue_status' => 'pending',
+                'date_activite' => $validated['date_activite'],
+                'heure_debut' => $validated['heure_debut'],
+                'heure_fin' => $validated['heure_fin'] ?? $existingActivity->heure_fin,
+                'duree_minutes' => $validated['duree_minutes'] ?? $existingActivity->duree_minutes,
+                'activity_type' => 'visite',
+                'statut' => in_array($existingActivity->statut, ['brouillon', 'en_attente', 'planifiee'], true) ? 'en_attente' : $existingActivity->statut,
+                'notes' => trim(($existingActivity->notes ?? '') . "\n[VISITE DUO SUPERVISEUR] " . ($validated['notes'] ?? $validated['objective'] ?? 'Visite conjointe DUO avec le superviseur.')),
+            ]);
+
+            $activity = $existingActivity->fresh();
+        } else {
+            $activity = Activity::create([
+                'subsidiary_id' => $subsidiary?->id,
+                'user_id' => $targetUserId,
+                'contact_id' => $validated['contact_id'] ?? null,
+                'account_id' => $validated['account_id']
+                    ?? (isset($validated['contact_id']) ? \App\Models\Contact::withoutGlobalScopes()->whereKey($validated['contact_id'])->value('account_id') : null),
+                'is_duo' => true,
+                'duo_user_id' => auth()->id(),
+                'duo_activity_type_id' => $this->duoTypeId($request->input('duo_type', 'coaching')),
+                'duo_status' => 'accepted',
+                'duo_delegue_status' => 'pending',
+                'date_activite' => $validated['date_activite'],
+                'heure_debut' => $validated['heure_debut'],
+                'heure_fin' => $validated['heure_fin'] ?? null,
+                'duree_minutes' => $validated['duree_minutes'] ?? null,
+                'activity_type' => 'visite',
+                'statut' => 'en_attente',
+                'notes' => '[VISITE DUO SUPERVISEUR] ' . ($validated['notes'] ?? $validated['objective'] ?? 'Visite conjointe DUO avec le superviseur.'),
+            ]);
+        }
 
         // Notification au Délégué (nouveau_duo)
         $delegate = \App\Models\User::find($targetUserId);
         if ($delegate) {
+            $rawDate = $validated['date_activite'] ?? null;
+            $rawTime = $validated['heure_debut'] ?? null;
+
+            try {
+                $dateLabel = $rawDate ? \Carbon\Carbon::parse($rawDate)->locale('fr')->translatedFormat('d/m/Y') : 'la date prévue';
+                $timeLabel = $rawTime ? substr((string) $rawTime, 0, 5) : null;
+            } catch (\Throwable $e) {
+                $dateLabel = is_string($rawDate) ? preg_replace('/T.*$/', '', $rawDate) : 'la date prévue';
+                $timeLabel = is_string($rawTime) ? substr($rawTime, 0, 5) : null;
+            }
+
+            $dateMessage = $timeLabel ? "le {$dateLabel} à {$timeLabel}" : "le {$dateLabel}";
+
             NotificationController::sendNotification(
                 $delegate,
                 'Nouvelle proposition DUO',
-                "Votre superviseur a proposé une visite DUO pour le {$validated['date_activite']} à {$validated['heure_debut']}.",
+                "Votre superviseur a proposé une visite DUO pour {$dateMessage}.",
                 'nouveau_duo',
                 'delegate',
                 ['activity_id' => (string) $activity->id]
@@ -995,36 +1118,69 @@ class ActivityController extends Controller
     public function storeTrio(Request $request)
     {
         $user = auth()->user();
-        if ($user && $user->hasAnyRole(['superadmin', 'super-admin', 'Super Administrateur', 'admin'])) {
-            return response()->json([
-                'message' => 'Le Super Administrateur ne peut pas planifier de visite.'
-            ], 403);
-        }
+        abort_unless($user && $user->hasRole('sales_manager'), 403, 'Seul un Sales Manager peut proposer une visite Trio.');
 
         $validated = $request->validate([
-            'user_id'       => 'required|string',
-            'date_activite' => 'required|date',
-            'heure_debut'   => 'required|string',
-            'heure_fin'     => 'nullable|string',
+            'user_id'       => 'required|uuid|exists:users,id',
+            'date_activite' => 'required|date|after_or_equal:today',
+            'heure_debut'   => 'required|date_format:H:i',
+            'heure_fin'     => 'nullable|date_format:H:i|after:heure_debut',
             'duree_minutes' => 'nullable|integer',
-            'contact_id'    => 'nullable|string',
-            'account_id'    => 'nullable|string',
+            'contact_id'    => 'nullable|uuid|exists:contacts,id',
+            'account_id'    => 'nullable|uuid|exists:accounts,id',
             'activity_type' => 'nullable|string',
             'objective'     => 'nullable|string',
             'notes'         => 'nullable|string',
         ]);
 
-        $subsidiary = \App\Models\Subsidiary::first();
-        $delegate = User::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($validated['user_id']);
+        $delegate = User::withoutGlobalScopes()->findOrFail($validated['user_id']);
+        abort_unless($delegate->hasAnyRole(['delegue-medical', 'delegue_medical', 'delegue', 'delegate']), 422, 'La visite Trio doit être planifiée avec un délégué médical.');
         $this->ensureSupervises($delegate->id);
-        $supervisor = $delegate->manager ?? User::whereHas('roles', fn($q) => $q->whereIn('name', ['superviseur', 'supervisor']))->first();
+        $supervisor = $delegate->manager_id
+            ? User::withoutGlobalScopes()->find($delegate->manager_id)
+            : null;
+        abort_unless(
+            $supervisor
+                && (string) $supervisor->manager_id === (string) $user->id
+                && $supervisor->hasAnyRole(['superviseur', 'supervisor', 'manager', 'Manager']),
+            422,
+            'Le délégué doit être rattaché à un superviseur directement encadré par vous.'
+        );
+
+        $contact = !empty($validated['contact_id'])
+            ? \App\Models\Contact::withoutGlobalScopes()->findOrFail($validated['contact_id'])
+            : null;
+        if ($contact) {
+            abort_unless((string) $contact->user_id === (string) $delegate->id, 403, 'Ce prescripteur n’appartient pas au délégué sélectionné.');
+        }
+
+        $account = !empty($validated['account_id'])
+            ? \App\Models\Account::withoutGlobalScopes()->findOrFail($validated['account_id'])
+            : null;
+        if ($account) {
+            $belongsToDelegate = (string) $account->user_id === (string) $delegate->id
+                || (string) $account->delegue_id === (string) $delegate->id
+                || ($contact && (string) $contact->account_id === (string) $account->id);
+            abort_unless($belongsToDelegate, 403, 'Cet établissement n’appartient pas au délégué sélectionné.');
+        }
+
+        $hasOverlap = Activity::checkOverlap(
+            $delegate->id,
+            $validated['date_activite'],
+            $validated['heure_debut'],
+            $validated['heure_fin'] ?? null,
+            $validated['duree_minutes'] ?? null
+        );
+        if ($hasOverlap) {
+            return response()->json(['message' => 'Le délégué a déjà une visite sur ce créneau.'], 422);
+        }
 
         $activity = Activity::create([
-            'subsidiary_id'        => $subsidiary?->id,
+            'subsidiary_id'        => $user->subsidiary_id ?? $supervisor->subsidiary_id,
             'user_id'              => $delegate->id,
             'accompanying_user_id' => $user->id,
             'contact_id'           => $validated['contact_id'] ?? null,
-            'account_id'           => $validated['account_id'] ?? null,
+            'account_id'           => $validated['account_id'] ?? $contact?->account_id,
             'date_activite'        => $validated['date_activite'],
             'heure_debut'          => $validated['heure_debut'],
             'heure_fin'            => $validated['heure_fin'] ?? null,
@@ -1034,28 +1190,39 @@ class ActivityController extends Controller
             'notes'                => '[VISITE TRIO SALES MANAGER] ' . ($validated['notes'] ?? $validated['objective'] ?? 'Visite conjointe TRIO.'),
         ]);
 
-        // Transmis au Superviseur pour validation (JAMAIS directement au Délégué)
-        if ($supervisor) {
-            NotificationController::sendNotification(
-                $supervisor,
-                'Nouveau TRIO à valider',
-                "Le Sales Manager {$user->name} a créé une visite TRIO pour le délégué {$delegate->name} le {$validated['date_activite']}.",
-                'trio_transmis',
-                'supervisor',
-                ['activity_id' => (string) $activity->id]
-            );
-        }
+        $activity->load(['delegue', 'accompanyingUser', 'contact', 'account']);
+        $date = $activity->date_activite?->format('d/m/Y');
+        $time = substr($activity->heure_debut, 0, 5);
+        $visitName = $this->trioVisitName($activity);
+
+        NotificationController::sendNotification(
+            $supervisor,
+            'Proposition Trio à valider',
+            "{$user->name} propose une visite Trio avec {$delegate->name} le {$date} à {$time} ({$visitName}). Vous êtes le superviseur direct chargé de la valider.",
+            'trio_transmis',
+            'supervisor',
+            [
+                'activity_id' => (string) $activity->id,
+                'action_url' => '/visites',
+                'sales_manager_name' => $user->name,
+                'delegate_name' => $delegate->name,
+                'supervisor_name' => $supervisor->name,
+            ]
+        );
 
         return response()->json([
             'message' => 'Visite TRIO créée et transmise au Superviseur pour validation.',
-            'data' => new ActivityResource($activity->load(['delegue']))
+            'data' => new ActivityResource($activity)
         ], 201);
     }
 
     public function validateTrio(Request $request, string $id)
     {
-        $activity = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($id);
-        $this->ensureSupervises($activity->user_id);
+        $activity = Activity::withoutGlobalScopes()
+            ->with(['delegue' => fn ($query) => $query->withoutGlobalScopes(), 'accompanyingUser' => fn ($query) => $query->withoutGlobalScopes(), 'contact' => fn ($query) => $query->withoutGlobalScopes(), 'account' => fn ($query) => $query->withoutGlobalScopes()])
+            ->findOrFail($id);
+        $supervisor = $this->authorizeTrioSupervisor($activity);
+        abort_unless($activity->statut === 'en_attente', 422, 'Cette proposition Trio a déjà été traitée.');
 
         // Appliquer la détection de conflit de planning du délégué
         if (!empty($activity->date_activite) && !empty($activity->heure_debut)) {
@@ -1081,15 +1248,32 @@ class ActivityController extends Controller
             'validation_date' => now(),
         ]);
 
-        // Notifier le Délégué (uniquement notification, aucune action de sa part)
-        if ($activity->delegue) {
+        $activity->load(['delegue', 'accompanyingUser', 'contact', 'account']);
+        $delegate = $activity->delegue;
+        $salesManager = $activity->accompanyingUser;
+        $date = $activity->date_activite?->format('d/m/Y');
+        $time = substr($activity->heure_debut, 0, 5);
+        $visitName = $this->trioVisitName($activity);
+
+        if ($delegate) {
             NotificationController::sendNotification(
-                $activity->delegue,
-                'Nouvelle visite TRIO au planning',
-                "Une visite TRIO avec votre hiérarchie a été validée pour le {$activity->date_activite} à {$activity->heure_debut}.",
+                $delegate,
+                'Visite Trio planifiée',
+                "Votre visite Trio avec {$salesManager?->name} le {$date} à {$time} ({$visitName}) a été validée par votre superviseur {$supervisor->name}.",
                 'nouveau_trio',
                 'delegate',
-                ['activity_id' => (string) $activity->id]
+                ['activity_id' => (string) $activity->id, 'sales_manager_name' => $salesManager?->name, 'supervisor_name' => $supervisor->name]
+            );
+        }
+
+        if ($salesManager) {
+            NotificationController::sendNotification(
+                $salesManager,
+                'Votre demande Trio a été acceptée',
+                "Votre demande de visite Trio avec {$delegate?->name} le {$date} à {$time} ({$visitName}) a été acceptée par {$supervisor->name}.",
+                'trio_accepte',
+                'sales_manager',
+                ['activity_id' => (string) $activity->id, 'delegate_name' => $delegate?->name, 'supervisor_name' => $supervisor->name]
             );
         }
 
@@ -1101,7 +1285,11 @@ class ActivityController extends Controller
 
     public function rejectTrio(Request $request, string $id)
     {
-        $activity = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($id);
+        $activity = Activity::withoutGlobalScopes()
+            ->with(['delegue' => fn ($query) => $query->withoutGlobalScopes(), 'accompanyingUser' => fn ($query) => $query->withoutGlobalScopes(), 'contact' => fn ($query) => $query->withoutGlobalScopes(), 'account' => fn ($query) => $query->withoutGlobalScopes()])
+            ->findOrFail($id);
+        $supervisor = $this->authorizeTrioSupervisor($activity);
+        abort_unless($activity->statut === 'en_attente', 422, 'Cette proposition Trio a déjà été traitée.');
 
         $validated = $request->validate([
             'motif' => 'required|string|min:2',
@@ -1116,15 +1304,31 @@ class ActivityController extends Controller
             'validated_by_id'  => auth()->id(),
         ]);
 
-        // Notifier le Sales Manager du rejet
-        if ($activity->accompanyingUser) {
+        $activity->load(['delegue', 'accompanyingUser', 'contact', 'account']);
+        $delegate = $activity->delegue;
+        $salesManager = $activity->accompanyingUser;
+        $date = $activity->date_activite?->format('d/m/Y');
+        $visitName = $this->trioVisitName($activity);
+
+        if ($salesManager) {
             NotificationController::sendNotification(
-                $activity->accompanyingUser,
-                'Visite TRIO rejetée par le superviseur',
-                "La visite TRIO a été rejetée. Motif : {$validated['motif']}",
+                $salesManager,
+                'Votre demande Trio a été refusée',
+                "Votre proposition de visite Trio avec {$delegate?->name} le {$date} ({$visitName}) a été refusée par {$supervisor->name}. Motif : {$validated['motif']}",
                 'trio_rejete',
                 'sales_manager',
-                ['activity_id' => (string) $activity->id, 'motif' => $validated['motif']]
+                ['activity_id' => (string) $activity->id, 'motif' => $validated['motif'], 'delegate_name' => $delegate?->name, 'supervisor_name' => $supervisor->name]
+            );
+        }
+
+        if ($delegate) {
+            NotificationController::sendNotification(
+                $delegate,
+                'Proposition de visite Trio refusée',
+                "La proposition de visite Trio avec {$salesManager?->name} le {$date} ({$visitName}) a été refusée par votre superviseur {$supervisor->name}.",
+                'trio_rejete',
+                'delegate',
+                ['activity_id' => (string) $activity->id, 'sales_manager_name' => $salesManager?->name, 'supervisor_name' => $supervisor->name]
             );
         }
 
@@ -1132,6 +1336,33 @@ class ActivityController extends Controller
             'message' => 'Visite TRIO rejetée avec enregistrement du motif.',
             'data' => new ActivityResource($activity)
         ]);
+    }
+
+    private function authorizeTrioSupervisor(Activity $activity): User
+    {
+        abort_unless($activity->isTrio(), 404, 'Cette activité n’est pas une proposition Trio.');
+
+        $supervisor = auth()->user();
+        abort_unless($supervisor && $supervisor->hasAnyRole(['superviseur', 'supervisor', 'manager', 'Manager']), 403, 'Seul le superviseur concerné peut traiter cette proposition Trio.');
+
+        $delegate = User::withoutGlobalScopes()->findOrFail($activity->user_id);
+        $salesManager = User::withoutGlobalScopes()->findOrFail($activity->accompanying_user_id);
+
+        abort_unless(
+            (string) $delegate->manager_id === (string) $supervisor->id
+                && (string) $supervisor->manager_id === (string) $salesManager->id
+                && $salesManager->hasRole('sales_manager'),
+            403,
+            'Cette visite Trio ne relève pas de votre hiérarchie directe.'
+        );
+
+        return $supervisor;
+    }
+
+    private function trioVisitName(Activity $activity): string
+    {
+        $contactName = trim(($activity->contact?->prenom ?? '') . ' ' . ($activity->contact?->nom ?? ''));
+        return $activity->contact?->nom_complet ?: ($contactName ?: ($activity->account?->nom ?: 'visite médicale'));
     }
 
     /**

@@ -31,8 +31,8 @@ class UserSeeder extends Seeder
             'force_password_change' => false,
             'status' => true,
         ]);
-        if (!$admin->hasRole('superadmin')) {
-            $admin->assignRole('superadmin');
+        if (!$admin->hasRole('super-admin')) {
+            $admin->assignRole('super-admin');
         }
 
         // 2. Manager Principal (COZI Adom Moucharif)
@@ -45,7 +45,7 @@ class UserSeeder extends Seeder
             'force_password_change' => false,
             'status' => true,
         ]);
-        foreach (['superviseur', 'manager', 'Manager'] as $r) {
+        foreach (['superviseur'] as $r) {
             if (\Spatie\Permission\Models\Role::where('name', $r)->exists() && !$manager->hasRole($r)) {
                 $manager->assignRole($r);
             }
@@ -59,32 +59,32 @@ class UserSeeder extends Seeder
             [
                 'email' => 'adommoucha@gmail.com',
                 'name' => 'COZI Adom Moucharif (Délégué)',
-                'role' => 'delegue_medical',
+                'role' => 'delegue-medical',
             ],
             [
                 'email' => 'afi.mensah@crm.local',
                 'name' => 'Afi Mensah',
-                'role' => 'delegue_medical',
+                'role' => 'delegue-medical',
             ],
             [
                 'email' => 'koffi.agbeko@crm.local',
                 'name' => 'Koffi Agbeko',
-                'role' => 'delegue_medical',
+                'role' => 'delegue-medical',
             ],
             [
                 'email' => 'sarah.lawson@crm.local',
                 'name' => 'Sarah Lawson',
-                'role' => 'delegue_medical',
+                'role' => 'delegue-medical',
             ],
             [
                 'email' => 'mamadou.kane@crm.local',
                 'name' => 'Mamadou Kane',
-                'role' => 'delegue_medical',
+                'role' => 'delegue-medical',
             ],
             [
                 'email' => 'jean.dupont@crm.local',
                 'name' => 'Jean Dupont',
-                'role' => 'delegue_medical',
+                'role' => 'delegue-medical',
             ],
         ];
 
@@ -101,7 +101,7 @@ class UserSeeder extends Seeder
             $user->update([
                 'manager_id' => $manager?->id,
             ]);
-            foreach ([$dData['role'], 'delegue', 'Délégué Médical'] as $r) {
+            foreach ([$dData['role']] as $r) {
                 if (\Spatie\Permission\Models\Role::where('name', $r)->exists() && !$user->hasRole($r)) {
                     $user->assignRole($r);
                 }

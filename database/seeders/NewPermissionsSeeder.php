@@ -369,9 +369,10 @@ class NewPermissionsSeeder extends Seeder
         }
 
         // ── Création des rôles de base ──────────────────────────────────────
-        $superAdmin = Role::firstOrCreate(['name' => 'super-admin', 'guard_name' => 'web']);
-        $dirCom     = Role::firstOrCreate(['name' => 'directeur-commercial', 'guard_name' => 'web']);
-        $dirMkt     = Role::firstOrCreate(['name' => 'directeur-marketing', 'guard_name' => 'web']);
+        $superAdmin   = Role::firstOrCreate(['name' => 'super-admin', 'guard_name' => 'web']);
+        $dirCom       = Role::firstOrCreate(['name' => 'directeur-commercial', 'guard_name' => 'web']);
+        $dirMkt       = Role::firstOrCreate(['name' => 'directeur-marketing', 'guard_name' => 'web']);
+        $salesManager = Role::firstOrCreate(['name' => 'sales_manager', 'guard_name' => 'web']);
         $manager    = Role::firstOrCreate(['name' => 'superviseur', 'guard_name' => 'web']);
         $delegue    = Role::firstOrCreate(['name' => 'delegue-medical', 'guard_name' => 'web']);
 
@@ -399,7 +400,7 @@ class NewPermissionsSeeder extends Seeder
           ->toArray());
 
         // Directeur Marketing → campagnes, événements, KOL, enquêtes, supports
-        $dirMkt->syncPermissions(Permission::whereIn('module', [
+        $marketingPermissions = Permission::whereIn('module', [
             'Marketing.Campagnes',
             'Marketing.Enquêtes',
             'Marketing.Événements',
@@ -410,7 +411,9 @@ class NewPermissionsSeeder extends Seeder
             'Réseau Médical.Professionnels',
             'Analytics',
         ])->pluck('name')
-          ->toArray());
+                    ->toArray();
+                $dirMkt->syncPermissions($marketingPermissions);
+                $salesManager->syncPermissions($marketingPermissions);
 
         // Superviseur → validation, supervision, équipe
         $manager->syncPermissions([

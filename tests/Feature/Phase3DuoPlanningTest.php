@@ -53,6 +53,33 @@ class Phase3DuoPlanningTest extends TestCase
             ->assertJsonPath('data.statut', 'en_attente');
     }
 
+    public function test_supervisor_duo_proposal_on_existing_visit_does_not_create_duplicate_activity(): void
+    {
+        Sanctum::actingAs($this->supervisor);
+
+        $existing = Activity::create([
+            'user_id' => $this->delegate->id,
+            'date_activite' => now()->addDays(2)->toDateString(),
+            'heure_debut' => '10:00',
+            'heure_fin' => '11:00',
+            'statut' => 'planifiee',
+            'activity_type' => 'visite',
+        ]);
+
+        $response = $this->postJson('/api/v1/activities/duo', [
+            'activity_id' => $existing->id,
+            'user_id' => $this->delegate->id,
+            'date_activite' => $existing->date_activite,
+            'heure_debut' => '10:00',
+            'heure_fin' => '11:00',
+            'duo_type' => 'coaching',
+        ]);
+
+        $response->assertStatus(201);
+        $this->assertDatabaseCount('activities', 1);
+        $this->assertDatabaseHas('activities', ['id' => $existing->id, 'is_duo' => true, 'duo_user_id' => $this->supervisor->id]);
+    }
+
     /**
      * Test 2: Le Délégué refuse un DUO sans motif -> Le refus est bloqué (422).
      */

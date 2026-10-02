@@ -51,7 +51,7 @@ class DynamicPerimeterScope implements Scope
      */
     public static function teamIdsFor(User $user): array
     {
-        if (!$user->hasAnyRole(['superviseur', 'directeur_regional', 'directeur_commercial', 'directeur_marketing'])) {
+        if (!$user->hasAnyRole(['superviseur', 'directeur_regional', 'directeur_commercial', 'directeur-commercial', 'directeur_marketing', 'directeur-marketing', 'sales_manager'])) {
             return [];
         }
 
@@ -189,7 +189,7 @@ class DynamicPerimeterScope implements Scope
     protected function filterUsers(Builder $builder, User $user, array $accessibleUnitIds): void
     {
         // Supervisors and managers can see their team members
-        if ($user->hasAnyRole(['superviseur', 'directeur_regional', 'directeur_commercial', 'directeur_marketing'])) {
+        if ($user->hasAnyRole(['superviseur', 'directeur_regional', 'directeur_commercial', 'directeur-commercial', 'directeur_marketing', 'directeur-marketing', 'sales_manager'])) {
             $builder->whereIn('users.id', array_merge([$user->id], self::teamIdsFor($user)));
             return;
         }
@@ -263,7 +263,7 @@ class DynamicPerimeterScope implements Scope
                 }
                 
                 // Supervisors and managers can see their team members' records
-                if ($user->hasAnyRole(['superviseur', 'directeur_regional', 'directeur_commercial', 'directeur_marketing'])) {
+                if ($user->hasAnyRole(['superviseur', 'directeur_regional', 'directeur_commercial', 'directeur-commercial', 'directeur_marketing', 'directeur-marketing', 'sales_manager'])) {
                     $teamIds = self::teamIdsFor($user);
                     if (!empty($teamIds)) {
                         $query->orWhereIn($table . '.user_id', $teamIds);

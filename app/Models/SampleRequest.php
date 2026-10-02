@@ -16,6 +16,8 @@ class SampleRequest extends Model
         'quantity',
         'status',
         'approved_by',
+        'approved_quantity',
+        'rejection_reason',
         'notes',
     ];
 

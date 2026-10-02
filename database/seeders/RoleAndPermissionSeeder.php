@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use App\Models\Role;
+use App\Models\User;
 use App\Models\Permission;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -14,6 +15,29 @@ class RoleAndPermissionSeeder extends Seeder
     {
         // Nettoyage du cache Spatie
         app()[PermissionRegistrar::class]->forgetCachedPermissions();
+
+        // Fusionner les anciens slugs pour éviter de recréer des rôles équivalents.
+        foreach ([
+            'superadmin' => 'super-admin',
+            'directeur_commercial' => 'directeur-commercial',
+            'directeur_marketing' => 'directeur-marketing',
+            'delegue_medical' => 'delegue-medical',
+        ] as $oldName => $canonicalName) {
+            $canonicalRole = Role::firstOrCreate([
+                'name' => $canonicalName,
+                'guard_name' => 'web',
+            ]);
+
+            foreach (Role::where('name', $oldName)->where('guard_name', 'web')->get() as $oldRole) {
+                $canonicalRole->givePermissionTo($oldRole->permissions);
+
+                foreach ($oldRole->users as $user) {
+                    $user->assignRole($canonicalRole);
+                }
+
+                $oldRole->delete();
+            }
+        }
 
         // ── Définition de toutes les permissions par module ─────────────────
         $permissionsByModule = [
@@ -229,12 +253,13 @@ class RoleAndPermissionSeeder extends Seeder
         }
 
         // ── Création des rôles de base ──────────────────────────────────────
-        $superAdmin = Role::firstOrCreate(['name' => 'superadmin',           'guard_name' => 'web']);
+        $superAdmin = Role::firstOrCreate(['name' => 'super-admin',          'guard_name' => 'web']);
         $dirReg     = Role::firstOrCreate(['name' => 'directeur_regional',   'guard_name' => 'web']);
-        $dirCom     = Role::firstOrCreate(['name' => 'directeur_commercial', 'guard_name' => 'web']);
-        $dirMkt     = Role::firstOrCreate(['name' => 'directeur_marketing',  'guard_name' => 'web']);
+        $dirCom     = Role::firstOrCreate(['name' => 'directeur-commercial', 'guard_name' => 'web']);
+        $dirMkt     = Role::firstOrCreate(['name' => 'directeur-marketing',  'guard_name' => 'web']);
+        $salesManager = Role::firstOrCreate(['name' => 'sales_manager',      'guard_name' => 'web']);
         $manager    = Role::firstOrCreate(['name' => 'superviseur',          'guard_name' => 'web']);
-        $delegue    = Role::firstOrCreate(['name' => 'delegue_medical',      'guard_name' => 'web']);
+        $delegue    = Role::firstOrCreate(['name' => 'delegue-medical',      'guard_name' => 'web']);
 
         // Super Admin → toutes les permissions
         $superAdmin->syncPermissions(Permission::all());
@@ -263,14 +288,16 @@ class RoleAndPermissionSeeder extends Seeder
         ])->get());
 
         // Directeur Marketing → terrain médical + KOL + formations
-        $dirMkt->syncPermissions(Permission::whereIn('module', [
+        $marketingPermissions = $dirMkt->permissions->merge(Permission::whereIn('module', [
             'Activités Terrain',
             'KOL (Leaders d\'opinion)',
             'Formations',
             'Comptes & Contacts',
             'Rapports & Analytics',
             'Objectifs & Performance',
-        ])->get());
+        ])->get())->unique('id');
+        $dirMkt->syncPermissions($marketingPermissions);
+        $salesManager->syncPermissions($dirMkt->permissions);
 
         // Manager → vue d'équipe + terrain + validation
         $manager->syncPermissions(Permission::whereIn('name', [
@@ -309,6 +336,18 @@ class RoleAndPermissionSeeder extends Seeder
             'notifications.view',
             'analytics.view-dashboard',
         ])->get());
+
+        if (!User::whereHas('roles', fn ($query) => $query->where('name', 'sales_manager'))->exists()) {
+            $unassignedUser = User::whereDoesntHave('roles')
+                ->orderBy('created_at')
+                ->orderBy('id')
+                ->first();
+
+            if ($unassignedUser) {
+                $unassignedUser->assignRole($salesManager);
+                $this->command?->info("Rôle Sales Manager attribué à {$unassignedUser->email}.");
+            }
+        }
 
         $this->command->info('✅ ' . Permission::count() . ' permissions créées et assignées aux rôles avec succès.');
     }

@@ -45,12 +45,13 @@ class DatabaseSeeder extends Seeder
 
         // 3. Assigner les permissions de scope aux rôles réels
         $rolesConfig = [
-            'superadmin' => ['scope:global'],
+            'super-admin' => ['scope:global'],
             'directeur_regional' => ['scope:country'],
-            'directeur_commercial' => ['scope:subsidiary'],
-            'directeur_marketing' => ['scope:subsidiary'],
+            'directeur-commercial' => ['scope:subsidiary'],
+            'directeur-marketing' => ['scope:subsidiary'],
+            'sales_manager' => ['scope:subsidiary'],
             'superviseur' => ['scope:subsidiary'],
-            'delegue_medical' => ['scope:team']
+            'delegue-medical' => ['scope:team']
         ];
 
         foreach ($rolesConfig as $roleName => $perms) {
@@ -111,7 +112,6 @@ class DatabaseSeeder extends Seeder
             ActivityTypeSeeder::class,
             ActivityResultSeeder::class,
             EventFormatSeeder::class,
-            RoleAndPermissionSeeder::class,
             SettingSeeder::class,
             ObjectifTypeSeeder::class,
             DuoActivityTypesSeeder::class,

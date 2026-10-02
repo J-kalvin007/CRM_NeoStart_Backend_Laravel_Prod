@@ -7,6 +7,7 @@ use App\Models\SampleRequest;
 use App\Models\SampleStock;
 use App\Models\SampleMovement;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class SampleRequestController extends Controller
 {
@@ -17,9 +18,12 @@ class SampleRequestController extends Controller
         $query = SampleRequest::with(['product', 'user', 'approver'])
             ->orderBy('created_at', 'desc');
 
-        // Délégué : ses demandes ; hiérarchie : les siennes + celles de son équipe ; admin : tout
+        // Users see their own requests and requests from their direct reports only.
         if (!($user->can('scope:global') || $user->hasAnyRole(['superadmin', 'super-admin', 'admin']))) {
-            $query->whereIn('user_id', array_merge([$user->id], $user->teamMemberIds()));
+            $query->where(function ($requests) use ($user) {
+                $requests->where('user_id', $user->id)
+                    ->orWhereHas('user', fn ($delegate) => $delegate->withoutGlobalScopes()->where('manager_id', $user->id));
+            });
         }
 
         return response()->json($query->get());
@@ -29,136 +33,153 @@ class SampleRequestController extends Controller
     {
         $user = $request->user();
 
-        $productId = $request->input('product_id');
-        $product = \App\Models\Product::where('id', $productId)->first();
-        if (!$product) {
-            $product = \App\Models\Product::first();
+        if (!$user->hasAnyRole(['delegue_medical', 'delegue-medical', 'delegue', 'delegate'])) {
+            return response()->json(['message' => 'Seul un délégué peut demander des échantillons.'], 403);
         }
 
-        $quantity = (int) ($request->input('quantity') ?? $request->input('quantity_requested') ?? 1);
-        $notes = $request->input('notes') ?? $request->input('motif') ?? 'Demande de réassort d\'échantillons';
+        $validated = $request->validate([
+            'product_id' => 'required|uuid|exists:products,id',
+            'quantity' => 'required|integer|min:1|max:100',
+            'notes' => 'required|string|max:2000',
+        ]);
+
+        $manager = $user->manager;
+        if (!$manager) {
+            return response()->json(['message' => 'Aucun supérieur direct n’est associé à votre compte.'], 422);
+        }
+
+        $product = \App\Models\Product::findOrFail($validated['product_id']);
 
         $sampleRequest = SampleRequest::create([
             'user_id' => $user->id,
-            'product_id' => $product?->id,
-            'quantity' => $quantity > 0 ? $quantity : 1,
+            'product_id' => $product->id,
+            'quantity' => $validated['quantity'],
             'status' => 'pending',
-            'notes' => $notes,
+            'notes' => $validated['notes'],
         ]);
 
-        // Envoyer une notification au Manager / Superviseur
-        // La demande est adressée au supérieur direct du délégué
-        $manager = $user?->manager;
-        if ($manager) {
-            NotificationController::sendNotification(
-                $manager,
-                'Nouvelle Demande de Stock',
-                "Le délégué {$user->name} a soumis une demande de réassort de " . ($product ? ($product->nom ?: $product->name) : 'échantillons') . " ({$quantity} boîtes).",
-                'sample',
-                'superviseur',
-                ['request_id' => (string) $sampleRequest->id]
-            );
-        }
+        NotificationController::sendNotification(
+            $manager,
+            'Nouvelle demande d’échantillons',
+            "{$user->name} demande {$validated['quantity']} boîte(s) de " . ($product->nom ?: $product->name) . ". Motif : {$validated['notes']}",
+            'sample',
+            'superviseur',
+            ['request_id' => (string) $sampleRequest->id]
+        );
 
-        return response()->json($sampleRequest->load(['product', 'user']), 201);
+        return response()->json($sampleRequest->load(['product', 'user', 'approver']), 201);
     }
 
     public function approve(Request $request, $id)
     {
         $user = $request->user();
 
-        if (!$user->isAdminOrSupervisor() && !$user->hasRole(['superviseur', 'directeur_marketing', 'superadmin', 'manager', 'Manager'])) {
-            return response()->json(['message' => 'Non autorisé.'], 403);
-        }
-
-        $sampleRequest = SampleRequest::findOrFail($id);
-        if (!(($user->can('scope:global') || $user->hasAnyRole(['superadmin', 'super-admin', 'admin'])) || $user->manages($sampleRequest->user_id))) {
-            return response()->json(['message' => "Cette demande n'appartient pas à un délégué de votre équipe."], 403);
-        }
-
-        if ($sampleRequest->status !== 'pending') {
-            return response()->json(['message' => 'Cette demande est déjà traitée.'], 400);
-        }
-
-        $sampleRequest->status = 'approved';
-        $sampleRequest->approved_by = $user->id;
-        $sampleRequest->save();
-
-        $lotNumber = 'LOT-' . date('Y-m') . '-' . strtoupper(substr(uniqid(), -4));
-        $expiryDate = date('Y-m-d', strtotime('+1 year'));
-
-        $stock = SampleStock::firstOrCreate([
-            'user_id' => $sampleRequest->user_id,
-            'product_id' => $sampleRequest->product_id,
-            'lot_number' => $lotNumber
-        ], [
-            'expiry_date' => $expiryDate,
-            'quantity' => 0
+        $sampleRequest = SampleRequest::with('user')->findOrFail($id);
+        $this->authorizeDecision($user, $sampleRequest);
+        $validated = $request->validate([
+            'quantity_delivered' => 'required|integer|min:1|max:' . $sampleRequest->quantity,
         ]);
 
-        $stock->increment('quantity', $sampleRequest->quantity);
+        $sampleRequest = DB::transaction(function () use ($id, $user, $validated) {
+            $sampleRequest = SampleRequest::with('user')->whereKey($id)->lockForUpdate()->firstOrFail();
+            abort_unless($sampleRequest->status === 'pending', 409, 'Cette demande a déjà été traitée.');
 
-        SampleMovement::create([
-            'user_id' => $sampleRequest->user_id,
-            'product_id' => $sampleRequest->product_id,
-            'movement_type' => 'reception',
-            'quantity' => $sampleRequest->quantity,
-            'remarques' => 'Approuvé par ' . $user->name,
-            'lot_number' => $lotNumber,
-            'expiry_date' => $expiryDate,
-            'date_mouvement' => date('Y-m-d')
-        ]);
+            $delivered = (int) $validated['quantity_delivered'];
+            $lotNumber = 'REQ-' . strtoupper(substr(str_replace('-', '', $sampleRequest->id), 0, 16));
+            $stock = SampleStock::firstOrCreate([
+                'user_id' => $sampleRequest->user_id,
+                'product_id' => $sampleRequest->product_id,
+                'lot_number' => $lotNumber,
+            ], ['expiry_date' => null, 'quantity' => 0]);
+            $stock->increment('quantity', $delivered);
+            $stock->refresh();
+
+            SampleMovement::create([
+                'user_id' => $sampleRequest->user_id,
+                'product_id' => $sampleRequest->product_id,
+                'movement_type' => 'reception',
+                'quantity' => $delivered,
+                'stock_apres' => $stock->quantity,
+                'remarques' => 'Remis par ' . $user->name . ' au titre de la demande ' . $sampleRequest->id,
+                'lot_number' => $lotNumber,
+            ]);
+
+            $sampleRequest->update([
+                'status' => 'approved',
+                'approved_by' => $user->id,
+                'approved_quantity' => $delivered,
+                'rejection_reason' => null,
+            ]);
+
+            return $sampleRequest->fresh(['product', 'user', 'approver']);
+        });
 
         // Notification au délégué
         $delegate = $sampleRequest->user;
         if ($delegate) {
             NotificationController::sendNotification(
                 $delegate,
-                'Demande d\'Échantillons Approuvée',
-                "Votre demande de réassort d'échantillons ({$sampleRequest->quantity} boîtes) a été approuvée par votre manager.",
+                'Demande d’échantillons approuvée',
+                "Votre supérieur vous a remis {$sampleRequest->approved_quantity} boîte(s) de " . ($sampleRequest->product?->nom ?? 'ce produit') . ".",
                 'sample',
                 'delegate',
-                ['id' => (string) $sampleRequest->id, 'type' => 'sample']
+                ['request_id' => (string) $sampleRequest->id, 'type' => 'sample']
             );
         }
 
-        return response()->json($sampleRequest->load(['product', 'user', 'approver']));
+        return response()->json($sampleRequest);
     }
 
     public function reject(Request $request, $id)
     {
         $user = $request->user();
 
-        if (!$user->isAdminOrSupervisor() && !$user->hasRole(['superviseur', 'directeur_marketing', 'superadmin', 'manager', 'Manager'])) {
-            return response()->json(['message' => 'Non autorisé.'], 403);
-        }
+        $sampleRequest = SampleRequest::with('user')->findOrFail($id);
+        $this->authorizeDecision($user, $sampleRequest);
+        $validated = $request->validate([
+            'rejection_reason' => 'required|string|min:3|max:2000',
+        ]);
 
-        $sampleRequest = SampleRequest::findOrFail($id);
-        if (!(($user->can('scope:global') || $user->hasAnyRole(['superadmin', 'super-admin', 'admin'])) || $user->manages($sampleRequest->user_id))) {
-            return response()->json(['message' => "Cette demande n'appartient pas à un délégué de votre équipe."], 403);
-        }
+        $sampleRequest = DB::transaction(function () use ($id, $user, $validated) {
+            $sampleRequest = SampleRequest::with('user')->whereKey($id)->lockForUpdate()->firstOrFail();
+            abort_unless($sampleRequest->status === 'pending', 409, 'Cette demande a déjà été traitée.');
 
-        if ($sampleRequest->status !== 'pending') {
-            return response()->json(['message' => 'Cette demande est déjà traitée.'], 400);
-        }
+            $sampleRequest->update([
+                'status' => 'rejected',
+                'approved_by' => $user->id,
+                'approved_quantity' => null,
+                'rejection_reason' => $validated['rejection_reason'],
+            ]);
 
-        $sampleRequest->status = 'rejected';
-        $sampleRequest->approved_by = $user->id;
-        $sampleRequest->save();
+            return $sampleRequest->fresh(['product', 'user', 'approver']);
+        });
 
         $delegate = $sampleRequest->user;
         if ($delegate) {
             NotificationController::sendNotification(
                 $delegate,
-                'Demande d\'Échantillons Refusée',
-                "Votre demande de réassort d'échantillons a été refusée par votre manager.",
+                'Demande d’échantillons refusée',
+                "Votre demande d’échantillons a été refusée par {$user->name}. Motif : {$validated['rejection_reason']}",
                 'sample',
                 'delegate',
-                ['id' => (string) $sampleRequest->id, 'type' => 'sample']
+                ['request_id' => (string) $sampleRequest->id, 'type' => 'sample', 'rejection_reason' => $validated['rejection_reason']]
             );
         }
 
-        return response()->json($sampleRequest->load(['product', 'user', 'approver']));
+        return response()->json($sampleRequest);
+    }
+
+    private function authorizeDecision($user, SampleRequest $sampleRequest): void
+    {
+        $isGlobalAdmin = $user->can('scope:global')
+            || $user->hasAnyRole(['superadmin', 'super-admin', 'admin']);
+        $canApproveSamples = $user->hasAnyRole([
+            'superviseur', 'supervisor', 'sales_manager', 'manager', 'Manager',
+            'directeur_marketing', 'directeur-marketing',
+        ]);
+        $isDirectManager = (string) $sampleRequest->user?->manager_id === (string) $user->id;
+
+        abort_unless($isGlobalAdmin || ($canApproveSamples && $isDirectManager), 403, 'Seul le supérieur direct peut traiter cette demande.');
     }
 
     /**

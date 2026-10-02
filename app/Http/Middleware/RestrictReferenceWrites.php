@@ -27,6 +27,7 @@ class RestrictReferenceWrites
         'directeur_commercial', 'directeur-commercial',
         'directeur_marketing', 'directeur-marketing',
         'directeur_regional', 'directeur-regional',
+        'sales_manager',
     ];
 
     public function handle(Request $request, Closure $next)

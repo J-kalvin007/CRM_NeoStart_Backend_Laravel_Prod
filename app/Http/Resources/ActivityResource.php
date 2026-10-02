@@ -20,6 +20,8 @@ class ActivityResource extends JsonResource
             'duration'       => $this->duration ?? $this->duree_minutes,
             'gps_debut'      => ['lat' => $this->gps_debut_lat, 'lng' => $this->gps_debut_lng],
             'gps_fin'        => ['lat' => $this->gps_fin_lat, 'lng' => $this->gps_fin_lng],
+            'start_time'     => $this->start_time,
+            'end_time'       => $this->end_time,
             'notes'          => $this->notes,
             'prochain_rdv'   => $this->prochain_rdv,
             'statut'         => $this->statut,
@@ -28,6 +30,8 @@ class ActivityResource extends JsonResource
             'is_duo'                       => (bool) $this->is_duo,
             'duo_user'                     => $this->when($this->is_duo, fn () => $this->duoUser ? ['id' => (string) $this->duoUser->id, 'name' => $this->duoUser->name] : null),
             'duo_type'                     => $this->when($this->is_duo, fn () => $this->duoActivityType?->code),
+            'is_trio'                      => $this->isTrio(),
+            'trio_sales_manager'           => $this->when($this->isTrio() && $this->relationLoaded('accompanyingUser'), fn () => $this->accompanyingUser ? ['id' => (string) $this->accompanyingUser->id, 'name' => $this->accompanyingUser->name] : null),
             'duo_status'                   => $this->duo_status,
             'duo_delegue_status'           => $this->duo_delegue_status,
             'duo_delegue_rejection_reason' => $this->duo_delegue_rejection_reason,
@@ -46,6 +50,7 @@ class ActivityResource extends JsonResource
                 'id'    => $this->delegue->id,
                 'name'  => $this->delegue->name,
                 'email' => $this->delegue->email,
+                'manager_id' => $this->delegue->manager_id,
             ]),
             'contact'        => new ContactResource($this->whenLoaded('contact')),
             'contacts'       => ContactResource::collection($this->whenLoaded('contacts')),
@@ -72,6 +77,16 @@ class ActivityResource extends JsonResource
                     'quantity'          => $p->pivot->quantity ?? 0,
                     'customer_interest' => $p->pivot->customer_interest ?? null,
                     'remarques'         => $p->pivot->remarques ?? null,
+                ])
+            ),
+            'sample_movements' => $this->whenLoaded('sampleMovements', fn() =>
+                $this->sampleMovements->map(fn($movement) => [
+                    'id' => $movement->id,
+                    'product_id' => $movement->product_id,
+                    'product_name' => $movement->product?->nom,
+                    'quantity' => $movement->quantity,
+                    'lot_number' => $movement->lot_number,
+                    'contact_id' => $movement->contact_id,
                 ])
             ),
             'created_at'     => $this->created_at,

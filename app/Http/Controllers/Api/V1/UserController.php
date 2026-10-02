@@ -32,7 +32,12 @@ class UserController extends Controller
     )]
     public function index(Request $request)
     {
+        $actor = $request->user();
         $query = User::with(['roles', 'scopes']);
+
+        if (!$this->hasUserPermission($actor, 'users.view-all') && !$this->hasUserPermission($actor, 'users.view')) {
+            $query->whereIn('id', array_values(array_unique(array_merge([$actor->id], $actor->teamMemberIds()))));
+        }
 
         // ?team=1 ou ?role=delegate : uniquement les collaborateurs encadrés (sans soi-même)
         if ($request->boolean('team') || in_array($request->query('role'), ['delegate', 'delegue', 'delegue_medical'], true)) {
@@ -72,6 +77,7 @@ class UserController extends Controller
     )]
     public function store(StoreUserRequest $request)
     {
+        $this->authorizeUserPermission($request, 'users.create');
         $data = $request->validated();
 
         // Convertir 'active'/'inactive' → boolean pour la colonne DB
@@ -140,6 +146,7 @@ class UserController extends Controller
     )]
     public function show(string $id)
     {
+        $actor = request()->user();
         $user = User::with([
             'roles', 
             'scopes', 
@@ -151,6 +158,16 @@ class UserController extends Controller
         ])
         ->withCount(['contacts', 'accounts', 'activities'])
         ->findOrFail($id);
+
+        abort_unless(
+            $this->hasUserPermission($actor, 'users.view-profile')
+                || $this->hasUserPermission($actor, 'users.view')
+                || (string) $actor->id === (string) $user->id
+                || $actor->manages($user->id),
+            403,
+            'Vous ne pouvez pas consulter ce profil utilisateur.'
+        );
+
         return new UserResource($user);
     }
 
@@ -186,8 +203,13 @@ class UserController extends Controller
     )]
     public function update(UpdateUserRequest $request, string $id)
     {
+        $this->authorizeUserPermission($request, 'users.edit');
         $user = User::findOrFail($id);
         $data = $request->validated();
+
+        if (array_key_exists('roles', $data) || array_key_exists('permissions', $data)) {
+            $this->authorizeUserPermission($request, 'users.manage-roles');
+        }
 
         // Convertir 'active'/'inactive' → boolean pour la colonne DB
         if (isset($data['status'])) {
@@ -266,9 +288,28 @@ class UserController extends Controller
     )]
     public function destroy(string $id)
     {
+        $this->authorizeUserPermission(request(), 'users.delete');
         $user = User::findOrFail($id);
         $user->delete();
         
         return response()->json(null, 204);
+    }
+
+    private function hasUserPermission(?User $user, string $permission): bool
+    {
+        if (!$user) return false;
+
+        return $user->can('scope:global')
+            || $user->hasAnyRole(['superadmin', 'super-admin', 'admin'])
+            || $user->can($permission);
+    }
+
+    private function authorizeUserPermission(Request $request, string $permission): void
+    {
+        abort_unless(
+            $this->hasUserPermission($request->user(), $permission),
+            403,
+            'Vous ne disposez pas des droits nécessaires pour gérer les utilisateurs.'
+        );
     }
 }

@@ -128,11 +128,15 @@ class User extends Authenticatable
                 ->pluck('id')
                 ->all();
 
+            if (empty($children)) {
+                break;
+            }
+
             $ids = array_merge($ids, $children);
             $current = $children;
         }
 
-        return $ids;
+        return array_values(array_unique($ids));
     }
 
     /** Collaborateurs encadrés (voir teamMemberIds). */
@@ -192,6 +196,7 @@ class User extends Authenticatable
             'directeur_commercial',
             'directeur-marketing',
             'directeur_marketing',
+            'sales_manager',
             'superviseur'
         ]);
     }
