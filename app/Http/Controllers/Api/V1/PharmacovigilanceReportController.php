@@ -70,8 +70,9 @@ class PharmacovigilanceReportController extends Controller
         $report = PharmacovigilanceReport::create($validated);
 
         // Déclencher une alerte immédiate vers le superviseur (et/ou direction médicale)
-        $manager = User::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)->where('id', auth()->user()->team->manager_id ?? null)->first() 
-            ?? User::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)->where('id', '!=', auth()->id())->first();
+        // Supérieur direct du déclarant, à défaut le responsable de son équipe (jamais un utilisateur quelconque)
+        $manager = auth()->user()->manager
+            ?? User::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->find(auth()->user()->team->manager_id ?? null);
         if ($manager) {
             NotificationController::sendNotification(
                 $manager,

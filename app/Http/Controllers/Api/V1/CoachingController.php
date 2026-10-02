@@ -162,7 +162,7 @@ class CoachingController extends Controller
 
         $session = CoachingSession::create($validated);
 
-        $delegate = User::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)->find($session->delegate_id);
+        $delegate = User::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->find($session->delegate_id);
         if ($delegate) {
             NotificationController::sendNotification(
                 $delegate,

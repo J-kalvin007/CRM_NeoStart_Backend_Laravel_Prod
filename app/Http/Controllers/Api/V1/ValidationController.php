@@ -127,7 +127,7 @@ class ValidationController extends Controller
                 ];
             });
 
-        $pendingExpenses = \App\Models\Expense::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)
+        $pendingExpenses = \App\Models\Expense::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
             ->with(['user'])
             ->tap($inTeam)
             ->whereIn('status', ['submitted', 'en_attente'])
@@ -148,7 +148,7 @@ class ValidationController extends Controller
                 ];
             });
 
-        $pendingSampleRequests = \App\Models\SampleRequest::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)
+        $pendingSampleRequests = \App\Models\SampleRequest::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
             ->with(['product', 'user'])
             ->tap($inTeam)
             ->whereIn('status', ['pending', 'en_attente'])
@@ -168,7 +168,7 @@ class ValidationController extends Controller
                 ];
             });
 
-        $pendingDelegateRequests = \App\Models\DelegateRequest::withoutGlobalScope(\App\Models\Scopes\PerimeterScope::class)
+        $pendingDelegateRequests = \App\Models\DelegateRequest::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
             ->with(['user', 'contact'])
             ->tap($inTeam)
             ->whereIn('status', ['pending_manager_approval', 'en_attente', 'pending', 'soumis'])
@@ -225,7 +225,7 @@ class ValidationController extends Controller
         }
 
         if (in_array($type, ['visit', 'activity_report'])) {
-            $activity = \App\Models\Activity::findOrFail($id);
+            $activity = \App\Models\Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($id);
             $this->ensureManaged($activity->user_id);
             $activity->update([
                 'statut' => 'validee',
@@ -250,7 +250,7 @@ class ValidationController extends Controller
         }
 
         if ($type === 'tour_plan') {
-            $plan = \App\Models\TourPlan::findOrFail($id);
+            $plan = \App\Models\TourPlan::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($id);
             $this->ensureManaged($plan->user_id);
             $plan->update([
                 'statut' => 'valide',
@@ -276,7 +276,7 @@ class ValidationController extends Controller
         }
 
         if ($type === 'expense') {
-            $expense = \App\Models\Expense::findOrFail($id);
+            $expense = \App\Models\Expense::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($id);
             $this->ensureManaged($expense->user_id);
             $expense->update([
                 'status' => 'approved',
@@ -300,7 +300,7 @@ class ValidationController extends Controller
         }
 
         if (in_array($type, ['sample', 'sample_request'])) {
-            $sampleRequest = \App\Models\SampleRequest::findOrFail($id);
+            $sampleRequest = \App\Models\SampleRequest::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($id);
             $this->ensureManaged($sampleRequest->user_id);
             $sampleRequest->update([
                 'status' => 'approved',
@@ -348,7 +348,7 @@ class ValidationController extends Controller
         }
 
         if (in_array($type, ['request', 'delegate_request'])) {
-            $req = \App\Models\DelegateRequest::findOrFail($id);
+            $req = \App\Models\DelegateRequest::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($id);
             $this->ensureManaged($req->user_id);
             $req->update([
                 'status' => 'approved',
@@ -425,7 +425,7 @@ class ValidationController extends Controller
         $reason = $request->input('rejection_reason') ?? $request->input('motif');
 
         if (in_array($type, ['visit', 'activity_report'])) {
-            $activity = \App\Models\Activity::findOrFail($id);
+            $activity = \App\Models\Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($id);
             $this->ensureManaged($activity->user_id);
             $activity->update([
                 'statut' => 'refusee',
@@ -451,7 +451,7 @@ class ValidationController extends Controller
         }
 
         if ($type === 'tour_plan') {
-            $plan = \App\Models\TourPlan::findOrFail($id);
+            $plan = \App\Models\TourPlan::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($id);
             $this->ensureManaged($plan->user_id);
             $plan->update([
                 'statut' => 'rejete',
@@ -476,7 +476,7 @@ class ValidationController extends Controller
         }
 
         if ($type === 'expense') {
-            $expense = \App\Models\Expense::findOrFail($id);
+            $expense = \App\Models\Expense::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($id);
             $this->ensureManaged($expense->user_id);
             $expense->update([
                 'status' => 'rejected',
@@ -500,7 +500,7 @@ class ValidationController extends Controller
         }
 
         if (in_array($type, ['sample', 'sample_request'])) {
-            $sampleRequest = \App\Models\SampleRequest::findOrFail($id);
+            $sampleRequest = \App\Models\SampleRequest::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($id);
             $this->ensureManaged($sampleRequest->user_id);
             $sampleRequest->update([
                 'status' => 'rejected',
@@ -523,7 +523,7 @@ class ValidationController extends Controller
         }
 
         if (in_array($type, ['request', 'delegate_request'])) {
-            $req = \App\Models\DelegateRequest::findOrFail($id);
+            $req = \App\Models\DelegateRequest::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($id);
             $this->ensureManaged($req->user_id);
             $req->update([
                 'status' => 'rejected',

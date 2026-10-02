@@ -75,7 +75,10 @@ class TeamApiResourceTest extends TestCase
 
     public function test_team_manager_can_be_updated_via_api(): void
     {
+        // Les référentiels (dont les équipes) ne sont modifiables que par l'administration
+        \App\Models\Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
         $admin = User::factory()->create();
+        $admin->assignRole('admin');
         $manager = User::factory()->create();
 
         $country = Country::create([

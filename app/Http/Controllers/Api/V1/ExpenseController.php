@@ -259,8 +259,27 @@ class ExpenseController extends Controller
             new OA\Response(response: 401, description: 'Non authentifié')
         ]
     )]
-    public function updateStatus(Request $request, Expense $expense)
+    /** POST expenses/{id}/validate : approbation (mêmes contrôles et notification que updateStatus). */
+    public function validateExpense(Request $request, string $expense)
     {
+        $request->merge(['status' => 'approved']);
+        return $this->updateStatus($request, $expense);
+    }
+
+    /** POST expenses/{id}/reject : rejet avec motif (champ rejection_reason ou reason). */
+    public function rejectExpense(Request $request, string $expense)
+    {
+        $request->merge([
+            'status' => 'rejected',
+            'rejection_reason' => $request->input('rejection_reason') ?? $request->input('reason'),
+        ]);
+        return $this->updateStatus($request, $expense);
+    }
+
+    public function updateStatus(Request $request, string $expense)
+    {
+        // Lecture hors périmètre : l'appartenance à l'équipe est contrôlée juste après
+        $expense = Expense::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($expense);
         $v = $request->validate([
             'status'           => 'required|in:approved,rejected,pending',
             'rejection_reason' => 'nullable|string|max:500',

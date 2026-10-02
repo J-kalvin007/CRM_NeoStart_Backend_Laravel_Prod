@@ -43,14 +43,16 @@ class AllActionsNotificationTest extends TestCase
         $this->supervisor = User::factory()->create([
             'name' => 'Superviseur Test',
             'email' => 'supervisor_all@skynity.test',
-            'subsidiary_id' => $this->subsidiary->id,
         ]);
+
+        // Rôle hiérarchique : il donne au superviseur la visibilité sur son équipe
+        \App\Models\Role::firstOrCreate(['name' => 'superviseur', 'guard_name' => 'web']);
+        $this->supervisor->assignRole('superviseur');
 
         $this->delegate = User::factory()->create([
             'name' => 'Délégué Test',
             'email' => 'delegate_all@skynity.test',
             'manager_id' => $this->supervisor->id,
-            'subsidiary_id' => $this->subsidiary->id,
         ]);
     }
 

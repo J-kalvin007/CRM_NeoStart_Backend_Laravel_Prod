@@ -20,10 +20,15 @@ class Team extends Model
         'manager_id',
     ];
 
-    // public function members()
-    // {
-    //     return $this->hasMany(User::class);
-    // }
+    /**
+     * Membres de l'équipe : collaborateurs directement rattachés au responsable de l'équipe
+     * (users.team_id n'existe plus, la hiérarchie passe par users.manager_id).
+     */
+    public function members()
+    {
+        return $this->hasMany(User::class, 'manager_id', 'manager_id')
+            ->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class);
+    }
 
     public function sector()
     {

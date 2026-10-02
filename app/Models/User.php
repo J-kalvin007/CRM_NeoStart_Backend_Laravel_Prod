@@ -80,14 +80,21 @@ class User extends Authenticatable
         return $this->hasMany(UserLocation::class);
     }
 
+    /**
+     * Supérieur direct. Le lien hiérarchique est structurel : il ne dépend pas du périmètre
+     * de visibilité de l'utilisateur courant (sinon un délégué ne « voit » pas son superviseur
+     * et celui-ci n'est pas notifié de ses soumissions).
+     */
     public function manager()
     {
-        return $this->belongsTo(User::class, 'manager_id');
+        return $this->belongsTo(User::class, 'manager_id')
+            ->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class);
     }
 
     public function subordinates()
     {
-        return $this->hasMany(User::class, 'manager_id');
+        return $this->hasMany(User::class, 'manager_id')
+            ->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class);
     }
 
     public function contacts()

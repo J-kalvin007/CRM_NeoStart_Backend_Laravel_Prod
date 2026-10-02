@@ -30,7 +30,8 @@ class Phase4TrioPlanningTest extends TestCase
         $this->salesManager = User::factory()->create();
         $this->salesManager->assignRole('sales_manager');
 
-        $this->supervisor = User::factory()->create();
+        // Hiérarchie : Sales Manager > Superviseur > Délégué (un TRIO ne vise que sa propre équipe)
+        $this->supervisor = User::factory()->create(['manager_id' => $this->salesManager->id]);
         $this->supervisor->assignRole('superviseur');
 
         $this->delegate = User::factory()->create(['manager_id' => $this->supervisor->id]);
