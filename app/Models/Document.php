@@ -24,6 +24,7 @@ class Document extends Model
         'description',
         'type',
         'file_path',
+        'viewer_path',
         'version',
         'is_active',
         'status',

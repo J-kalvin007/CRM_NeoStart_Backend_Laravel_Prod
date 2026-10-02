@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Document;
 use Illuminate\Http\Request;
+use App\Services\DocumentViewerService;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 
 class DocumentController extends Controller
 {
@@ -24,65 +26,14 @@ class DocumentController extends Controller
             $query->where('is_active', $request->boolean('is_active'));
         }
 
-        // Adresse des fichiers joignable par le client (et non localhost de APP_URL)
-        $host = $request->getSchemeAndHttpHost();
-
-        $documents = $query->with('documentable')->get()->map(function ($doc) use ($host) {
-            // Map the internal types to frontend display types
-            $mappedType = 'NOTICE';
-            if ($doc->type === 'presentation') $mappedType = 'E-DETAILING';
-            if ($doc->type === 'video') $mappedType = 'VIDEO';
-            if ($doc->type === 'pdf') $mappedType = 'BROCHURE';
-
-            $status = 'VALIDE';
-            if (!$doc->is_active) $status = 'ARCHIVE';
-            if ($doc->expiration_date && \Carbon\Carbon::parse($doc->expiration_date)->isPast()) {
-                $status = 'EXPIRE';
-            }
-
-            $relative = preg_replace('/^\/?storage\//', '', $doc->file_path ?? '');
-            $sizeFormatted = null;
-            if ($relative !== '' && \Illuminate\Support\Facades\Storage::disk('public')->exists($relative)) {
-                $bytes = \Illuminate\Support\Facades\Storage::disk('public')->size($relative);
-                $sizeFormatted = round($bytes / (1024 * 1024), 1) . ' MB';
-            }
-
-            $url = null;
-            if ($doc->file_path) {
-                $url = preg_match('#^https?://#', $doc->file_path)
-                    ? $doc->file_path
-                    : $host . \Illuminate\Support\Facades\Storage::url($relative);
-            }
-
-            return [
-                'id' => $doc->id,
-                'reference' => 'DOC-' . substr($doc->id, 0, 6),
-                'titre' => $doc->title,
-                'title' => $doc->title,
-                'description' => $doc->description,
-                'type' => $mappedType,
-                'raw_type' => $doc->type,
-                'produit' => $doc->documentable_type === 'App\\Models\\Product' ? ($doc->documentable->nom ?? null) : 'Général',
-                'version' => 'v' . ($doc->version ?? '1.0'),
-                'taille' => $sizeFormatted,
-                'dateExpiration' => $doc->expiration_date ? \Carbon\Carbon::parse($doc->expiration_date)->format('Y-m-d') : null,
-                'expiration_date' => $doc->expiration_date ? \Carbon\Carbon::parse($doc->expiration_date)->format('Y-m-d') : null,
-                'statut' => $status,
-                'status' => $doc->status,
-                'is_active' => (bool) $doc->is_active,
-                'documentable_id' => $doc->documentable_id,
-                'documentable_type' => $doc->documentable_type,
-                'url' => $url,
-                'folder' => $mappedType === 'E-DETAILING' ? 'E-Detailing' : ($mappedType === 'VIDEO' ? 'Vidéos' : 'Brochures')
-            ];
-        });
+        $documents = $query->with('documentable')->get()->map(fn ($doc) => $this->format($doc, $request));
 
         return response()->json([
             'data' => $documents
         ]);
     }
 
-    public function store(Request $request)
+    public function store(Request $request, DocumentViewerService $viewers)
     {
         if (Auth::user() && Auth::user()->hasRole(['delegue', 'delegue_medical'])) {
             return response()->json(['message' => 'Action non autorisée pour votre rôle.'], 403);
@@ -111,53 +62,17 @@ class DocumentController extends Controller
         $data['subsidiary_id'] = Auth::user()->subsidiary_id;
 
         $document = Document::create($data);
+        $viewers->prepare($document);
 
-        // Format for frontend
-        $mappedType = 'NOTICE';
-        if ($document->type === 'presentation') $mappedType = 'E-DETAILING';
-        if ($document->type === 'video') $mappedType = 'VIDEO';
-        if ($document->type === 'pdf') $mappedType = 'BROCHURE';
-
-        $status = 'VALIDE';
-        if (!$document->is_active) $status = 'ARCHIVE';
-        if ($document->expiration_date && \Carbon\Carbon::parse($document->expiration_date)->isPast()) {
-            $status = 'EXPIRE';
-        }
-
-        $sizeFormatted = '1.5 MB';
-        if ($document->file_size) {
-            $sizeFormatted = round($document->file_size / (1024 * 1024), 1) . ' MB';
-        } elseif (\Illuminate\Support\Facades\Storage::disk('public')->exists($document->file_path ?? '')) {
-            $bytes = \Illuminate\Support\Facades\Storage::disk('public')->size($document->file_path);
-            $sizeFormatted = round($bytes / (1024 * 1024), 1) . ' MB';
-        }
-
-        $formatted = [
-            'id' => $document->id,
-            'reference' => 'DOC-' . substr($document->id, 0, 6),
-            'titre' => $document->title,
-            'type' => $mappedType,
-            'produit' => $document->documentable_type === 'App\\Models\\Product' ? ($document->documentable->nom ?? 'Produit Associé') : 'Général',
-            'version' => 'v' . ($document->version ?? '1.0'),
-            'taille' => $sizeFormatted,
-            'dateExpiration' => $document->expiration_date ? \Carbon\Carbon::parse($document->expiration_date)->format('Y-m-d') : 'N/A',
-            'statut' => $status,
-            'paysAutorises' => ['FR', 'CI', 'SN'],
-            'documentable_id' => $document->documentable_id,
-            'documentable_type' => $document->documentable_type,
-            'url' => config('app.url') . \Illuminate\Support\Facades\Storage::url(preg_replace('/^\/?storage\//', '', $document->file_path)),
-            'folder' => $mappedType === 'E-DETAILING' ? 'E-Detailing' : ($mappedType === 'VIDEO' ? 'Vidéos' : 'Brochures')
-        ];
-
-        return response()->json($formatted, 201);
+        return response()->json($this->format($document->fresh('documentable'), $request), 201);
     }
 
-    public function show(Document $document)
+    public function show(Request $request, Document $document)
     {
-        return response()->json($document);
+        return response()->json($this->format($document->load('documentable'), $request));
     }
 
-    public function update(Request $request, Document $document)
+    public function update(Request $request, Document $document, DocumentViewerService $viewers)
     {
         if (Auth::user() && Auth::user()->hasRole(['delegue', 'delegue_medical'])) {
             return response()->json(['message' => 'Action non autorisée pour votre rôle.'], 403);
@@ -184,47 +99,11 @@ class DocumentController extends Controller
         unset($data['file']);
 
         $document->update($data);
-        
-        $document->refresh();
-
-        // Format for frontend
-        $mappedType = 'NOTICE';
-        if ($document->type === 'presentation') $mappedType = 'E-DETAILING';
-        if ($document->type === 'video') $mappedType = 'VIDEO';
-        if ($document->type === 'pdf') $mappedType = 'BROCHURE';
-
-        $status = 'VALIDE';
-        if (!$document->is_active) $status = 'ARCHIVE';
-        if ($document->expiration_date && \Carbon\Carbon::parse($document->expiration_date)->isPast()) {
-            $status = 'EXPIRE';
+        if (isset($data['file_path'])) {
+            $viewers->prepare($document);
         }
 
-        $sizeFormatted = '1.5 MB';
-        if ($document->file_size) {
-            $sizeFormatted = round($document->file_size / (1024 * 1024), 1) . ' MB';
-        } elseif (\Illuminate\Support\Facades\Storage::disk('public')->exists($document->file_path ?? '')) {
-            $bytes = \Illuminate\Support\Facades\Storage::disk('public')->size($document->file_path);
-            $sizeFormatted = round($bytes / (1024 * 1024), 1) . ' MB';
-        }
-
-        $formatted = [
-            'id' => $document->id,
-            'reference' => 'DOC-' . substr($document->id, 0, 6),
-            'titre' => $document->title,
-            'type' => $mappedType,
-            'produit' => $document->documentable_type === 'App\\Models\\Product' ? ($document->documentable->nom ?? 'Produit Associé') : 'Général',
-            'version' => 'v' . ($document->version ?? '1.0'),
-            'taille' => $sizeFormatted,
-            'dateExpiration' => $document->expiration_date ? \Carbon\Carbon::parse($document->expiration_date)->format('Y-m-d') : 'N/A',
-            'statut' => $status,
-            'paysAutorises' => ['FR', 'CI', 'SN'],
-            'documentable_id' => $document->documentable_id,
-            'documentable_type' => $document->documentable_type,
-            'url' => config('app.url') . \Illuminate\Support\Facades\Storage::url(preg_replace('/^\/?storage\//', '', $document->file_path)),
-            'folder' => $mappedType === 'E-DETAILING' ? 'E-Detailing' : ($mappedType === 'VIDEO' ? 'Vidéos' : 'Brochures')
-        ];
-
-        return response()->json($formatted);
+        return response()->json($this->format($document->fresh('documentable'), $request));
     }
 
     public function destroy(Document $document)
@@ -234,5 +113,74 @@ class DocumentController extends Controller
         }
         $document->delete();
         return response()->json(null, 204);
+    }
+
+    /** Adresse publique d'un fichier du disque public, joignable par le client qui appelle (et non localhost de APP_URL). */
+    private function publicUrl(?string $path, Request $request): ?string
+    {
+        if (!$path) {
+            return null;
+        }
+        if (preg_match('#^https?://#', $path)) {
+            return $path;
+        }
+        $relative = DocumentViewerService::relativePath($path);
+        $encoded = implode('/', array_map('rawurlencode', explode('/', $relative)));
+
+        // Lien public/storage (php artisan storage:link), indépendant de APP_URL
+        return $request->getSchemeAndHttpHost() . '/storage/' . $encoded;
+    }
+
+    /** Format renvoyé au web et au mobile : uniquement des valeurs réelles du document. */
+    private function format(Document $doc, Request $request): array
+    {
+        $mappedType = 'NOTICE';
+        if ($doc->type === 'presentation') $mappedType = 'E-DETAILING';
+        if ($doc->type === 'video') $mappedType = 'VIDEO';
+        if ($doc->type === 'pdf') $mappedType = 'BROCHURE';
+
+        $status = 'VALIDE';
+        if (!$doc->is_active) $status = 'ARCHIVE';
+        if ($doc->expiration_date && \Carbon\Carbon::parse($doc->expiration_date)->isPast()) {
+            $status = 'EXPIRE';
+        }
+
+        $relative = DocumentViewerService::relativePath($doc->file_path);
+        $sizeFormatted = null;
+        if ($relative !== '' && Storage::disk('public')->exists($relative)) {
+            $sizeFormatted = round(Storage::disk('public')->size($relative) / (1024 * 1024), 1) . ' MB';
+        }
+
+        $viewerPath = $doc->viewer_path && Storage::disk('public')->exists($doc->viewer_path) ? $doc->viewer_path : null;
+        $viewerExt = DocumentViewerService::extension($viewerPath);
+        $expiration = $doc->expiration_date ? \Carbon\Carbon::parse($doc->expiration_date)->format('Y-m-d') : null;
+
+        return [
+            'id' => $doc->id,
+            'reference' => 'DOC-' . substr($doc->id, 0, 6),
+            'titre' => $doc->title,
+            'title' => $doc->title,
+            'description' => $doc->description,
+            'type' => $mappedType,
+            'raw_type' => $doc->type,
+            // Extension du fichier d'origine : pdf, pptx, ppt, zip (HTML5), mp4, png…
+            'format' => DocumentViewerService::extension($doc->file_path),
+            'produit' => $doc->documentable_type === 'App\\Models\\Product' ? ($doc->documentable->nom ?? null) : 'Général',
+            'version' => 'v' . ($doc->version ?? '1.0'),
+            'taille' => $sizeFormatted,
+            'dateExpiration' => $expiration,
+            'expiration_date' => $expiration,
+            'statut' => $status,
+            'status' => $doc->status,
+            'is_active' => (bool) $doc->is_active,
+            'documentable_id' => $doc->documentable_id,
+            'documentable_type' => $doc->documentable_type,
+            'file_path' => $doc->file_path,
+            'url' => $this->publicUrl($doc->file_path, $request),
+            // Version affichable sur tablette : PDF converti (PowerPoint) ou page d'entrée HTML5 (zip)
+            'viewer_url' => $this->publicUrl($viewerPath, $request),
+            'viewer_format' => $viewerPath ? ($viewerExt === 'pdf' ? 'pdf' : 'html') : null,
+            'folder' => $mappedType === 'E-DETAILING' ? 'E-Detailing' : ($mappedType === 'VIDEO' ? 'Vidéos' : 'Brochures'),
+        ];
     }
 }

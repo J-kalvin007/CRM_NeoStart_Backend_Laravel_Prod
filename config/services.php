@@ -39,4 +39,9 @@ return [
         'alert_email' => env('PV_ALERT_EMAIL'),
     ],
 
+    // Conversion des présentations PowerPoint en PDF pour l'e-detailing sur tablette
+    'libreoffice' => [
+        'binary' => env('LIBREOFFICE_BINARY', 'soffice'),
+    ],
+
 ];
