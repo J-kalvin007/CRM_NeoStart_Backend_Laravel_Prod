@@ -85,17 +85,19 @@ class ActivityController extends Controller
                         });
                     }
                 } elseif ($isManager) {
-                    // S'il est superviseur/manager, voit les visites de son équipe ou des délégués sous lui (sauf brouillons)
+                    // S'il est superviseur/manager, voit les visites de son équipe ou des délégués sous lui
+                    // Inclut : planifiées, en attente, en cours, réalisées, manquées, annulées, brouillons, et toutes les visites duo
                     $q->orWhere(function ($subQ) use ($user) {
-                        $subQ->where('activities.statut', '!=', 'brouillon')
-                             ->whereHas('delegue', function ($delegueQuery) use ($user) {
-                                $delegueQuery->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
-                                    ->where('manager_id', $user->id);
-                                if ($user->team_id) {
-                                    $delegueQuery->orWhere('team_id', $user->team_id);
-                                }
-                            });
+                        $subQ->whereHas('delegue', function ($delegueQuery) use ($user) {
+                            $delegueQuery->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
+                                ->where('manager_id', $user->id);
+                            if ($user->team_id) {
+                                $delegueQuery->orWhere('team_id', $user->team_id);
+                            }
+                        });
                     });
+                    // Voir aussi les visites où il est le duo_user_id (visites duo qu'il anime)
+                    $q->orWhere('activities.duo_user_id', $user->id);
                 }
             });
         }
