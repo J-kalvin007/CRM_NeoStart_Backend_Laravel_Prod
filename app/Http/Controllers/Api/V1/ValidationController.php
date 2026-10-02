@@ -25,7 +25,7 @@ class ValidationController extends Controller
         $user = auth()->user();
         // Admin/global : tout ; hiérarchie : uniquement les éléments soumis par les collaborateurs encadrés
         $isGlobal = $user->can('scope:global') || $user->hasAnyRole(['superadmin', 'super-admin', 'admin']);
-        $teamIds = $user->teamMemberIds();
+        $teamIds = array_merge([$user->id], $user->teamMemberIds());
         $inTeam = fn ($q) => $isGlobal ? $q : $q->whereIn('user_id', $teamIds);
 
         $pendingContacts = Contact::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)

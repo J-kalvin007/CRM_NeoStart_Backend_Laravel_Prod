@@ -135,7 +135,13 @@ class SupervisorDashboardController extends Controller
         $targetPerDelegate = $this->visitsPerDay() * $workingDays;
 
         $team = $user->teamMembers()->with('scopes')->orderBy('name')->get();
+        if ($team->isEmpty()) {
+            $team = collect([$user]);
+        }
         $teamIds = $team->pluck('id')->all();
+        if (!in_array($user->id, $teamIds)) {
+            $teamIds[] = $user->id;
+        }
 
         // Planifiées / réalisées par délégué sur la période affichée
         $stats = $this->visitQuery($teamIds)

@@ -54,13 +54,31 @@ class StoreActivityRequest extends FormRequest
             $merge['account_id'] = null;
         }
 
-        // Sauvegarder le type original dans meta pour l'affichage
-        if ($this->has('meta') && !empty($this->meta)) {
-            $meta = $this->meta;
-            if (!isset($meta['activity_key'])) {
-                $meta['activity_key'] = $rawType;
+        // Assurer que chaque element de products a un product_id valide
+        if ($this->has('products') && is_array($this->products)) {
+            $cleanedProducts = [];
+            foreach ($this->products as $p) {
+                if (!is_array($p)) continue;
+                $pId = $p['product_id'] ?? $p['id'] ?? null;
+                $pName = $p['nom'] ?? $p['name'] ?? null;
+
+                if (!$pId || !\Illuminate\Support\Str::isUuid((string)$pId)) {
+                    if ($pName) {
+                        $match = \App\Models\Product::where('nom', $pName)->orWhere('name', $pName)->first();
+                        if ($match) $pId = $match->id;
+                    }
+                }
+
+                if ($pId && \Illuminate\Support\Str::isUuid((string)$pId) && \App\Models\Product::where('id', (string)$pId)->exists()) {
+                    $cleanedProducts[] = array_merge($p, ['product_id' => (string)$pId]);
+                }
             }
-            $merge['meta'] = $meta;
+
+            if (empty($cleanedProducts)) {
+                $this->request->remove('products');
+            } else {
+                $merge['products'] = $cleanedProducts;
+            }
         }
 
         $this->merge($merge);
