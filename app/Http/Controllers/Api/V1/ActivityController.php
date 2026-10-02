@@ -818,7 +818,7 @@ class ActivityController extends Controller
             'delegate_id'   => 'nullable|string',
             'contact_id'    => 'nullable|uuid',
             'account_id'    => 'nullable|uuid',
-            'duo_type'      => 'nullable|in:coaching,formation',
+            'duo_type'      => 'nullable|string',
             'date_activite' => 'required|date|after_or_equal:today',
             'heure_debut'   => 'required|string',
             'heure_fin'     => 'nullable|string',
@@ -826,6 +826,16 @@ class ActivityController extends Controller
             'notes'         => 'nullable|string',
             'objective'     => 'nullable|string',
         ]);
+
+        // Vérifier que le type d'activité duo existe si fourni
+        if (!empty($validated['duo_type'])) {
+            $duoTypeExists = \Illuminate\Support\Facades\DB::table('duo_activity_types')
+                ->where('name', $validated['duo_type'])
+                ->exists();
+            if (!$duoTypeExists) {
+                return response()->json(['message' => 'Le type d\'activité duo sélectionné est invalide.'], 422);
+            }
+        }
 
         $targetUserId = $validated['user_id'] ?? $validated['delegate_id'];
         $existingActivityId = $validated['activity_id'] ?? null;
@@ -867,7 +877,7 @@ class ActivityController extends Controller
                 'is_duo' => true,
                 'is_trio' => false,
                 'duo_user_id' => auth()->id(),
-                'duo_activity_type_id' => $this->duoTypeId($request->input('duo_type', 'coaching')),
+                'duo_activity_type_id' => $this->duoTypeId($request->input('duo_type')),
                 'duo_status' => 'accepted',
                 'duo_delegue_status' => 'pending',
                 'date_activite' => $validated['date_activite'],
@@ -890,7 +900,7 @@ class ActivityController extends Controller
                 'is_duo' => true,
                 'is_trio' => false,
                 'duo_user_id' => auth()->id(),
-                'duo_activity_type_id' => $this->duoTypeId($request->input('duo_type', 'coaching')),
+                'duo_activity_type_id' => $this->duoTypeId($request->input('duo_type')),
                 'duo_status' => 'accepted',
                 'duo_delegue_status' => 'pending',
                 'date_activite' => $validated['date_activite'],
@@ -1151,6 +1161,16 @@ class ActivityController extends Controller
             'notes'         => 'nullable|string',
         ]);
 
+        // Vérifier que le type d'activité trio existe si fourni
+        if (!empty($validated['activity_type'])) {
+            $trioTypeExists = \Illuminate\Support\Facades\DB::table('trio_activity_types')
+                ->where('name', $validated['activity_type'])
+                ->exists();
+            if (!$trioTypeExists) {
+                return response()->json(['message' => 'Le type d\'activité trio sélectionné est invalide.'], 422);
+            }
+        }
+
         $delegate = User::withoutGlobalScopes()->findOrFail($validated['user_id']);
         abort_unless($delegate->hasAnyRole(['delegue-medical', 'delegue_medical', 'delegue', 'delegate']), 422, 'La visite Trio doit être planifiée avec un délégué médical.');
         $this->ensureSupervises($delegate->id);
@@ -1408,10 +1428,13 @@ class ActivityController extends Controller
         abort_unless($ownerId && $user->manages($ownerId), 403, "Cette activité n'appartient pas à un délégué de votre équipe.");
     }
 
-    /** ID du type d'activité DUO (activity_types.code : coaching | formation). */
-    private function duoTypeId(?string $code): ?string
+    /** ID du type d'activité DUO (duo_activity_types.name). */
+    private function duoTypeId(?string $name): ?string
     {
-        return \Illuminate\Support\Facades\DB::table('activity_types')->where('code', $code ?: 'coaching')->value('id');
+        if (!$name) {
+            return null;
+        }
+        return \Illuminate\Support\Facades\DB::table('duo_activity_types')->where('name', $name)->value('id');
     }
 
     private function notifyDuoSupervisor(Activity $activity, string $title, string $message, string $type, array $extra = []): void
