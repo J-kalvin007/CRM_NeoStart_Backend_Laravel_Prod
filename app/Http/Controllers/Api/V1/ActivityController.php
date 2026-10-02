@@ -812,7 +812,7 @@ class ActivityController extends Controller
 
         if ($user && $user->hasAnyRole(['delegue', 'delegue_medical', 'delegate', 'Délégué', 'Délégué Médical'])) {
             return response()->json([
-                'message' => 'Seul le superviseur ou la hiérarchie peut planifier des visites DUO.'
+                'message' => 'Seul le superviseur, le Sales Manager ou la hiérarchie peut planifier des visites DUO.'
             ], 403);
         }
 
@@ -869,6 +869,7 @@ class ActivityController extends Controller
                 'contact_id' => $validated['contact_id'] ?? $existingActivity->contact_id,
                 'account_id' => $validated['account_id'] ?? $existingActivity->account_id,
                 'is_duo' => true,
+                'is_trio' => false,
                 'duo_user_id' => auth()->id(),
                 'duo_activity_type_id' => $this->duoTypeId($request->input('duo_type', 'coaching')),
                 'duo_status' => 'accepted',
@@ -891,6 +892,7 @@ class ActivityController extends Controller
                 'account_id' => $validated['account_id']
                     ?? (isset($validated['contact_id']) ? \App\Models\Contact::withoutGlobalScopes()->whereKey($validated['contact_id'])->value('account_id') : null),
                 'is_duo' => true,
+                'is_trio' => false,
                 'duo_user_id' => auth()->id(),
                 'duo_activity_type_id' => $this->duoTypeId($request->input('duo_type', 'coaching')),
                 'duo_status' => 'accepted',
@@ -1199,6 +1201,9 @@ class ActivityController extends Controller
             'subsidiary_id'        => $user->subsidiary_id ?? $supervisor->subsidiary_id,
             'user_id'              => $delegate->id,
             'accompanying_user_id' => $user->id,
+            'is_duo'               => true,
+            'is_trio'              => true,
+            'duo_user_id'          => $supervisor->id,
             'contact_id'           => $validated['contact_id'] ?? null,
             'account_id'           => $validated['account_id'] ?? $contact?->account_id,
             'date_activite'        => $validated['date_activite'],
@@ -1263,7 +1268,7 @@ class ActivityController extends Controller
         }
 
         $activity->update([
-            'statut'          => 'validee',
+            'statut'          => 'planifiee',
             'validated_by_id' => auth()->id(),
             'validation_date' => now(),
         ]);
@@ -1282,7 +1287,12 @@ class ActivityController extends Controller
                 "Votre visite Trio avec {$salesManager?->name} le {$date} à {$time} ({$visitName}) a été validée par votre superviseur {$supervisor->name}.",
                 'nouveau_trio',
                 'delegate',
-                ['activity_id' => (string) $activity->id, 'sales_manager_name' => $salesManager?->name, 'supervisor_name' => $supervisor->name]
+                [
+                    'activity_id' => (string) $activity->id,
+                    'sales_manager_name' => $salesManager?->name,
+                    'supervisor_name' => $supervisor->name,
+                    'action_url' => '/visites'
+                ]
             );
         }
 
@@ -1293,7 +1303,12 @@ class ActivityController extends Controller
                 "Votre demande de visite Trio avec {$delegate?->name} le {$date} à {$time} ({$visitName}) a été acceptée par {$supervisor->name}.",
                 'trio_accepte',
                 'sales_manager',
-                ['activity_id' => (string) $activity->id, 'delegate_name' => $delegate?->name, 'supervisor_name' => $supervisor->name]
+                [
+                    'activity_id' => (string) $activity->id,
+                    'delegate_name' => $delegate?->name,
+                    'supervisor_name' => $supervisor->name,
+                    'action_url' => '/visites'
+                ]
             );
         }
 
@@ -1318,7 +1333,7 @@ class ActivityController extends Controller
         ]);
 
         $activity->update([
-            'statut'           => 'rejetee',
+            'statut'           => 'annulee',
             'rejection_reason' => $validated['motif'],
             'motif'            => $validated['motif'],
             'validated_by_id'  => auth()->id(),

@@ -21,6 +21,7 @@ class Activity extends Model
         'user_id',
         'accompanying_user_id',
         'is_duo',
+        'is_trio',
         'duo_user_id',
         'duo_activity_type_id',
         'duo_status',
@@ -56,21 +57,10 @@ class Activity extends Model
         'niveau_interet',
         'motif',
         'meta',
-        'is_duo',
-        'duo_user_id',
-        'duo_status',
-        'duo_rejection_reason',
-        'duo_delegue_status',
-        'duo_delegue_rejection_reason',
         'gps_debut_accuracy',
         'gps_fin_accuracy',
         'start_time',
         'end_time',
-        'report_status',
-        'report_content',
-        'validated_by_id',
-        'validation_date',
-        'rejection_reason',
         'signature',
     ];
 
@@ -89,6 +79,7 @@ class Activity extends Model
         'gps_flagged'     => 'boolean',
         'validation_date' => 'datetime',
         'is_duo'          => 'boolean',
+        'is_trio'         => 'boolean',
     ];
 
     /* ─── Relations ──────────────────────────────────────────── */
@@ -138,8 +129,7 @@ class Activity extends Model
 
     public function isTrio(): bool
     {
-        return $this->accompanying_user_id !== null
-            && str_starts_with((string) $this->notes, '[VISITE TRIO SALES MANAGER]');
+        return (bool) $this->is_trio;
     }
 
     public function validatedBy()
