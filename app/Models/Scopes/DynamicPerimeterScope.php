@@ -87,8 +87,21 @@ class DynamicPerimeterScope implements Scope
         // Sans périmètre configuré, la hiérarchie voit au moins les délégués qu'elle encadre directement
         $teamIds = self::teamIdsFor($user);
 
+        $ownerIds = array_merge([$user->id], $teamIds);
+
         if ($table === 'users') {
-            $builder->whereIn('users.id', array_merge([$user->id], $teamIds));
+            $builder->whereIn('users.id', $ownerIds);
+        } elseif ($table === 'accounts') {
+            // Établissements créés par l'utilisateur ou son équipe, et ceux où exercent leurs
+            // prescripteurs (établissement principal ou rattachement multiple)
+            $builder->where(function ($q) use ($ownerIds) {
+                $q->whereIn('accounts.user_id', $ownerIds)
+                  ->orWhereIn('accounts.id', fn ($sub) => $sub->select('account_id')->from('contacts')
+                      ->whereIn('user_id', $ownerIds)->whereNotNull('account_id')->whereNull('deleted_at'))
+                  ->orWhereIn('accounts.id', fn ($sub) => $sub->select('account_contact.account_id')->from('account_contact')
+                      ->join('contacts', 'contacts.id', '=', 'account_contact.contact_id')
+                      ->whereIn('contacts.user_id', $ownerIds)->whereNull('contacts.deleted_at'));
+            });
         } elseif (in_array($table, $operationalTables)) {
             $builder->whereIn($table . '.user_id', array_merge([$user->id], $teamIds));
         } elseif (in_array($table, ['products', 'categories', 'product_types', 'specialities', 'galenic_forms'])) {
