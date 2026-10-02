@@ -115,10 +115,10 @@ class Activity extends Model
         return $this->belongsTo(User::class, 'duo_user_id');
     }
 
-    /** Nature du DUO (activity_types : coaching, formation) */
+    /** Nature du DUO (duo_activity_types : coaching, formation) */
     public function duoActivityType()
     {
-        return $this->belongsTo(ActivityType::class, 'duo_activity_type_id');
+        return $this->belongsTo(\App\Models\DuoActivityType::class, 'duo_activity_type_id');
     }
 
     /** DUO actif : proposé/accepté et non refusé par le délégué */

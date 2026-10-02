@@ -47,6 +47,7 @@ class ActivityController extends Controller
                 'contacts' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account', 'speciality', 'potential', 'influence']),
                 'account' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class),
                 'accompanyingUser' => fn($q) => $q->withoutGlobalScopes(),
+                'duoActivityType',
                 'products' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class),
                 'sampleMovements' => fn($q) => $q->where('movement_type', 'distribution')->with('product'),
             ])
@@ -360,6 +361,7 @@ class ActivityController extends Controller
                 'contacts' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account', 'speciality', 'potential', 'influence']),
                 'account' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class),
                 'tourPlan',
+                'duoActivityType',
                 'products' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class),
                 'sampleMovements'
             ])->findOrFail($id);

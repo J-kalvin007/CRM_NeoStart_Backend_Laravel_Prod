@@ -29,7 +29,8 @@ class ActivityResource extends JsonResource
             // Visite DUO (superviseur participant, nature et réponses)
             'is_duo'                       => (bool) $this->is_duo,
             'duo_user'                     => $this->when($this->is_duo, fn () => $this->duoUser ? ['id' => (string) $this->duoUser->id, 'name' => $this->duoUser->name] : null),
-            'duo_type'                     => $this->when($this->is_duo, fn () => $this->duoActivityType?->code),
+            'duo_type'                     => $this->when($this->is_duo, fn () => $this->duoActivityType?->name),
+            'duo_activity_type'             => $this->when($this->is_duo, fn () => $this->duoActivityType?->name),
             'is_trio'                      => $this->isTrio(),
             'trio_sales_manager'           => $this->when($this->isTrio() && $this->relationLoaded('accompanyingUser'), fn () => $this->accompanyingUser ? ['id' => (string) $this->accompanyingUser->id, 'name' => $this->accompanyingUser->name] : null),
             'duo_status'                   => $this->duo_status,
