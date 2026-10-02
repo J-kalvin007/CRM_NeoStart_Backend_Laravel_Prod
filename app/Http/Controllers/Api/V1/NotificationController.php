@@ -74,10 +74,34 @@ class NotificationController extends Controller
             $userList = [$users];
         }
 
-        foreach ($userList as $user) {
-            if (!$user || empty($user->id)) {
+        foreach ($userList as $u) {
+            if (!$u) {
                 continue;
             }
+
+            $userObj = null;
+            $userId = null;
+
+            if ($u instanceof User) {
+                $userObj = $u;
+                $userId = (string) $u->id;
+            } elseif (is_array($u)) {
+                $userId = (string) ($u['id'] ?? $u['user_id'] ?? '');
+                if ($userId) {
+                    $userObj = User::find($userId);
+                }
+            } elseif (is_string($u) || is_numeric($u)) {
+                $userId = (string) $u;
+                $userObj = User::find($userId);
+            }
+
+            if (!$userId) {
+                continue;
+            }
+
+            $nameStr = $userObj ? ($userObj->name ?? $userObj->nom ?? 'Utilisateur') : 'Utilisateur';
+            $emailStr = $userObj ? ($userObj->email ?? null) : null;
+            $fcmToken = $userObj ? ($userObj->fcm_token ?? null) : null;
 
             // 1. Insertion en base de données (Table notifications)
             try {
@@ -85,14 +109,14 @@ class NotificationController extends Controller
                     'id' => (string) Str::uuid(),
                     'type' => 'App\Notifications\GeneralNotification',
                     'notifiable_type' => 'App\Models\User',
-                    'notifiable_id' => $user->id,
+                    'notifiable_id' => $userId,
                     'data' => json_encode(array_merge([
                         'title' => $title,
                         'message' => $message,
                         'type' => $type,
                         'recipient_role' => $recipientRole,
-                        'user_id' => (string) $user->id,
-                        'delegate_name' => (string) $user->name,
+                        'user_id' => $userId,
+                        'delegate_name' => $nameStr,
                     ], $extra)),
                     'read_at' => null,
                     'created_at' => now(),
@@ -100,33 +124,73 @@ class NotificationController extends Controller
                 ]);
             } catch (\Throwable $e) {
                 Log::error("Erreur enregistrement notification DB: " . $e->getMessage());
-                throw $e;
             }
 
             // 2. Envoi d'Email au destinataire
-            if (!empty($user->email)) {
+            if ($userObj && !empty($emailStr)) {
                 try {
-                    Mail::to($user->email)->send(new \App\Mail\SkynityNotificationMail(
-                        $user,
+                    Mail::to($emailStr)->send(new \App\Mail\SkynityNotificationMail(
+                        $userObj,
                         $title,
                         $message,
                         $extra['action_url'] ?? null
                     ));
                 } catch (\Throwable $e) {
-                    Log::warning("Alerte envoi email notification ({$user->email}): " . $e->getMessage());
+                    Log::warning("Alerte envoi email notification ({$emailStr}): " . $e->getMessage());
                 }
             }
 
             // 3. Envoi Push Notification FCM si disponible
             try {
-                if (!empty($user->fcm_token) && app()->bound(\App\Services\FcmNotificationService::class)) {
+                if ($userObj && !empty($fcmToken) && app()->bound(\App\Services\FcmNotificationService::class)) {
                     $fcmService = app(\App\Services\FcmNotificationService::class);
-                    $fcmService->sendToUser($user, $title, $message, array_merge(['type' => $type], $extra));
+                    $fcmService->sendToUser($userObj, $title, $message, array_merge(['type' => $type], $extra));
                 }
             } catch (\Throwable $e) {
-                Log::info("FCM non configuré ou token expiré pour {$user->id}: " . $e->getMessage());
+                Log::info("FCM non configuré ou token expiré pour {$userId}: " . $e->getMessage());
             }
         }
+    }
+
+    /**
+     * Envoie une notification à tous les managers/superviseurs (ou au manager direct).
+     */
+    public static function notifyManagers(string $title, string $message, string $type = 'info', array $extra = [], $delegate = null)
+    {
+        $managers = collect();
+
+        // Check direct manager if delegate user provided
+        if ($delegate) {
+            $delObj = is_string($delegate) ? User::find($delegate) : $delegate;
+            if ($delObj && !empty($delObj->manager_id)) {
+                $mgr = User::find($delObj->manager_id);
+                if ($mgr) {
+                    $managers->push($mgr);
+                }
+            }
+        }
+
+        // Fallback: all managers/supervisors in database
+        if ($managers->isEmpty()) {
+            $managers = User::where(function ($q) {
+                $q->where('role', 'like', '%manager%')
+                  ->orWhere('role', 'like', '%supervis%')
+                  ->orWhere('role', 'like', '%admin%');
+            })->get();
+        }
+
+        if ($managers->isNotEmpty()) {
+            self::sendNotification($managers, $title, $message, $type, 'manager', $extra);
+        }
+    }
+
+    /**
+     * Envoie une notification au délégué et à son manager.
+     */
+    public static function notifyUserAndManagers($user, string $title, string $message, string $type = 'info', array $extra = [])
+    {
+        self::sendNotification($user, $title, $message, $type, 'delegate', $extra);
+        self::notifyManagers($title, $message, $type, $extra, $user);
     }
 
     #[OA\Post(

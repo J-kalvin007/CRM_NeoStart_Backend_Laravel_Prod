@@ -44,6 +44,43 @@ class ActivityReportController extends Controller
             'report_status'  => 'required|in:draft,submitted'
         ]);
 
+        // RÈGLE : Si on tente de soumettre le rapport d'aujourd'hui mais qu'il existe des rapports non soumis des jours précédents
+        if ($validated['report_status'] === 'submitted') {
+            $activityDate = Carbon::parse($activity->date_heure ?? $activity->created_at);
+            $todayStart = Carbon::today()->startOfDay();
+
+            // Si la visite est celle d'aujourd'hui ou récente
+            if ($activityDate->gte($todayStart)) {
+                $userId = $activity->user_id ?? auth()->id();
+                $unsubmittedPastCount = Activity::where('user_id', $userId)
+                    ->where('id', '!=', $activity->id)
+                    ->where('date_heure', '<', $todayStart)
+                    ->where(function ($q) {
+                        $q->whereNull('report_status')
+                          ->orWhere('report_status', '!=', 'submitted')
+                          ->orWhere('statut', '!=', 'realisee');
+                    })
+                    ->count();
+
+                if ($unsubmittedPastCount > 0) {
+                    NotificationController::sendNotification(
+                        $userId,
+                        '⚠️ Rapports des jours précédents non soumis',
+                        "Vous avez {$unsubmittedPastCount} compte-rendu(s) de visite en retard. Vous devez impérativement les soumettre avant de soumettre celui d'aujourd'hui.",
+                        'warning',
+                        'delegate',
+                        ['activity_id' => (string) $activity->id]
+                    );
+
+                    return response()->json([
+                        'error' => 'REPORTS_BLOCKED_UNSUBMITTED_PAST',
+                        'message' => "Impossible de soumettre le compte-rendu d'aujourd'hui : Vous avez {$unsubmittedPastCount} compte-rendu(s) de visite des jours précédents (hier ou antérieurs) non soumis. Veuillez d'abord soumettre vos rapports en retard.",
+                        'unsubmitted_count' => $unsubmittedPastCount,
+                    ], 422);
+                }
+            }
+        }
+
         $data = $validated;
         if ($validated['report_status'] === 'submitted') {
             $data['statut'] = 'realisee';
@@ -78,17 +115,13 @@ class ActivityReportController extends Controller
 
         if ($validated['report_status'] === 'submitted') {
             $user = $activity->delegue ?? $activity->user ?? auth()->user();
-            $manager = $user?->manager ?? \App\Models\User::whereHas('roles', fn($q) => $q->whereIn('name', ['superviseur', 'supervisor', 'manager', 'Manager', 'Superviseur', 'dir-commercial']))->first();
-            if ($manager && $user) {
-                NotificationController::sendNotification(
-                    $manager,
-                    'Nouveau compte-rendu de visite soumis',
-                    "Le délégué {$user->name} a finalisé et soumis son compte-rendu de visite.",
-                    'report',
-                    'manager',
-                    ['activity_id' => (string) $activity->id, 'sender_id' => (string) $user->id]
-                );
-            }
+            NotificationController::notifyUserAndManagers(
+                $user ?? auth()->id(),
+                'Nouveau compte-rendu de visite soumis',
+                "Le compte-rendu de visite a été soumis avec succès.",
+                'report',
+                ['activity_id' => (string) $activity->id]
+            );
         }
 
         return response()->json(new ActivityResource($activity->load(['delegue', 'contact', 'account', 'products'])));
@@ -139,19 +172,20 @@ class ActivityReportController extends Controller
             'validation_date' => Carbon::now()
         ]);
 
-        // Notification au délégué
+        // Notification au délégué & manager
         $title = $validated['status'] === 'validated' ? 'Compte-rendu validé' : 'Compte-rendu rejeté';
         $message = "Votre compte-rendu a été {$validated['status']}.";
         if ($validated['status'] === 'rejected') {
             $message .= " Motif : " . $validated['rejection_reason'];
         }
 
-        app(NotificationService::class)->send(
-            $activity->user,
+        NotificationController::sendNotification(
+            $activity->user_id ?? $activity->user,
             $title,
             $message,
             'report_validation',
-            ['activity_id' => $activity->id]
+            'delegate',
+            ['activity_id' => (string) $activity->id]
         );
 
         return response()->json($activity);
