@@ -30,7 +30,7 @@ class TourPlanResource extends JsonResource
         if ($activities->isNotEmpty()) {
             foreach ($activities as $act) {
                 $dateStr = $act->date_activite ? \Carbon\Carbon::parse($act->date_activite)->format('d/m/Y') : 'Date';
-                $timeStr = $act->heure_debut ? substr($act->heure_debut, 0, 5) : '09:30';
+                $timeStr = $act->heure_debut ? substr($act->heure_debut, 0, 5) : '--:--';
                 $docName = $act->contact 
                     ? trim(($act->contact->titre ? $act->contact->titre . ' ' : '') . $act->contact->prenom . ' ' . $act->contact->nom)
                     : ($act->contact_name ?? 'Dr. Praticien');
@@ -44,28 +44,6 @@ class TourPlanResource extends JsonResource
                     ];
                 }
                 $groupedDays[$dateStr]['items'][] = $line;
-            }
-        } else {
-            // Démonstration des rendez-vous de la semaine
-            $startDate = \Carbon\Carbon::parse($this->date_debut ?? now()->startOfWeek());
-            $demoDoctors = [
-                ['name' => 'Dr. Marc Adjanohoun (Cardiologie)', 'hosp' => 'Polyclinique Sainte Anne'],
-                ['name' => 'Dr. Sarah Kouassi (Pédiatrie)', 'hosp' => 'Clinique Sainte Marie'],
-                ['name' => 'Dr. Jean-Baptiste Koffi (Médecine Générale)', 'hosp' => 'CHU de Cocody'],
-                ['name' => 'Dr. Marie-Claire Diallo (Gynécologie)', 'hosp' => 'Centre Médical Riviera'],
-                ['name' => 'Dr. Ibrahim Touré (Neurologie)', 'hosp' => 'Hôpital Militaire'],
-            ];
-
-            for ($i = 0; $i < 5; $i++) {
-                $dayDate = $startDate->copy()->addDays($i)->format('d/m/Y');
-                $doc = $demoDoctors[$i % count($demoDoctors)];
-                $groupedDays[$dayDate] = [
-                    'day' => 'Visite du ' . $dayDate,
-                    'items' => [
-                        '09:00 • ' . $doc['name'] . ' (' . $doc['hosp'] . ')',
-                        '14:30 • Staff Médical • ' . $doc['hosp'],
-                    ],
-                ];
             }
         }
 

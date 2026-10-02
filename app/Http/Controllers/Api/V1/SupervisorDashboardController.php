@@ -52,6 +52,8 @@ class SupervisorDashboardController extends Controller
             ->get()
             ->map(fn ($act) => [
                 'name' => $act->delegue?->name ?? 'Délégué',
+                'user_id' => (string) $act->user_id,
+                'time' => $act->heure_debut ? substr($act->heure_debut, 0, 5) : null,
                 'sector' => $this->delegateSector($act->delegue),
                 'statusBadgeText' => $this->statusLabel($act->statut),
                 'subText' => trim($this->contactName($act) . ($act->account ? " ({$act->account->nom})" : '')),

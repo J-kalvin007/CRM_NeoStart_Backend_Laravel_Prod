@@ -35,4 +35,8 @@ return [
         ],
     ],
 
+    'pharmacovigilance' => [
+        'alert_email' => env('PV_ALERT_EMAIL'),
+    ],
+
 ];

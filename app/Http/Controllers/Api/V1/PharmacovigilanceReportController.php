@@ -84,11 +84,16 @@ class PharmacovigilanceReportController extends Controller
         }
 
         // Si gravité grave ou décès, envoyer un email
+        // Gravité grave ou décès : email à la direction pharmacovigilance (adresse configurée)
         if (in_array($report->severity, ['grave', 'deces'])) {
-            // Mock email sending
-            Mail::raw("Alerte PV Sévère soumise par " . auth()->user()->name . "\nDescription: " . $report->adverse_event_description, function($msg) {
-                $msg->to('pv-direction@example.com')->subject('ALERTE PHARMACOVIGILANCE URGENTE');
-            });
+            $recipient = config('services.pharmacovigilance.alert_email');
+            if ($recipient) {
+                Mail::raw("Alerte PV Sévère soumise par " . auth()->user()->name . "\nDescription: " . $report->adverse_event_description, function ($msg) use ($recipient) {
+                    $msg->to($recipient)->subject('ALERTE PHARMACOVIGILANCE URGENTE');
+                });
+            } else {
+                \Log::warning('Alerte pharmacovigilance grave non envoyée par email : PV_ALERT_EMAIL non configuré.', ['report_id' => $report->id]);
+            }
         }
 
         return response()->json($report, 201);

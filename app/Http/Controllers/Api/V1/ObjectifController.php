@@ -196,7 +196,7 @@ class ObjectifController extends Controller
                     ->whereMonth('date_activite', $now->month)
                     ->count();
             } elseif ($obj->type_objectif === 'couverture_categorie_a') {
-                // Mock logic for catégorie A
+                // Prescripteurs de catégorie A (meta.categorie) visités ce mois
                 $realise = \App\Models\Activity::where('user_id', $user->id)
                     ->where('activity_type', 'visite')
                     ->where('statut', 'realisee')

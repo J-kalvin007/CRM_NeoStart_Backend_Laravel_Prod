@@ -457,6 +457,7 @@ class ValidationController extends Controller
                 'statut' => 'rejete',
                 'valide_par' => auth()->id(),
                 'valide_le' => now(),
+                'commentaire_validation' => $reason,
             ]);
 
             $recipient = $plan->delegue ?? $plan->user;
@@ -464,7 +465,7 @@ class ValidationController extends Controller
                 NotificationController::sendNotification(
                     $recipient,
                     'Planning de tournée rejeté',
-                    "Votre plan de tournée '{$plan->nom}' a été rejeté par votre superviseur.",
+                    "Votre plan de tournée '{$plan->nom}' a été rejeté par votre superviseur." . ($reason ? " Motif : {$reason}" : ""),
                     'planning',
                     'delegate',
                     ['id' => (string) $plan->id, 'type' => $type]

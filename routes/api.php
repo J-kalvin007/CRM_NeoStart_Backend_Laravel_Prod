@@ -376,6 +376,7 @@ Route::prefix('v1')->group(function () {
 
         // ── Messagerie Interne ─────────────────────────────────
         Route::get('conversations', [ConversationController::class, 'index']);
+        Route::post('conversations', [ConversationController::class, 'store']);
         Route::get('conversations/{id}/messages', [ConversationController::class, 'messages']);
         Route::post('conversations/{id}/messages', [ConversationController::class, 'sendMessage']);
 

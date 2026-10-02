@@ -59,10 +59,12 @@ class ClmAnalyticController extends Controller
         ]);
 
         $docId = $validated['document_id'];
-        // If docId is not a valid UUID, find or fallback to first document
-        if (!\Illuminate\Support\Str::isUuid($docId)) {
-            $existingDoc = \App\Models\Document::first();
-            $docId = $existingDoc ? $existingDoc->id : \Illuminate\Support\Str::uuid();
+        // La présentation doit être rattachée au document réellement présenté
+        if (!\Illuminate\Support\Str::isUuid($docId) || !\App\Models\Document::whereKey($docId)->exists()) {
+            return response()->json([
+                'message' => 'Document de présentation inconnu.',
+                'errors' => ['document_id' => ['Document de présentation inconnu.']],
+            ], 422);
         }
 
         $contactId = $validated['contact_id'] ?? $activity->contact_id;

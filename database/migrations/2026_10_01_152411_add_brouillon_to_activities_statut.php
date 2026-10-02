@@ -11,7 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-        \Illuminate\Support\Facades\DB::statement("ALTER TABLE activities MODIFY statut VARCHAR(50) DEFAULT 'brouillon'");
+        // MySQL : conversion de l'ENUM en chaîne ; autres pilotes (SQLite des tests) : la colonne accepte déjà toute chaîne
+        if (\Illuminate\Support\Facades\DB::getDriverName() === 'mysql') {
+            \Illuminate\Support\Facades\DB::statement("ALTER TABLE activities MODIFY statut VARCHAR(50) DEFAULT 'brouillon'");
+        }
     }
 
     /**
@@ -19,6 +22,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        \Illuminate\Support\Facades\DB::statement("ALTER TABLE activities MODIFY statut ENUM('planifiee', 'en_cours', 'realisee', 'manquee', 'annulee') DEFAULT 'planifiee'");
+        if (\Illuminate\Support\Facades\DB::getDriverName() === 'mysql') {
+            \Illuminate\Support\Facades\DB::statement("ALTER TABLE activities MODIFY statut ENUM('planifiee', 'en_cours', 'realisee', 'manquee', 'annulee') DEFAULT 'planifiee'");
+        }
     }
 };

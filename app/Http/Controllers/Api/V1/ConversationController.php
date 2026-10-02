@@ -5,190 +5,155 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Conversation;
 use App\Models\Message;
+use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 
+/**
+ * Messagerie interne : uniquement les conversations dont l'utilisateur est participant.
+ * Aucune conversation ni aucun message de démonstration.
+ */
 class ConversationController extends Controller
 {
     public function index(Request $request)
     {
-        try {
-            $conversations = Conversation::with(['messages' => function ($q) {
-                $q->latest()->limit(1);
-            }])->get();
+        $user = $request->user();
 
-            if ($conversations->isNotEmpty()) {
-                $data = $conversations->map(function ($c) {
-                    $lastMsg = $c->messages->first();
-                    return [
-                        'id' => (string) $c->id,
-                        'name' => $c->title ?? 'Discussion Équipe',
-                        'title' => $c->title ?? 'Discussion Équipe',
-                        'type' => $c->type ?? 'direct',
-                        'last_message' => $lastMsg ? $lastMsg->content : 'Aucun message',
-                        'last_message_at' => $lastMsg ? $lastMsg->created_at->toIso8601String() : $c->updated_at->toIso8601String(),
-                        'unread_count' => 0,
-                    ];
-                });
+        $data = Conversation::whereHas('users', fn ($q) => $q->where('users.id', $user->id))
+            ->with([
+                'messages' => fn ($q) => $q->latest()->limit(1),
+                'users:id,name',
+            ])
+            ->get()
+            ->map(function (Conversation $c) use ($user) {
+                $lastMsg = $c->messages->first();
+                $others = $c->users->where('id', '!=', $user->id)->pluck('name')->filter()->values();
+                $name = $c->title ?: ($others->isNotEmpty() ? $others->join(', ') : 'Conversation');
 
-                return response()->json(['data' => $data]);
-            }
-        } catch (\Throwable $e) {
-            // Fallback
+                return [
+                    'id' => (string) $c->id,
+                    'name' => $name,
+                    'title' => $name,
+                    'type' => $c->type ?? 'direct',
+                    'last_message' => $lastMsg?->content ?? '',
+                    'last_message_at' => ($lastMsg?->created_at ?? $c->updated_at)->toIso8601String(),
+                    'unread_count' => Message::where('conversation_id', $c->id)
+                        ->where('sender_id', '!=', $user->id)
+                        ->where('is_read', false)
+                        ->count(),
+                ];
+            })
+            ->sortByDesc('last_message_at')
+            ->values();
+
+        return response()->json(['data' => $data]);
+    }
+
+    /** Démarrer une conversation avec un destinataire (et un premier message). */
+    public function store(Request $request)
+    {
+        $validated = $request->validate([
+            'recipient_id' => 'required|uuid|exists:users,id',
+            'title' => 'nullable|string|max:255',
+            'type' => 'nullable|string|max:100',
+            'message' => 'nullable|string',
+        ]);
+        $user = $request->user();
+
+        if ($validated['recipient_id'] === $user->id) {
+            return response()->json(['message' => 'Vous ne pouvez pas démarrer une conversation avec vous-même.'], 422);
         }
 
-        return response()->json([
-            'data' => [
-                [
-                    'id' => 'conv-1',
-                    'name' => 'Équipe Abidjan Est — Visites DUO & Coaching',
-                    'title' => 'Équipe Abidjan Est — Visites DUO & Coaching',
-                    'type' => 'Groupe Secteur',
-                    'last_message' => 'Rappel : validation des plannings de la semaine et remise d\'échantillons VasoProtect.',
-                    'last_message_at' => now()->subHours(2)->toIso8601String(),
-                    'unread_count' => 2,
-                ],
-                [
-                    'id' => 'conv-2',
-                    'name' => 'Supervision Régionale — Marc Dupont',
-                    'title' => 'Supervision Régionale — Marc Dupont',
-                    'type' => 'Manager Direct',
-                    'last_message' => 'Votre rapport de visite au CHU de Cocody a bien été validé.',
-                    'last_message_at' => now()->subDays(1)->toIso8601String(),
-                    'unread_count' => 0,
-                ],
-                [
-                    'id' => 'conv-3',
-                    'name' => 'Support Technique SKYNITY & Certifications HDS',
-                    'title' => 'Support Technique SKYNITY & Certifications HDS',
-                    'type' => 'Support Technique',
-                    'last_message' => 'Toutes vos données de visites hors-ligne sont synchronisées avec succès.',
-                    'last_message_at' => now()->subDays(2)->toIso8601String(),
-                    'unread_count' => 0,
-                ],
-            ]
+        $conversation = Conversation::create([
+            'title' => $validated['title'] ?? null,
+            'type' => $validated['type'] ?? 'direct',
         ]);
+        $conversation->users()->attach([$user->id, $validated['recipient_id']]);
+
+        if (!empty($validated['message'])) {
+            Message::create([
+                'conversation_id' => $conversation->id,
+                'sender_id' => $user->id,
+                'content' => $validated['message'],
+                'is_read' => false,
+            ]);
+        }
+
+        $recipient = User::find($validated['recipient_id']);
+        if ($recipient && !empty($validated['message'])) {
+            NotificationController::sendNotification(
+                $recipient,
+                'Nouveau message',
+                "{$user->name} : " . mb_strimwidth($validated['message'], 0, 120, '…'),
+                'message',
+                'all',
+                ['id' => (string) $conversation->id, 'type' => 'conversation']
+            );
+        }
+
+        return response()->json(['data' => ['id' => (string) $conversation->id]], 201);
     }
 
     public function messages($id, Request $request)
     {
-        try {
-            $dbMessages = Message::where('conversation_id', $id)->with('sender')->orderBy('created_at', 'asc')->get();
-            if ($dbMessages->isNotEmpty()) {
-                $data = $dbMessages->map(function ($m) {
-                    return [
-                        'id' => (string) $m->id,
-                        'conversation_id' => (string) $m->conversation_id,
-                        'sender_id' => (string) $m->sender_id,
-                        'sender_name' => $m->sender ? $m->sender->name : 'Utilisateur',
-                        'content' => $m->content,
-                        'created_at' => $m->created_at->toIso8601String(),
-                    ];
-                });
-                return response()->json(['data' => $data]);
-            }
-        } catch (\Throwable $e) {
-            // Fallback
-        }
+        $conversation = $this->participantConversation($id, $request->user());
 
-        $fallbackMessages = [
-            'conv-1' => [
-                [
-                    'id' => 'msg-101',
-                    'conversation_id' => 'conv-1',
-                    'sender_id' => 'usr-manager',
-                    'sender_name' => 'Marc Dupont (Manager)',
-                    'content' => 'Bonjour l\'équipe, n\'oubliez pas de soumettre vos rapports de tournée avant 18h.',
-                    'created_at' => now()->subHours(4)->toIso8601String(),
-                ],
-                [
-                    'id' => 'msg-102',
-                    'conversation_id' => 'conv-1',
-                    'sender_id' => 'usr-sophie',
-                    'sender_name' => 'Sophie Lawson (Déléguée)',
-                    'content' => 'Bonjour Marc, c\'est noté. Mes rapports pour la Polyclinique Indénié sont transmis.',
-                    'created_at' => now()->subHours(3)->toIso8601String(),
-                ],
-                [
-                    'id' => 'msg-103',
-                    'conversation_id' => 'conv-1',
-                    'sender_id' => 'usr-manager',
-                    'sender_name' => 'Marc Dupont (Manager)',
-                    'content' => 'Parfait réactivité ! Merci Sophie.',
-                    'created_at' => now()->subHours(2)->toIso8601String(),
-                ],
-            ],
-            'conv-2' => [
-                [
-                    'id' => 'msg-201',
-                    'conversation_id' => 'conv-2',
-                    'sender_id' => 'usr-manager',
-                    'sender_name' => 'Marc Dupont (Manager)',
-                    'content' => 'Bonjour, félicitations pour les résultats sur le secteur Cocody ce mois-ci !',
-                    'created_at' => now()->subDays(1)->toIso8601String(),
-                ],
-                [
-                    'id' => 'msg-202',
-                    'conversation_id' => 'conv-2',
-                    'sender_id' => 'usr-sophie',
-                    'sender_name' => 'Sophie Lawson (Déléguée)',
-                    'content' => 'Merci Marc ! Le ciblage des médecins prioritaires a bien fonctionné.',
-                    'created_at' => now()->subHours(20)->toIso8601String(),
-                ],
-            ],
-            'conv-3' => [
-                [
-                    'id' => 'msg-301',
-                    'conversation_id' => 'conv-3',
-                    'sender_id' => 'usr-support',
-                    'sender_name' => 'Support Technique SKYNITY',
-                    'content' => 'Bienvenue dans la messagerie sécurisée SKYNITY HDS.',
-                    'created_at' => now()->subDays(2)->toIso8601String(),
-                ],
-            ],
-        ];
+        // Les messages reçus sont marqués comme lus à l'ouverture
+        Message::where('conversation_id', $conversation->id)
+            ->where('sender_id', '!=', $request->user()->id)
+            ->where('is_read', false)
+            ->update(['is_read' => true]);
 
-        return response()->json(['data' => $fallbackMessages[$id] ?? $fallbackMessages['conv-1']]);
+        $data = Message::where('conversation_id', $conversation->id)
+            ->with('sender:id,name')
+            ->orderBy('created_at')
+            ->get()
+            ->map(fn ($m) => [
+                'id' => (string) $m->id,
+                'conversation_id' => (string) $m->conversation_id,
+                'sender_id' => (string) $m->sender_id,
+                'sender_name' => $m->sender?->name ?? '',
+                'content' => $m->content,
+                'created_at' => $m->created_at->toIso8601String(),
+            ]);
+
+        return response()->json(['data' => $data]);
     }
 
     public function sendMessage($id, Request $request)
     {
-        $content = $request->input('content', '');
-        $userId = $request->user() ? $request->user()->id : 'usr-current';
-        $userName = $request->user() ? $request->user()->name : 'Moi';
+        $validated = $request->validate(['content' => 'required|string']);
+        $user = $request->user();
+        $conversation = $this->participantConversation($id, $user);
 
-        try {
-            $msg = Message::create([
-                'id' => Str::uuid(),
-                'conversation_id' => $id,
-                'sender_id' => $userId,
-                'content' => $content,
-                'is_read' => true,
-            ]);
+        $msg = Message::create([
+            'conversation_id' => $conversation->id,
+            'sender_id' => $user->id,
+            'content' => $validated['content'],
+            'is_read' => false,
+        ]);
+        $conversation->touch();
 
-            return response()->json([
-                'status' => 'success',
-                'data' => [
-                    'id' => (string) $msg->id,
-                    'conversation_id' => (string) $msg->conversation_id,
-                    'sender_id' => (string) $msg->sender_id,
-                    'sender_name' => $userName,
-                    'content' => $msg->content,
-                    'created_at' => $msg->created_at->toIso8601String(),
-                ]
-            ]);
-        } catch (\Throwable $e) {
-            return response()->json([
-                'status' => 'success',
-                'data' => [
-                    'id' => 'msg-' . time(),
-                    'conversation_id' => $id,
-                    'sender_id' => $userId,
-                    'sender_name' => $userName,
-                    'content' => $content,
-                    'created_at' => now()->toIso8601String(),
-                ]
-            ]);
-        }
+        return response()->json([
+            'data' => [
+                'id' => (string) $msg->id,
+                'conversation_id' => (string) $msg->conversation_id,
+                'sender_id' => (string) $msg->sender_id,
+                'sender_name' => $user->name,
+                'content' => $msg->content,
+                'created_at' => $msg->created_at->toIso8601String(),
+            ],
+        ], 201);
+    }
+
+    private function participantConversation(string $id, User $user): Conversation
+    {
+        $conversation = Conversation::findOrFail($id);
+        abort_unless(
+            $conversation->users()->where('users.id', $user->id)->exists(),
+            403,
+            'Vous ne participez pas à cette conversation.'
+        );
+
+        return $conversation;
     }
 }
