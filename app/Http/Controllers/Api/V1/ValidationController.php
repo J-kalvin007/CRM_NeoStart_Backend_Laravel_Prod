@@ -227,12 +227,14 @@ class ValidationController extends Controller
         if (in_array($type, ['visit', 'activity_report'])) {
             $activity = \App\Models\Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($id);
             $this->ensureManaged($activity->user_id);
-            $activity->update([
-                'statut' => 'validee',
-                'report_status' => 'validated',
-                'validated_by_id' => auth()->id(),
-                'validation_date' => now(),
-            ]);
+            // Visite planifiée : validation du créneau ; compte-rendu : validation du rapport,
+            // la visite reste « réalisée » (son statut n'est pas écrasé)
+            $activity->update(array_merge(
+                $type === 'activity_report'
+                    ? ['report_status' => 'validated']
+                    : ['statut' => 'validee'],
+                ['rejection_reason' => null, 'validated_by_id' => auth()->id(), 'validation_date' => now()]
+            ));
 
             $recipient = $activity->user ?? $activity->delegue;
             if ($recipient) {
@@ -258,7 +260,11 @@ class ValidationController extends Controller
                 'valide_le' => now(),
             ]);
 
-            \App\Models\Activity::where('tour_plan_id', $plan->id)->update(['statut' => 'validee']);
+            // Seules les visites encore en attente sont validées (les visites réalisées, annulées… gardent leur statut)
+            \App\Models\Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
+                ->where('tour_plan_id', $plan->id)
+                ->whereIn('statut', ['brouillon', 'en_attente', 'soumis'])
+                ->update(['statut' => 'validee', 'validated_by_id' => auth()->id(), 'validation_date' => now()]);
 
             $recipient = $plan->delegue ?? $plan->user;
             if ($recipient) {
@@ -427,13 +433,14 @@ class ValidationController extends Controller
         if (in_array($type, ['visit', 'activity_report'])) {
             $activity = \App\Models\Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($id);
             $this->ensureManaged($activity->user_id);
-            $activity->update([
-                'statut' => 'refusee',
-                'report_status' => 'rejected',
-                'rejection_reason' => $reason,
-                'validated_by_id' => auth()->id(),
-                'validation_date' => now(),
-            ]);
+            // Compte-rendu rejeté : la visite reste réalisée, le délégué corrige son rapport ;
+            // visite planifiée refusée : le créneau est refusé
+            $activity->update(array_merge(
+                $type === 'activity_report'
+                    ? ['report_status' => 'rejected', 'is_locked' => false]
+                    : ['statut' => 'refusee'],
+                ['rejection_reason' => $reason, 'validated_by_id' => auth()->id(), 'validation_date' => now()]
+            ));
 
             $recipient = $activity->user ?? $activity->delegue;
             if ($recipient) {
@@ -480,7 +487,7 @@ class ValidationController extends Controller
             $this->ensureManaged($expense->user_id);
             $expense->update([
                 'status' => 'rejected',
-                'rejection_reason' => $reason ?? 'Non conforme',
+                'rejection_reason' => $reason,
                 'approved_by' => auth()->id(),
             ]);
 

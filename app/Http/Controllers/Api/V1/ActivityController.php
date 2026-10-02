@@ -240,6 +240,12 @@ class ActivityController extends Controller
         // - annulee : quand le délégué annule la visite
         // - visite_duo : quand c'est une visite en duo
 
+        $isManagerRole = $user->hasRole(['superadmin', 'admin', 'superviseur', 'supervisor', 'manager']);
+        // Un délégué ne crée pas une visite déjà validée, refusée ou manquée : elle part en validation
+        if (!$isManagerRole && in_array($data['statut'] ?? null, ['validee', 'valide', 'refusee', 'rejetee', 'manquee', 'annulee'], true)) {
+            $data['statut'] = 'en_attente';
+        }
+
         if (!isset($data['statut']) || $data['statut'] === 'planifiee') {
             if (isset($data['is_draft']) && $data['is_draft'] === true) {
                 // Le délégué crée un brouillon
@@ -401,6 +407,17 @@ class ActivityController extends Controller
 
         $validatedData = $request->validated();
         $targetStatus = $validatedData['statut'] ?? null;
+
+        // Validation / refus : décision du responsable (circuit validations), jamais du délégué lui-même
+        $user = auth()->user();
+        $canDecide = $user->can('scope:global') || $user->hasAnyRole(['superadmin', 'super-admin', 'admin']) || ($activity->user_id && $user->manages((string) $activity->user_id));
+        $decisionStatuts = ['planifiee', 'validee', 'valide', 'refusee', 'rejetee'];
+        if (!$canDecide && $targetStatus !== null && $targetStatus !== $activity->statut && in_array($targetStatus, $decisionStatuts, true)) {
+            return response()->json(['message' => 'La validation ou le refus d\'une visite revient à votre responsable.'], 403);
+        }
+        if (!$canDecide && in_array($validatedData['report_status'] ?? null, ['validated', 'rejected'], true)) {
+            return response()->json(['message' => 'La validation d\'un compte-rendu revient à votre responsable.'], 403);
+        }
         if (in_array($targetStatus, ['en_cours', 'realisee'], true) && (string) $activity->user_id !== (string) auth()->id()) {
             return response()->json([
                 'message' => 'Seul le délégué auquel cette visite est attribuée peut la démarrer ou la terminer.'

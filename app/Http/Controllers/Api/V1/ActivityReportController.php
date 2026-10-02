@@ -44,21 +44,26 @@ class ActivityReportController extends Controller
             'report_status'  => 'required|in:draft,submitted'
         ]);
 
+        abort_unless((string) $activity->user_id === (string) auth()->id(), 403, 'Seul le délégué de cette visite peut rédiger son compte-rendu.');
+        abort_if($activity->report_status === 'validated', 422, 'Ce compte-rendu a déjà été validé par votre responsable.');
+
         // RÈGLE : Si on tente de soumettre le rapport d'aujourd'hui mais qu'il existe des rapports non soumis des jours précédents
         if ($validated['report_status'] === 'submitted') {
-            $activityDate = Carbon::parse($activity->date_heure ?? $activity->created_at);
+            $activityDate = Carbon::parse($activity->date_activite ?? $activity->created_at);
             $todayStart = Carbon::today()->startOfDay();
 
             // Si la visite est celle d'aujourd'hui ou récente
             if ($activityDate->gte($todayStart)) {
                 $userId = $activity->user_id ?? auth()->id();
+                // Comptes-rendus en retard : visites des jours précédents effectivement démarrées ou réalisées
+                // dont le rapport n'a pas été soumis (ou a été rejeté et doit être corrigé)
                 $unsubmittedPastCount = Activity::where('user_id', $userId)
                     ->where('id', '!=', $activity->id)
-                    ->where('date_heure', '<', $todayStart)
+                    ->whereDate('date_activite', '<', $todayStart)
+                    ->whereIn('statut', ['en_cours', 'realisee'])
                     ->where(function ($q) {
                         $q->whereNull('report_status')
-                          ->orWhere('report_status', '!=', 'submitted')
-                          ->orWhere('statut', '!=', 'realisee');
+                          ->orWhereIn('report_status', ['draft', 'rejected']);
                     })
                     ->count();
 
@@ -84,6 +89,8 @@ class ActivityReportController extends Controller
         $data = $validated;
         if ($validated['report_status'] === 'submitted') {
             $data['statut'] = 'realisee';
+            // Nouvelle soumission : l'ancien motif de rejet ne s'applique plus
+            $data['rejection_reason'] = null;
         }
         if ($request->has('notes') && !empty($request->input('notes'))) {
             $data['notes'] = $request->input('notes');

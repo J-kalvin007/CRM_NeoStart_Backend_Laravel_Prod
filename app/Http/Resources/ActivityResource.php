@@ -43,7 +43,7 @@ class ActivityResource extends JsonResource
             'signature'      => $this->signature,
             'subsidiary_id'  => $this->subsidiary_id,
             'user_id'        => $this->user_id,
-            'delegate_name'  => $this->delegue?->name ?? 'Délégué Médical',
+            'delegate_name'  => $this->delegue?->name,
             'type'           => $this->whenLoaded('type', fn() => ['id' => $this->type->id, 'nom' => $this->type->nom]),
             'user'           => $this->whenLoaded('delegue', fn() => ['id' => $this->delegue->id, 'name' => $this->delegue->name, 'email' => $this->delegue->email]),
             'delegue'        => $this->whenLoaded('delegue', fn() => [
