@@ -47,7 +47,7 @@ return new class extends Migration
             $table->enum('influence', ['faible', 'moyen', 'fort'])->nullable();
             $table->unsignedSmallInteger('score')->nullable()->comment('Score 0-100 calculé par le moteur IA');
 
-            $table->enum('statut', ['actif', 'inactif', 'archive'])->default('actif');
+            $table->enum('statut', ['en_attente', 'actif', 'inactif', 'archive', 'rejete'])->default('en_attente');
 
             // Attributs sectoriels libres
             // Pharma ex: {"rpps": "12345", "is_kol": true, "nb_consultations_jour": 30}

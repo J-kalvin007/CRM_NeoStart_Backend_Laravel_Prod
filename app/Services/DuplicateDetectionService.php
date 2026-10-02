@@ -22,7 +22,8 @@ class DuplicateDetectionService
         $query = Contact::query();
 
         if ($countryId) {
-            $query->whereHas('account.subsidiary', function($q) use ($countryId) {
+            $query->whereHas('account.organizationalUnit', function($q) use ($countryId) {
+                // TODO: country_id might not exist on organizational_units.
                 $q->where('country_id', $countryId);
             });
         }
@@ -56,26 +57,32 @@ class DuplicateDetectionService
      * Vérifie si un Compte en doublon existe déjà dans la même filiale.
      * Critères : (Nom ET Ville) OU (Email) OU (Téléphone)
      */
-    public function findDuplicateAccount(string $subsidiaryId, array $data, ?string $excludeId = null): ?Account
+    public function findDuplicateAccount(?string $organizationalUnitId, array $data, ?string $excludeId = null): ?Account
     {
-        $query = Account::where('subsidiary_id', $subsidiaryId);
+        $query = Account::query();
+
+        // Si une unité org est définie on restreint la recherche à ce périmètre,
+        // sinon on cherche globalement (évite de rater un doublon sans unité).
+        if ($organizationalUnitId) {
+            $query->where('organizational_unit_id', $organizationalUnitId);
+        }
 
         if ($excludeId) {
             $query->where('id', '!=', $excludeId);
         }
 
-        $email = $data['email'] ?? null;
+        $email     = $data['email']     ?? null;
         $telephone = $data['telephone'] ?? null;
-        $nom = $data['nom'] ?? null;
-        $ville = $data['ville'] ?? null;
+        $nom       = $data['nom']       ?? null;
+        $ville     = $data['ville']     ?? null;
 
         if (!$email && !$telephone && !($nom && $ville)) {
-            return null; // Pas assez de critères pour détecter un doublon
+            return null; // Pas assez de critères
         }
 
         return $query->where(function($q) use ($email, $telephone, $nom, $ville) {
-            if ($email) $q->orWhere('email', $email);
-            if ($telephone) $q->orWhere('telephone', $telephone);
+            if ($email)             $q->orWhere('email', $email);
+            if ($telephone)         $q->orWhere('telephone', $telephone);
             if ($nom && $ville) {
                 $q->orWhere(function($subQ) use ($nom, $ville) {
                     $subQ->where('nom', $nom)->where('ville', $ville);
@@ -85,27 +92,32 @@ class DuplicateDetectionService
     }
 
     /**
-     * Lance une exception 409 Conflict si un doublon est détecté.
+     * Lance une exception 409 Conflict si un doublon de contact est détecté.
      */
     public function abortIfDuplicateContact(?string $countryId, array $data, ?string $excludeId = null): void
     {
         $duplicate = $this->findDuplicateContact($countryId, $data, $excludeId);
         if ($duplicate) {
-            abort(409, json_encode([
-                'message' => 'Un contact similaire existe déjà.',
-                'duplicate_id' => $duplicate->id
-            ]));
+            abort(response()->json([
+                'message'        => 'Un contact similaire existe déjà.',
+                'duplicate_id'   => $duplicate->id,
+                'duplicate_name' => trim(($duplicate->nom ?? '') . ' ' . ($duplicate->prenom ?? '')),
+            ], 409));
         }
     }
 
-    public function abortIfDuplicateAccount(string $subsidiaryId, array $data, ?string $excludeId = null): void
+    /**
+     * Lance une exception 409 Conflict si un doublon de compte est détecté.
+     */
+    public function abortIfDuplicateAccount(?string $organizationalUnitId, array $data, ?string $excludeId = null): void
     {
-        $duplicate = $this->findDuplicateAccount($subsidiaryId, $data, $excludeId);
+        $duplicate = $this->findDuplicateAccount($organizationalUnitId, $data, $excludeId);
         if ($duplicate) {
-            abort(409, json_encode([
-                'message' => 'Un compte similaire existe déjà dans cette filiale.',
-                'duplicate_id' => $duplicate->id
-            ]));
+            abort(response()->json([
+                'message'        => 'Un compte similaire existe déjà dans cette filiale.',
+                'duplicate_id'   => $duplicate->id,
+                'duplicate_name' => $duplicate->nom ?? 'Inconnu',
+            ], 409));
         }
     }
 }

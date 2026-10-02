@@ -1,91 +1,54 @@
-# Skynity CRM Backend (API)
+# CRM Backend API
 
-Il s'agit de l'API de base (backend) pour le CRM, développée avec Laravel 12. 
-Le backend repose sur une architecture agnostique, conçue pour gérer la force de vente (collaborateurs et agents terrain), les tournées, la gestion des stocks d'échantillons, les campagnes marketing, et bien plus encore.
+## Table des Matières
+1. [Introduction](#introduction)
+2. [Prérequis](#prérequis)
+3. [Installation](#installation)
+4. [Architecture et Fonctionnalités](#architecture-et-fonctionnalités)
+5. [Intégration Mobile (Offline & Sync)](#intégration-mobile-offline--sync)
+6. [Notifications Multi-Canaux](#notifications-multi-canaux)
+7. [Génération Swagger](#génération-swagger)
 
-## 🚀 Prérequis
+## Introduction
+Backend robuste pour la gestion CRM, intégrant une API complète (PHP 8 / Laravel) pour les utilisateurs web et mobiles (délégués médicaux, managers, etc.). L'API utilise les attributs PHP 8 pour la documentation Swagger.
 
-- **PHP** : >= 8.2
-- **Composer** : >= 2.0
-- **Base de données** : MySQL ou PostgreSQL
-- **Serveur web** : Nginx / Apache / Serveur interne PHP
+## Prérequis
+- PHP 8.2+
+- Composer
+- MySQL 8+
+- Node.js & NPM (pour le frontend/vite si besoin)
 
-## ⚙️ Installation & Configuration
+## Installation
+```bash
+git clone <repository>
+composer install
+cp .env.example .env
+php artisan key:generate
+php artisan migrate --seed
+```
 
-1. **Cloner le dépôt et installer les dépendances**
-   ```bash
-   git clone <votre_depot>
-   cd CRM-backend
-   composer install
-   ```
+## Architecture et Fonctionnalités
+- **RBAC Complet** : Gestion des rôles et permissions (via Spatie). Filtrage automatique des données (Global Scopes `HasPerimeter`) basé sur le territoire et la filiale du Délégué/Manager.
+- **Tables de Référence (Lookups)** : Spécialités, segmentations, potentiels, influences, formes galéniques, types d'activités, etc.
+- **Gestion des Stocks** : Entrées, sorties, attributions, distributions avec contrôle strict et système d'alertes via notifications.
+- **Activités & Comptes Rendus** : Gestion complète des visites terrain, incluant un workflow de validation des comptes rendus de visite.
+- **Fichiers et Médias** : Endpoint unifié (`/api/v1/media/upload`) pour la gestion des signatures, avatars, et e-detailing.
 
-2. **Configurer l'environnement**
-   Copiez le fichier d'exemple et configurez votre base de données :
-   ```bash
-   cp .env.example .env
-   php artisan key:generate
-   ```
-   *N'oubliez pas de configurer vos identifiants de base de données dans le `.env` (`DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`).*
+## Intégration Mobile (Offline & Sync)
+Une interface de synchronisation robuste est exposée pour permettre à l'application mobile (Flutter) de fonctionner de manière totalement déconnectée :
+- **PULL (`/api/v1/sync/pull`)** : Récupère uniquement les enregistrements modifiés ou créés depuis le dernier `last_sync` (Contacts, Accounts, Activities, Products, etc.). Inclut un noeud `deleted` pour répercuter les suppressions.
+- **PUSH (`/api/v1/sync/push`)** : Permet au mobile d'envoyer un lot de créations/modifications hors-ligne. Utilise la logique d'idempotence basée sur un `local_uuid` généré par le mobile pour prévenir les doublons de synchronisation.
 
-3. **Construire la base de données et les données de test (Seeders)**
-   Cette commande génère toute la structure (tables, UUID, clés étrangères) et peuple la base avec des rôles, des utilisateurs (`admin@crm.local`, `utilisateur@crm.local`), des filiales, des contacts professionnels et des historiques de visites.
-   ```bash
-   php artisan migrate:fresh --seed
-   ```
+## Notifications Multi-Canaux
+L'application intègre un service de notifications multi-canaux (`App\Services\NotificationService`) qui alerte les utilisateurs lors d'événements clés :
+- **In-App (Base de données)** : Historique des notifications consultable dans l'application.
+- **Push Mobile (FCM)** : Firebase Cloud Messaging.
+- **Email** : Envoi de mails récapitulatifs.
+*Exemples de déclencheurs : Soumission/Validation de compte rendu, Stock d'échantillons critique, Assignation de visite.*
 
-4. **Lancer le serveur de développement**
-   ```bash
-   php artisan serve
-   ```
-
-## 📖 Documentation API (Swagger)
-
-L'API est entièrement documentée avec L5-Swagger (OpenAPI 3). 
-Une fois le serveur lancé, vous pouvez consulter la documentation et tester les endpoints interactivement à l'adresse suivante :
-
-**[http://localhost:8000/api/documentation](http://localhost:8000/api/documentation)**
-
-*Pour régénérer la documentation après avoir modifié les annotations dans les contrôleurs, exécutez :*
+## Génération Swagger
+La documentation de l'API est générée automatiquement à partir des attributs PHP 8 (`#[OA\Get]`, `#[OA\Post]`, etc.).
 ```bash
 php artisan l5-swagger:generate
 ```
-
-## 🧠 Intelligence Métier (Tâches en arrière-plan)
-
-Le CRM inclut des mécanismes automatiques (State Machines et CRON) pour assister les équipes.
-
-### 1. Commandes Planifiées (Cron Jobs)
-Assurez-vous que le planificateur de tâches de Laravel est configuré sur votre serveur de production (`* * * * * cd /path-to-your-project && php artisan schedule:run >> /dev/null 2>&1`).
-
-*   **Rappels des visites (`app:send-reminders`)** : Tourne à **07h00** tous les jours. Envoie un récapitulatif par email aux collaborateurs pour les visites de la journée suivante.
-*   **Moteur de Scoring (`app:calculate-scores`)** : Tourne à **02h00** tous les jours. Recalcule le `potentiel` et le `score` des contacts en fonction de la fréquence des visites (30 derniers jours).
-    *   *Vous pouvez tester le calcul manuellement avec :* `php artisan app:calculate-scores`
-
-### 2. Workflows (Observers)
-*   **Workflow Visites (`ActivityObserver`)** :
-    *   Lorsqu'une visite est marquée "Réalisée", le système calcule la durée automatiquement, vérifie le pointage GPS de l'activité par rapport à la cible (tolérance 500m), déduit les échantillons donnés de la table `sample_movements`, et verrouille la visite contre toute modification future.
-*   **Workflow Campagnes (`CampaignObserver`)** :
-    *   Empêche les sauts de statuts illogiques (`creation` -> `validation` -> `deploiement`...). Lève une erreur API HTTP 422 si la séquence métier n'est pas respectée.
-
-## 🎨 Personnalisation & Configuration (Settings)
-
-Le CRM est conçu pour être personnalisé en "marque blanche" par filiale.
-Une table `settings` (clé/valeur) permet de configurer le nom de l'application, les couleurs et le logo.
-
-- **Route publique** : `GET /api/v1/settings` (Permet au Front-End d'afficher le logo avant même la connexion).
-- **Upload du Logo** : `POST /api/v1/settings` (Accepte les `multipart/form-data` avec le fichier image `logo`). Le chemin est converti dynamiquement en URL publique complète (`https://.../storage/logos/...`).
-- **Périmètre** : En passant un `subsidiary_id`, chaque filiale peut surcharger la configuration globale avec son propre logo.
-
-## 🔐 Sécurité & Authentification
-
--   L'API utilise **Laravel Sanctum** pour l'authentification par jeton (Token Bearer).
--   La gestion des rôles et des accès (RBAC) est assurée par **Spatie Permission** (`super-admin`, `manager`, `user`).
--   Les données sont cloisonnées par périmètre géographique (Filiale/Pays) via le trait global `HasPerimeter`.
-
-## 🧪 Tests manuels rapides
-
-Si vous avez lancé les Seeders, voici les identifiants de test préconfigurés :
-- **Super Admin** : `admin@crm.local` (Mot de passe : `password`)
-- **Agent Terrain / Collaborateur** : `delegue@crm.local` (Mot de passe : `password`)
-
-*(Note : à la toute première connexion, l'API renverra un statut `force_password_change` pour simuler le changement de mot de passe obligatoire).*
+L'interface Swagger est ensuite accessible sur `/api/documentation`.

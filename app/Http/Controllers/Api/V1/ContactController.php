@@ -9,6 +9,7 @@ use App\Http\Resources\ContactResource;
 use App\Models\Contact;
 use App\Models\ContactType;
 use App\Models\Account;
+use App\Models\Potential;
 use App\Services\DynamicValidationService;
 use App\Services\DuplicateDetectionService;
 use Illuminate\Http\Request;
@@ -35,19 +36,109 @@ class ContactController extends Controller
     )]
     public function index(Request $request)
     {
-        $query = Contact::with(['account', 'categories'])
-            ->when($request->specialite, fn($q, $v) => $q->where('specialite', 'like', "%$v%"))
+        $query = Contact::with([
+                // L'account doit être chargé sans le DynamicPerimeterScope car un établissement
+                // peut appartenir à un autre utilisateur (ex: admin) que le délégué qui consulte.
+                // withoutGlobalScopes() sur la relation garantit que le nom s'affiche toujours.
+                'account' => fn($q) => $q->withoutGlobalScopes(),
+                'categories', 'speciality', 'contactType', 'potential', 'influence', 'segmentation', 'delegue',
+            ])
+            ->when($request->specialite ?? $request->speciality, function($q, $v) {
+                if (!$v || $v === 'Tous') return;
+                $q->where(function($sub) use ($v) {
+                    $sub->whereHas('speciality', fn($sq) => $sq->where('nom', 'like', "%$v%"))
+                        ->orWhere('meta->specialite', 'like', "%$v%")
+                        ->orWhere('titre', 'like', "%$v%");
+                });
+            })
+            ->when($request->facility_type ?? $request->account_type ?? $request->etablissement, function($q, $v) {
+                if (!$v || $v === 'Tous') return;
+                $q->where(function($sub) use ($v) {
+                    $sub->whereHas('account', function($aq) use ($v) {
+                        $aq->where('type', 'like', "%$v%")
+                           ->orWhere('nom', 'like', "%$v%");
+                    })->orWhere('meta->etablissement', 'like', "%$v%");
+                });
+            })
+            ->when($request->statut ?? $request->status, function($q, $v) {
+                if (!$v || $v === 'Tous') return;
+                $q->where('statut', 'like', "%$v%");
+            })
             ->when($request->has('is_kol'), fn($q) => $q->where('is_kol', $request->boolean('is_kol')))
             ->when($request->account_id, fn($q, $v) => $q->where('account_id', $v))
-            ->when($request->statut, fn($q, $v) => $q->where('statut', $v))
             ->when($request->search, fn($q, $v) => $q->where(function ($q) use ($v) {
                 $q->where('nom', 'like', "%$v%")
                   ->orWhere('prenom', 'like', "%$v%")
-                  ->orWhere('specialite', 'like', "%$v%");
+                  ->orWhere('titre', 'like', "%$v%")
+                  ->orWhere('meta->specialite', 'like', "%$v%")
+                  ->orWhereHas('speciality', fn($sq) => $sq->where('nom', 'like', "%$v%"))
+                  ->orWhereHas('account', fn($aq) => $aq->where('nom', 'like', "%$v%"));
             }));
 
-        return ContactResource::collection($query->paginate(25));
+        $user = auth()->user();
+        if ($user) {
+            $isGlobalAdminLocal = $user->can('scope:global') || $user->hasAnyRole(['superadmin', 'admin', 'Administrateur Groupe', 'Administrateur Pays', 'Direction Générale']);
+            $isSupervisor = $user->hasAnyRole(['superviseur', 'Manager', 'supervisor', 'manager', 'directeur-commercial', 'directeur_commercial', 'directeur-marketing', 'directeur_marketing', 'sales_manager']);
+            
+            if (!$isGlobalAdminLocal) {
+                if ($isSupervisor) {
+                    $teamMemberIds = array_merge([$user->id], $user->teamMemberIds());
+                    $query->whereIn('contacts.user_id', $teamMemberIds);
+                } elseif ($user->hasRole('delegue_medical')) {
+                    $query->where('contacts.user_id', $user->id);
+                }
+            }
+
+            if (!$user->isAdminOrSupervisor()) {
+                $query->whereIn('statut', ['actif', 'valide']);
+            }
+        }
+
+        // Filtrage additionnel par périmètre organisationnel sélectionné (header X-Organizational-Unit-Id)
+        $perimeterUnitId = app()->bound('active_perimeter_unit_id') ? app('active_perimeter_unit_id') : null;
+        $isGlobalAdmin   = $user && ($user->can('scope:global') || $user->hasAnyRole(['superadmin', 'admin']));
+
+        if ($perimeterUnitId && $user && !$isGlobalAdmin) {
+            // Utilisateurs non-admin : filtre strict par UserScope dans le périmètre
+            $allUnitIds = $this->getDescendantUnitIds([$perimeterUnitId]);
+            $userIdsInUnit = \Illuminate\Support\Facades\DB::table('user_scopes')
+                ->whereIn('organizational_unit_id', $allUnitIds)
+                ->where('is_active', true)
+                ->pluck('user_id')
+                ->unique()
+                ->toArray();
+            if (!empty($userIdsInUnit)) {
+                $query->whereIn('contacts.user_id', $userIdsInUnit);
+            }
+        }
+        // Pour le superadmin : le périmètre topbar est informatif seulement
+        // → il voit TOUS les contacts sans restriction supplémentaire
+
+        $perPage = $request->get('per_page', 500);
+        return ContactResource::collection($query->paginate($perPage));
     }
+
+    /**
+     * Récupère tous les IDs descendants récursivement
+     */
+    private function getDescendantUnitIds(array $parentIds): array
+    {
+        if (empty($parentIds)) return [];
+        $allIds = $parentIds;
+        $currentParentIds = $parentIds;
+        while (true) {
+            $childrenIds = \Illuminate\Support\Facades\DB::table('organizational_units')
+                ->whereIn('parent_id', $currentParentIds)
+                ->where('is_active', true)
+                ->pluck('id')
+                ->toArray();
+            if (empty($childrenIds)) break;
+            $allIds = array_merge($allIds, $childrenIds);
+            $currentParentIds = $childrenIds;
+        }
+        return array_unique($allIds);
+    }
+
 
     #[OA\Post(
         path: '/api/v1/contacts/check-duplicates',
@@ -74,19 +165,21 @@ class ContactController extends Controller
     {
         $request->validate([
             'account_id' => 'nullable|uuid|exists:accounts,id',
-            'nom' => 'nullable|string',
-            'prenom' => 'nullable|string',
-            'telephone' => 'nullable|string',
-            'email' => 'nullable|email',
+            'nom'        => 'nullable|string',
+            'prenom'     => 'nullable|string',
+            'telephone'  => 'nullable|string',
+            'email'      => 'nullable|email',
+            'exclude_id' => 'nullable|string', // ID du contact à exclure (utile lors d'une édition)
         ]);
 
         $countryId = null;
         if ($request->account_id) {
-            $account = Account::with('subsidiary')->find($request->account_id);
-            $countryId = $account?->subsidiary?->country_id;
+            $account = Account::with('organizationalUnit')->find($request->account_id);
+            // $countryId = $account?->organizationalUnit?->country_id; // TODO: Adapt if organizational units have a country mapping
         }
 
-        $duplicate = $duplicateService->findDuplicateContact($countryId, $request->all());
+        $excludeId = $request->exclude_id ?: null;
+        $duplicate = $duplicateService->findDuplicateContact($countryId, $request->all(), $excludeId);
 
         return response()->json([
             'is_duplicate' => $duplicate ? true : false,
@@ -133,6 +226,33 @@ class ContactController extends Controller
     ) {
         $validated = $request->validated();
 
+        $user = auth()->user();
+        if ($user && !$user->isAdminOrSupervisor()) {
+            $validated['statut'] = 'en_attente';
+        } else {
+            $validated['statut'] = 'valide';
+        }
+
+        if (!empty($validated['specialite'])) {
+            $meta = $validated['meta'] ?? [];
+            $meta['specialite'] = $validated['specialite'];
+            $validated['meta'] = $meta;
+            unset($validated['specialite']);
+        }
+
+        // Mapper potentiel (string) -> potential_id (UUID FK)
+        if (!empty($validated['potentiel'])) {
+            $codeMap = ['faible' => 'LOW', 'moyen' => 'MED', 'fort' => 'HIGH'];
+            $code = $codeMap[strtolower($validated['potentiel'])] ?? null;
+            if ($code) {
+                $potential = Potential::where('code', $code)->first();
+                if ($potential) {
+                    $validated['potential_id'] = $potential->id;
+                }
+            }
+            unset($validated['potentiel']);
+        }
+
         // Validation dynamique
         if (!empty($validated['contact_type_id'])) {
             $type = ContactType::find($validated['contact_type_id']);
@@ -142,15 +262,57 @@ class ContactController extends Controller
         // Détection de doublons (Bloque la requête si doublon)
         $countryId = null;
         if (!empty($validated['account_id'])) {
-            $account = Account::with('subsidiary')->find($validated['account_id']);
-            $countryId = $account?->subsidiary?->country_id;
+            $account = Account::with('organizationalUnit')->find($validated['account_id']);
+            // $countryId = $account?->organizationalUnit?->country_id;
         }
         $duplicateService->abortIfDuplicateContact($countryId, $validated);
 
+        $user = auth()->user();
+        $isDelegue = $user && !$user->isAdminOrSupervisor();
+        $statutValidation = $isDelegue ? 'en_attente' : 'valide';
+
         $contact = Contact::create(array_merge(
             $validated,
-            ['user_id' => auth()->id()]
+            [
+                'user_id' => $user->id ?? null,
+                'statut_validation' => $statutValidation,
+            ]
         ));
+
+        $accountsInput = $request->input('accounts') ?? $request->input('account_ids') ?? null;
+        if (!empty($accountsInput)) {
+            $accountIds = (array) $accountsInput;
+            $primaryAccountId = $request->input('primary_account_id');
+            $syncData = [];
+            foreach ($accountIds as $index => $accId) {
+                $isPrimary = $primaryAccountId ? ($accId === $primaryAccountId) : ($index === 0);
+                $syncData[$accId] = ['id' => \Illuminate\Support\Str::uuid()->toString(), 'is_primary' => $isPrimary];
+            }
+            $contact->accounts()->sync($syncData);
+        } elseif ($contact->account_id) {
+            $contact->accounts()->sync([
+                $contact->account_id => ['id' => \Illuminate\Support\Str::uuid()->toString(), 'is_primary' => true]
+            ]);
+        }
+
+        if ($isDelegue) {
+            $supervisors = \App\Models\User::role('superviseur')->where('team_id', $user->team_id)->get();
+            if ($supervisors->isNotEmpty()) {
+                \Illuminate\Support\Facades\Notification::send($supervisors, new \App\Notifications\PendingValidationNotification($contact, $user));
+            }
+            $manager = $user?->manager ?? \App\Models\User::where('email', 'cmoucharif@gmail.com')->first() ?? \App\Models\User::whereHas('roles', fn($q) => $q->whereIn('name', ['superviseur', 'supervisor', 'manager', 'Manager']))->first();
+            if ($manager) {
+                NotificationController::sendNotification(
+                    $manager,
+                    'Nouvelle demande de validation prescripteur',
+                    "Le délégué {$user->name} a créé le prescripteur {$contact->titre} {$contact->prenom} {$contact->nom} en attente de validation.",
+                    'validation',
+                    'manager',
+                    ['contact_id' => (string) $contact->id]
+                );
+            }
+        }
+
         return new ContactResource($contact->load(['account', 'categories']));
     }
 
@@ -169,7 +331,13 @@ class ContactController extends Controller
     )]
     public function show(string $id)
     {
-        $contact = Contact::with(['account', 'categories', 'activities' => fn($q) => $q->latest()->limit(10)])->findOrFail($id);
+        $contact = Contact::with([
+                'account'    => fn($q) => $q->withoutGlobalScopes(),
+                'categories',
+                'delegue',
+                'speciality',
+                'activities' => fn($q) => $q->latest()->limit(10),
+            ])->findOrFail($id);
         return new ContactResource($contact);
     }
 
@@ -210,18 +378,34 @@ class ContactController extends Controller
 
         // Validation dynamique
         $typeId = $validated['contact_type_id'] ?? $contact->contact_type_id;
+        $mergedMeta = array_merge($contact->meta ?? [], $validated['meta'] ?? []);
         if ($typeId) {
             $type = ContactType::find($typeId);
-            $mergedMeta = array_merge($contact->meta ?? [], $validated['meta'] ?? []);
-            $validationService->validateMeta($mergedMeta, $type);
+            if ($type) {
+                $validationService->validateMeta($mergedMeta, $type);
+            }
+        }
+        $validated['meta'] = $mergedMeta;
+
+        // Mapper potentiel (string) -> potential_id (UUID FK)
+        if (!empty($validated['potentiel'])) {
+            $codeMap = ['faible' => 'LOW', 'moyen' => 'MED', 'fort' => 'HIGH'];
+            $code = $codeMap[strtolower($validated['potentiel'])] ?? null;
+            if ($code) {
+                $potential = Potential::where('code', $code)->first();
+                if ($potential) {
+                    $validated['potential_id'] = $potential->id;
+                }
+            }
+            unset($validated['potentiel']);
         }
 
         // Détection de doublons
         $accountId = $validated['account_id'] ?? $contact->account_id;
         $countryId = null;
         if ($accountId) {
-            $account = Account::with('subsidiary')->find($accountId);
-            $countryId = $account?->subsidiary?->country_id;
+            $account = Account::with('organizationalUnit')->find($accountId);
+            // $countryId = $account?->organizationalUnit?->country_id;
         }
         $dataForDuplicateCheck = array_merge($contact->toArray(), $validated);
         $duplicateService->abortIfDuplicateContact($countryId, $dataForDuplicateCheck, $contact->id);
@@ -245,7 +429,161 @@ class ContactController extends Controller
     )]
     public function destroy(string $id)
     {
-        Contact::findOrFail($id)->delete();
+        $record = Contact::findOrFail($id);
+        abort_unless(auth()->user()->canDeleteSharedRecord($record->user_id, $record->statut_validation), 403,
+            "Un prescripteur validé ne peut être supprimé que par votre superviseur ou l'administration.");
+        $record->delete();
+
         return response()->json(null, 204);
+    }
+
+    #[OA\Post(
+        path: '/api/v1/contacts/arbitrage',
+        summary: 'Arbitrage du portefeuille (Jauge 100 max)',
+        security: [['bearerAuth' => []]],
+        tags: ['Contacts'],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['delegate_id', 'new_contact_id', 'removed_contact_id'],
+                properties: [
+                    new OA\Property(property: 'delegate_id', type: 'string', format: 'uuid'),
+                    new OA\Property(property: 'new_contact_id', type: 'string', format: 'uuid'),
+                    new OA\Property(property: 'removed_contact_id', type: 'string', format: 'uuid'),
+                    new OA\Property(property: 'reason', type: 'string'),
+                    new OA\Property(property: 'action', type: 'string'),
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Arbitrage effectué avec succès'),
+        ]
+    )]
+    public function arbitrage(Request $request)
+    {
+        $validated = $request->validate([
+            'delegate_id' => 'required|uuid|exists:users,id',
+            'new_contact_id' => 'required|uuid|exists:contacts,id',
+            'removed_contact_id' => 'required|uuid|exists:contacts,id',
+            'reason' => 'nullable|string',
+            'action' => 'nullable|string',
+        ]);
+
+        $removedContact = Contact::findOrFail($validated['removed_contact_id']);
+        $newContact = Contact::findOrFail($validated['new_contact_id']);
+
+        // Réaffecter l'ancien prescripteur au bassin régional (on lui enlève son délégué)
+        $removedContact->update([
+            'user_id' => null, 
+            // On pourrait ajouter un champ history ou reason si le modèle le permet
+        ]);
+
+        // Assigner le nouveau prescripteur au délégué
+        $newContact->update([
+            'user_id' => $validated['delegate_id'],
+            'statut_validation' => 'valide', // ou on garde 'en_attente'
+        ]);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Arbitrage effectué. Prescripteur réaffecté au bassin régional sans perte d\'historique.',
+            'data' => [
+                'delegate_id' => $validated['delegate_id'],
+                'active_portfolio_count' => Contact::where('user_id', $validated['delegate_id'])->count(),
+                'reallocated_contact' => [
+                    'id' => $removedContact->id,
+                    'previous_delegate' => $validated['delegate_id'],
+                    'unassigned_at' => now()->toIso8601String(),
+                ]
+            ]
+        ], 200);
+    }
+
+    /**
+     * Suppression en masse de contacts (soft-delete)
+     * DELETE /api/v1/contacts/bulk-delete
+     * Body: { "ids": ["uuid1", "uuid2", ...] }
+     */
+    public function bulkDelete(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $request->validate([
+            'ids'   => 'required|array|min:1|max:500',
+            'ids.*' => 'required|uuid|exists:contacts,id',
+        ]);
+
+        $user = auth()->user();
+        $ids  = $request->input('ids');
+
+        // Seuls les admins/superviseurs peuvent supprimer en masse
+        // Les délégués peuvent seulement supprimer leurs propres contacts
+        $query = Contact::withoutGlobalScopes()->whereIn('id', $ids);
+
+        if (!$user->isAdminOrSupervisor()) {
+            $query->where('user_id', $user->id);
+        }
+
+        $contacts = $query->get();
+        $deletedCount = 0;
+
+        foreach ($contacts as $contact) {
+            $contact->delete();
+            $deletedCount++;
+        }
+
+        $skipped = count($ids) - $deletedCount;
+
+        return response()->json([
+            'success' => true,
+            'message' => "{$deletedCount} prescripteur(s) supprimé(s) avec succès.",
+            'deleted' => $deletedCount,
+            'skipped' => $skipped,
+        ]);
+    }
+
+    public function validateContact(Request $request, string $id)
+    {
+        $contact = Contact::withoutGlobalScopes()->findOrFail($id);
+        $user = auth()->user();
+
+        if ($user && $user->hasRole('delegue_medical')) {
+            return response()->json(['message' => 'Action non autorisée.'], 403);
+        }
+
+        $contact->update([
+            'statut_validation' => 'valide',
+            'statut'            => 'actif',
+        ]);
+
+        return response()->json([
+            'message' => 'Prescripteur validé avec succès.',
+            'data'    => new ContactResource($contact->load(['account', 'categories']))
+        ]);
+    }
+
+    public function rejectContact(Request $request, string $id)
+    {
+        $contact = Contact::withoutGlobalScopes()->findOrFail($id);
+        $user = auth()->user();
+
+        if ($user && $user->hasRole('delegue_medical')) {
+            return response()->json(['message' => 'Action non autorisée.'], 403);
+        }
+
+        $validated = $request->validate([
+            'motif' => 'required|string|min:2',
+        ], [
+            'motif.required' => 'Le motif du rejet est obligatoire.'
+        ]);
+
+        $contact->update([
+            'statut_validation' => 'rejete',
+            'statut'            => 'inactif',
+            'rejection_reason'  => $validated['motif'],
+        ]);
+
+        return response()->json([
+            'message' => 'Prescripteur rejeté avec enregistrement du motif.',
+            'data'    => new ContactResource($contact->load(['account', 'categories']))
+        ]);
     }
 }

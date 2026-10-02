@@ -10,89 +10,180 @@ use Carbon\Carbon;
 use App\Models\Contact;
 use App\Models\Task;
 use App\Models\Activity;
+use App\Models\Account;
+use App\Models\Product;
+use App\Models\Document;
+use App\Models\DigitalSupport;
+use App\Models\Event;
+use App\Models\TourPlan;
+use App\Models\Notification;
+use App\Models\SampleMovement;
+use App\Models\Campaign;
+use App\Models\Opportunity;
+use App\Models\Order;
+use App\Models\Sale;
+use App\Models\Expense;
+use App\Models\Leave;
+use App\Models\Training;
+use App\Models\Conversation;
+use App\Models\Objectif;
+use OpenApi\Attributes as OA;
 
+#[OA\Tag(name: 'Synchronisation Offline', description: 'API de synchronisation pour le mode hors ligne mobile')]
 class SyncController extends Controller
 {
-    /**
-     * PULL: Le mobile demande les données modifiées depuis sa dernière synchronisation.
-     */
+    #[OA\Get(
+        path: '/api/v1/sync/pull',
+        summary: 'Pull des données pour le mode offline',
+        security: [['bearerAuth' => []]],
+        tags: ['Synchronisation Offline'],
+        parameters: [
+            new OA\Parameter(name: 'last_sync', in: 'query', required: false, schema: new OA\Schema(type: 'string', format: 'date-time'))
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Données synchronisées')
+        ]
+    )]
     public function pull(Request $request)
     {
         $lastSync = $request->query('last_sync', '1970-01-01 00:00:00');
         $user = Auth::user();
 
-        // Récupérer les entités créées/modifiées ou supprimées depuis le last_sync
+        // Fonction utilitaire pour récupérer les données modifiées (le DynamicPerimeterScope applique automatiquement le RBAC)
+        $getModified = function ($modelClass) use ($lastSync) {
+            if (in_array('Illuminate\Database\Eloquent\SoftDeletes', class_uses_recursive($modelClass))) {
+                return $modelClass::withTrashed()->where('updated_at', '>=', $lastSync)->get();
+            }
+            return $modelClass::where('updated_at', '>=', $lastSync)->get();
+        };
+
+        // Fonction utilitaire pour récupérer les données supprimées
+        $getDeleted = function ($modelClass) use ($lastSync) {
+            if (in_array('Illuminate\Database\Eloquent\SoftDeletes', class_uses_recursive($modelClass))) {
+                return $modelClass::onlyTrashed()->where('deleted_at', '>=', $lastSync)->pluck('id');
+            }
+            return [];
+        };
+
         $data = [
-            'contacts' => Contact::withTrashed()->where('updated_at', '>=', $lastSync)->get(),
-            'tasks' => Task::withTrashed()->where('updated_at', '>=', $lastSync)->get(),
-            'activities' => Activity::withTrashed()->where('updated_at', '>=', $lastSync)->get(),
-            // On peut ajouter Accounts, Products, Documents, etc.
+            'contacts' => $getModified(Contact::class),
+            'accounts' => $getModified(Account::class),
+            'products' => $getModified(Product::class),
+            'activities' => $getModified(Activity::class),
+            'tour_plans' => $getModified(TourPlan::class),
+            'tasks' => $getModified(Task::class),
+            'documents' => $getModified(Document::class),
+            'digital_supports' => $getModified(DigitalSupport::class),
+            'events' => $getModified(Event::class),
+            'notifications' => Notification::where('notifiable_id', $user->id)->where('updated_at', '>=', $lastSync)->get(),
+            'sample_movements' => $getModified(SampleMovement::class),
+            'campaigns' => $getModified(Campaign::class),
+            'opportunities' => $getModified(Opportunity::class),
+            'orders' => $getModified(Order::class),
+            'sales' => $getModified(Sale::class),
+            'expenses' => $getModified(Expense::class),
+            'leaves' => $getModified(Leave::class),
+            'trainings' => $getModified(Training::class),
+            'objectifs' => $getModified(Objectif::class),
+        ];
+
+        $deleted = [
+            'contacts' => $getDeleted(Contact::class),
+            'accounts' => $getDeleted(Account::class),
+            'activities' => $getDeleted(Activity::class),
+            'tasks' => $getDeleted(Task::class),
+            'tour_plans' => $getDeleted(TourPlan::class),
+            'objectifs' => $getDeleted(Objectif::class),
         ];
 
         return response()->json([
             'timestamp' => Carbon::now()->toDateTimeString(),
-            'data' => $data
+            'data' => $data,
+            'deleted' => $deleted
         ]);
     }
 
-    /**
-     * PUSH: Le mobile envoie un lot de modifications faites en mode "Offline".
-     */
+    #[OA\Post(
+        path: '/api/v1/sync/push',
+        summary: 'Push massif de la file d\'attente hors-ligne',
+        security: [['bearerAuth' => []]],
+        tags: ['Synchronisation Offline'],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['queue'],
+                properties: [
+                    new OA\Property(property: 'queue', type: 'array', items: new OA\Items(
+                        properties: [
+                            new OA\Property(property: 'endpoint', type: 'string'),
+                            new OA\Property(property: 'method', type: 'string'),
+                            new OA\Property(property: 'payload', type: 'object')
+                        ]
+                    ))
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Statut de synchronisation')
+        ]
+    )]
     public function push(Request $request)
     {
-        $payload = $request->validate([
-            'tasks' => 'nullable|array',
-            'activities' => 'nullable|array',
-        ]);
-
-        $user = Auth::user();
-        $processed = ['tasks' => 0, 'activities' => 0];
-        $errors = [];
+        $queue = $request->input('queue', []);
+        
+        $processed = 0;
+        $failed = [];
 
         DB::beginTransaction();
         try {
-            // Traitement des tâches envoyées en offline
-            if (!empty($payload['tasks'])) {
-                foreach ($payload['tasks'] as $taskData) {
-                    $task = Task::find($taskData['id']);
-                    if ($task) {
-                        $task->update($taskData);
-                    } else {
-                        // Si le mobile a généré son propre UUID, on force l'insertion
-                        $taskData['user_id'] = $user->id;
-                        $taskData['subsidiary_id'] = $user->subsidiary_id;
-                        Task::create($taskData);
-                    }
-                    $processed['tasks']++;
-                }
-            }
+            foreach ($queue as $index => $item) {
+                $endpoint = $item['endpoint'] ?? null;
+                $method = strtoupper($item['method'] ?? 'POST');
+                $payload = $item['payload'] ?? [];
 
-            // Traitement des activités (visites) envoyées en offline
-            if (!empty($payload['activities'])) {
-                foreach ($payload['activities'] as $activityData) {
-                    $activity = Activity::find($activityData['id']);
-                    if ($activity) {
-                        $activity->update($activityData);
-                    } else {
-                        $activityData['user_id'] = $user->id;
-                        $activityData['subsidiary_id'] = $user->subsidiary_id;
-                        Activity::create($activityData);
+                if (!$endpoint) {
+                    $failed[] = ['index' => $index, 'error' => 'Endpoint manquant'];
+                    continue;
+                }
+
+                try {
+                    // Création d'une requête interne pour simuler l'appel API
+                    $internalRequest = Request::create("/api/v1/{$endpoint}", $method, $payload);
+                    $internalRequest->headers->set('Accept', 'application/json');
+                    $internalRequest->setUserResolver(fn() => Auth::user());
+
+                    // Dispatch via le routeur de l'application
+                    $response = app()->handle($internalRequest);
+
+                    if ($response->getStatusCode() >= 400) {
+                        throw new \Exception($response->getContent());
                     }
-                    $processed['activities']++;
+
+                    $processed++;
+                } catch (\Exception $ex) {
+                    $failed[] = [
+                        'index' => $index,
+                        'endpoint' => $endpoint,
+                        'error' => $ex->getMessage()
+                    ];
                 }
             }
 
             DB::commit();
 
             return response()->json([
-                'status' => 'success',
-                'processed' => $processed,
+                'status' => count($failed) > 0 ? 'partial_success' : 'success',
+                'processed_items' => $processed,
+                'errors' => $failed,
                 'timestamp' => Carbon::now()->toDateTimeString()
             ]);
 
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+            return response()->json([
+                'status' => 'error', 
+                'message' => $e->getMessage()
+            ], 500);
         }
     }
 }

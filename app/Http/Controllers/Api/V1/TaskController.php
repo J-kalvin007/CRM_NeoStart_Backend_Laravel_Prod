@@ -17,7 +17,7 @@ class TaskController extends Controller
      */
     public function index(Request $request)
     {
-        // On récupère les tâches, en respectant le PerimeterScope
+        // On récupère les tâches, en respectant le DynamicPerimeterScope
         $query = Task::with(['contact', 'account', 'user']);
 
         // Filtres basiques pour l'agenda

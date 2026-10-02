@@ -16,7 +16,6 @@ class OrderSeeder extends Seeder
             ['nom' => 'Pharmacie de la Mairie'],
             [
                 'id' => \Illuminate\Support\Str::uuid(),
-                'subsidiary_id' => \App\Models\Subsidiary::first()->id ?? \App\Models\User::first()->subsidiary_id ?? null,
                 'user_id' => \App\Models\User::first()->id ?? null
             ]
         );
@@ -57,6 +56,11 @@ class OrderSeeder extends Seeder
             ]
         ];
 
-        \Illuminate\Support\Facades\DB::table('orders')->insert($orders);
+        foreach ($orders as $orderData) {
+            \Illuminate\Support\Facades\DB::table('orders')->updateOrInsert(
+                ['order_number' => $orderData['order_number']],
+                $orderData
+            );
+        }
     }
 }

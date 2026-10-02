@@ -9,9 +9,13 @@ use Illuminate\Support\Facades\Auth;
 
 class EventController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $events = Event::with(['user'])->paginate(15);
+        $events = Event::with(['user'])
+            ->when($request->status, fn($q, $v) => $q->where('status', $v))
+            ->when($request->from, fn($q, $v) => $q->where('start_time', '>=', $v))
+            ->orderBy('start_time')
+            ->paginate(min(max($request->integer('per_page', 50), 1), 200));
         return response()->json($events);
     }
 
@@ -43,17 +47,26 @@ class EventController extends Controller
 
     public function update(Request $request, Event $event)
     {
+        abort_unless(Auth::user()->canEditRecordOf($event->user_id), 403, 'Seul l\'organisateur ou sa hiérarchie peut modifier cet événement.');
+
         $data = $request->validate([
+            'title' => 'sometimes|required|string|max:255',
+            'description' => 'sometimes|nullable|string',
+            'type' => 'sometimes|required|in:congress,webinar,training,symposium,other',
             'status' => 'sometimes|required|in:planned,ongoing,completed,cancelled',
-            'budget' => 'sometimes|numeric|min:0',
+            'location' => 'sometimes|nullable|string|max:255',
+            'start_time' => 'sometimes|required|date',
+            'end_time' => 'sometimes|nullable|date|after_or_equal:' . ($request->input('start_time') ?? $event->start_time),
+            'budget' => 'sometimes|nullable|numeric|min:0',
         ]);
 
         $event->update($data);
-        return response()->json($event);
+        return response()->json($event->fresh(['user']));
     }
 
     public function destroy(Event $event)
     {
+        abort_unless(Auth::user()->canEditRecordOf($event->user_id), 403, 'Seul l\'organisateur ou sa hiérarchie peut supprimer cet événement.');
         $event->delete();
         return response()->json(null, 204);
     }

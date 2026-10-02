@@ -1,0 +1,67 @@
+{
+  "module": "Activities & Visits",
+  "version": "v1",
+  "base_url": "http://localhost:8000/api/v1",
+  "endpoints": {
+    "create_activity": {
+      "method": "POST",
+      "path": "/activities",
+      "headers": {
+        "Authorization": "Bearer {token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      "request_payload": {
+        "contact_id": "hcp_dr_amegbor",
+        "account_id": "acc_chu_sylvanus_olympio",
+        "activity_type": "visite",
+        "date_activite": "2026-09-18",
+        "heure_debut": "10:30",
+        "heure_fin": "11:15",
+        "statut": "soumis_definitif",
+        "motif": "Présentation Amoxil 500mg et remise d'échantillons",
+        "notes": "Médecin très intéressé par la nouvelle étude clinique.",
+        "niveau_interet": 4,
+        "samples": [
+          {
+            "product_id": "prod_amoxil_500",
+            "quantite": 5,
+            "num_lot": "LOT-2025-A456",
+            "date_peremption": "2027-12-31"
+          }
+        ],
+        "gadgets": [
+          {
+            "gadget_id": "gad_stylo_01",
+            "quantite": 3,
+            "beneficiaire": "Dr Kodjo AMEGBOR"
+          }
+        ],
+        "signature_base64": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA..."
+      },
+      "validation_rules": {
+        "contact_id": "required|string|exists:contacts,id",
+        "account_id": "required|string|exists:accounts,id",
+        "activity_type": "required|string|in:visite,reunion,appel,autre",
+        "date_activite": "required|date_format:Y-m-d",
+        "statut": "required|string|in:brouillon,soumis_definitif",
+        "motif": "required_if:statut,soumis_definitif|string|max:500",
+        "samples": "nullable|array",
+        "samples.*.product_id": "required_with:samples|string|exists:products,id",
+        "samples.*.quantite": "required_with:samples|integer|min:1",
+        "samples.*.num_lot": "required_with:samples|string|regex:/^[A-Z0-9-]+$/",
+        "signature_base64": "required_if:samples.*,not_null|string"
+      },
+      "response_201": {
+        "status": "success",
+        "message": "Activité et compte rendu enregistrés avec succès.",
+        "data": {
+          "id": "act_2026_0918_001",
+          "contact_id": "hcp_dr_amegbor",
+          "statut": "soumis_definitif",
+          "created_at": "2026-09-18T10:30:00Z"
+        }
+      }
+    }
+  }
+}

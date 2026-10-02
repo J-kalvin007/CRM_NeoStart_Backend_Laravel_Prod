@@ -12,7 +12,7 @@ class AccountType extends Model
     use HasFactory, HasUuids;
     use HasActivityLogs;
 
-    protected $fillable = ['code', 'libelle', 'description', 'couleur', 'icone', 'is_active', 'ordre', 'validation_rules'];
+    protected $fillable = ['code', 'libelle', 'description', 'couleur', 'icone', 'is_active', 'statut', 'ordre', 'validation_rules'];
 
     protected $casts = [
         'is_active' => 'boolean', 
@@ -27,6 +27,6 @@ class AccountType extends Model
 
     public function scopeActive($query)
     {
-        return $query->where('is_active', true);
+        return $query->whereIn('statut', ['actif', 'valide'])->orWhere('is_active', true);
     }
 }

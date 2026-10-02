@@ -1,0 +1,76 @@
+{
+  "module": "Contacts & Portfolio Arbitrage",
+  "version": "v1",
+  "base_url": "http://localhost:8000/api/v1",
+  "endpoints": {
+    "create_contact": {
+      "method": "POST",
+      "path": "/contacts",
+      "headers": {
+        "Authorization": "Bearer {token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      "request_payload": {
+        "nom": "SODJI",
+        "prenom": "Afi",
+        "titre": "Dr",
+        "telephone": "+22890112233",
+        "email": "dr.sodji@gmail.com",
+        "specialite": "Dermatologue",
+        "account_id_principal": "acc_clinique_biasa",
+        "account_ids_secondaires": ["acc_chu_sylvanus_olympio"],
+        "zone": "Secteur Lomé Est"
+      },
+      "validation_rules": {
+        "nom": "required|string|max:100",
+        "prenom": "required|string|max:100",
+        "account_id_principal": "required|string|exists:accounts,id",
+        "specialite": "required|string"
+      },
+      "response_201": {
+        "status": "pending_validation",
+        "message": "Prescripteur enregistré et transmis au Superviseur pour validation.",
+        "data": {
+          "id": "hcp_dr_sodji_afi",
+          "statut_validation": "en_attente"
+        }
+      }
+    },
+    "arbitrage_portfolio": {
+      "method": "POST",
+      "path": "/contacts/arbitrage",
+      "headers": {
+        "Authorization": "Bearer {token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      "request_payload": {
+        "delegate_id": "user_sena_kpodar",
+        "new_contact_id": "hcp_dr_sodji_afi",
+        "removed_contact_id": "hcp_dr_agbeko_kossi",
+        "reason": "Capacité maximale atteinte (100). Prescripteur le moins visité réaffecté au bassin régional.",
+        "action": "reallocate_to_regional_pool"
+      },
+      "validation_rules": {
+        "delegate_id": "required|uuid|exists:users,id",
+        "new_contact_id": "required|string|exists:contacts,id",
+        "removed_contact_id": "required|string|exists:contacts,id",
+        "reason": "required|string|max:500"
+      },
+      "response_200": {
+        "status": "success",
+        "message": "Arbitrage effectué. Dr Kossi AGBEKO réaffecté au bassin régional sans perte d'historique.",
+        "data": {
+          "delegate_id": "user_sena_kpodar",
+          "active_portfolio_count": 100,
+          "reallocated_contact": {
+            "id": "hcp_dr_agbeko_kossi",
+            "previous_delegate": "user_sena_kpodar",
+            "unassigned_at": "2026-09-18T02:15:00Z"
+          }
+        }
+      }
+    }
+  }
+}

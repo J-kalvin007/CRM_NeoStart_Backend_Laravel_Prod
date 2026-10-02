@@ -9,40 +9,82 @@ class AccountResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        // Résoudre le type d'établissement depuis la relation accountType
+        $accountTypeLabel = null;
+        if ($this->relationLoaded('accountType') && $this->accountType) {
+            $accountTypeLabel = $this->accountType->libelle ?? $this->accountType->code;
+        }
+
+        // Résoudre le potentiel depuis la relation potential
+        $potentielLabel = null;
+        if ($this->relationLoaded('potential') && $this->potential) {
+            $potentielLabel = $this->potential->name ?? $this->potential->code;
+        }
+
         return [
-            'id'            => $this->id,
-            'nom'           => $this->nom,
-            'adresse'       => $this->adresse,
-            'ville'         => $this->ville,
-            'quartier'      => $this->quartier,
-            'telephone'     => $this->telephone,
-            'email'         => $this->email,
-            'responsable'   => $this->responsable,
-            'gps_lat'       => $this->gps_lat,
-            'gps_lng'       => $this->gps_lng,
-            'potentiel'     => $this->potentiel,
-            'score'         => $this->score,
-            'statut'        => $this->statut,
-            'meta'          => $this->meta,
-            'local_uuid'    => $this->local_uuid,
-            'subsidiary_id' => $this->subsidiary_id,
-            'account_type'  => $this->whenLoaded('accountType', fn() => [
+            'id'              => $this->id,
+            'account_type_id' => $this->account_type_id,
+            'account_type'    => $accountTypeLabel, // string pour le mobile
+            'nom'             => $this->nom,
+            'adresse'         => $this->adresse,
+            'ville'           => $this->ville,
+            'quartier'        => $this->quartier,
+            'zone_quartier'   => $this->zone_quartier,
+            'telephone'       => $this->telephone,
+            'whatsapp'        => $this->whatsapp,
+            'email'           => $this->email,
+            'responsable'     => $this->responsable,
+            'responsable_prenom' => $this->responsable_prenom,
+            'responsable_nom'    => $this->responsable_nom,
+            'gps_lat'         => $this->gps_lat,
+            'gps_lng'         => $this->gps_lng,
+            'potentiel'       => $potentielLabel,
+            'potentiel_commande_mois' => $this->potentiel_commande_mois,
+            'grossiste_principal' => $this->grossiste_principal,
+            'produits_disponibles' => $this->produits_disponibles ?? [],
+            'score'           => $this->score,
+            'statut'          => $this->statut,
+            'statut_validation' => $this->statut_validation,
+            'code_externe'    => $this->code_externe,
+            'meta'            => $this->meta,
+            'local_uuid'      => $this->local_uuid,
+            'organizational_unit_id' => $this->organizational_unit_id,
+            'user_id'         => $this->user_id,
+            'delegue_id'      => $this->delegue_id,
+            'type'            => $this->whenLoaded('accountType', fn() => [
                 'id'      => $this->accountType->id,
                 'code'    => $this->accountType->code,
                 'libelle' => $this->accountType->libelle,
                 'couleur' => $this->accountType->couleur,
                 'icone'   => $this->accountType->icone,
             ]),
-            'subsidiary'    => $this->whenLoaded('subsidiary', fn() => [
-                'id'   => $this->subsidiary->id,
-                'name' => $this->subsidiary->name,
+            'potential'       => $this->whenLoaded('potential', fn() => [
+                'id'   => $this->potential->id,
+                'name' => $this->potential->name,
+                'code' => $this->potential->code,
             ]),
-            'categories'    => $this->whenLoaded('categories', fn() =>
+            'organizational_unit' => $this->whenLoaded('organizationalUnit', fn() => [
+                'id'   => $this->organizationalUnit->id,
+                'name' => $this->organizationalUnit->name,
+            ]),
+            'user'    => $this->whenLoaded('user', fn() => [
+                'id'   => $this->user->id,
+                'name' => $this->user->name,
+            ]),
+            'delegue' => $this->whenLoaded('delegue', fn() => [
+                'id'   => $this->delegue->id,
+                'name' => $this->delegue->name,
+            ]),
+            'categories' => $this->whenLoaded('categories', fn() =>
                 $this->categories->map(fn($c) => ['id' => $c->id, 'nom' => $c->nom, 'type' => $c->type])
             ),
+            'contacts'       => $this->whenLoaded('contacts', fn() => ContactResource::collection($this->contacts)),
             'contacts_count' => $this->whenCounted('contacts'),
-            'created_at'    => $this->created_at,
-            'updated_at'    => $this->updated_at,
+            'submitted_by'   => $this->whenLoaded('user', fn() => $this->user->name),
+            'delegue_name'   => $this->whenLoaded('delegue', fn() => $this->delegue->name),
+            'created_at'     => $this->created_at,
+            'updated_at'     => $this->updated_at,
+            'deleted_at'     => $this->deleted_at,
         ];
     }
 }

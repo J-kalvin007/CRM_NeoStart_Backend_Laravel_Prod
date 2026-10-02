@@ -17,19 +17,14 @@ class StoreUserRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
             'phone' => ['nullable', 'string', 'max:20'],
-            'status' => ['required', 'string', 'in:active,inactive'],
+            'status' => ['required', 'in:active,inactive,true,false,1,0'],
             'roles' => ['nullable', 'array'],
             'roles.*' => ['string', 'exists:roles,name'],
             'permissions' => ['nullable', 'array'],
             'permissions.*' => ['string', 'exists:permissions,name'],
-            'team_id' => ['nullable', 'uuid', 'exists:teams,id'],
-            'manager_id' => ['nullable', 'uuid', 'exists:users,id'],
-            'country_id' => ['nullable', 'uuid'],
-            'subsidiary_id' => ['nullable', 'uuid'],
-            'region_id' => ['nullable', 'uuid'],
-            'territory_id' => ['nullable', 'uuid'],
-            'zone_id' => ['nullable', 'uuid'],
-            'sector_id' => ['nullable', 'uuid'],
+            'scopes' => ['nullable', 'array'],
+            'scopes.*' => ['uuid', 'exists:organizational_units,id'],
+            'otp_enabled' => ['nullable', 'boolean'],
         ];
     }
 }

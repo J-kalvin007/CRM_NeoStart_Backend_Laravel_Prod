@@ -20,12 +20,29 @@ class StoreObjectifRequest extends FormRequest
      *
      * @return array<string, ValidationRule|array<mixed>|string>
      */
+    /**
+     * L'application envoie le code du type (type_objectif / type) : on le résout en objectif_type_id.
+     */
+    protected function prepareForValidation(): void
+    {
+        $code = $this->input('type_objectif') ?? (is_string($this->input('type')) ? $this->input('type') : null);
+        if (!$this->filled('objectif_type_id') && $code) {
+            $id = \Illuminate\Support\Facades\DB::table('objectif_types')->where('code', $code)->value('id');
+            if ($id) {
+                $this->merge(['objectif_type_id' => $id]);
+            }
+        }
+    }
+
     public function rules(): array
     {
         return [
             'user_id' => 'nullable|exists:users,id',
             'team_id' => 'nullable|uuid|exists:teams,id',
-            'indicator_id' => 'required|uuid|exists:indicators,id',
+            'organizational_unit_id' => 'nullable|uuid|exists:organizational_units,id',
+            'indicator_id' => 'nullable|uuid|exists:indicators,id',
+            'objectif_type_id' => 'required|uuid|exists:objectif_types,id',
+            'assigned_by_user_id' => 'nullable|exists:users,id',
             'date_debut' => 'required|date',
             'date_fin' => 'required|date|after_or_equal:date_debut',
             'periode' => 'nullable|string',
@@ -35,7 +52,7 @@ class StoreObjectifRequest extends FormRequest
             'product_id' => 'nullable|uuid|exists:products,id',
             'description' => 'nullable|string',
             'statut' => 'nullable|string|in:en_cours,actif,atteint,depasse,non_atteint,annule',
-            'subsidiary_id' => 'required|uuid|exists:subsidiaries,id',
+            'subsidiary_id' => 'nullable|uuid|exists:subsidiaries,id',
         ];
     }
 }

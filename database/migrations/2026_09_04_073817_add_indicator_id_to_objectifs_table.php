@@ -14,7 +14,11 @@ return new class extends Migration
         Schema::table('objectifs', function (Blueprint $table) {
             $table->foreignUuid('indicator_id')->nullable()->after('id')->constrained('indicators')->restrictOnDelete();
             
-            // On peut supprimer type_objectif et unite puisqu'ils sont gérés par l'indicateur
+            // Supprimer l'index sur type_objectif si présent avant de supprimer la colonne (compatibilité SQLite/MySQL)
+            try {
+                $table->dropIndex(['type_objectif']);
+            } catch (\Throwable $e) {}
+
             $table->dropColumn(['type_objectif', 'unite']);
         });
     }

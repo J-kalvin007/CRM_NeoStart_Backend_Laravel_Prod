@@ -16,21 +16,28 @@ class Account extends Model
     use HasActivityLogs;
 
     protected $fillable = [
-        'subsidiary_id', 'user_id', 'account_type_id',
-        'nom', 'adresse', 'ville', 'quartier',
-        'gps_lat', 'gps_lng', 'telephone', 'email', 'responsable',
-        'potentiel', 'score', 'statut', 'meta', 'local_uuid',
+        'organizational_unit_id', 'user_id', 'delegue_id', 'account_type_id',
+        'nom', 'adresse', 'ville', 'quartier', 'zone_quartier',
+        'responsable', 'responsable_prenom', 'responsable_nom',
+        'gps_lat', 'gps_lng', 'telephone', 'whatsapp', 'email',
+        'potential_id', 'score', 'potentiel_commande_mois',
+        'grossiste_principal', 'produits_disponibles',
+        'statut', 'statut_validation', 'rejection_reason', 'meta', 'local_uuid', 'code_externe',
     ];
 
     protected $casts = [
-        'gps_lat' => 'float',
-        'gps_lng' => 'float',
-        'score'   => 'integer',
-        'meta'    => 'array',   // JSON automatiquement décodé
+        'gps_lat'               => 'float',
+        'gps_lng'               => 'float',
+        'score'                 => 'integer',
+        'meta'                  => 'array',
+        'produits_disponibles'  => 'array',
     ];
 
-    public function subsidiary()   { return $this->belongsTo(Subsidiary::class); }
+    public function organizationalUnit() { return $this->belongsTo(OrganizationalUnit::class); }
+    public function potential()    { return $this->belongsTo(Potential::class); }
     public function owner()        { return $this->belongsTo(User::class, 'user_id'); }
+    public function user()         { return $this->belongsTo(User::class, 'user_id'); }
+    public function delegue()      { return $this->belongsTo(User::class, 'delegue_id'); }
     public function accountType()  { return $this->belongsTo(AccountType::class); }
     public function contacts()     { return $this->hasMany(Contact::class); }
     public function categories()   { return $this->belongsToMany(Category::class, 'account_category'); }
