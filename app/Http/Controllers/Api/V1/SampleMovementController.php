@@ -149,6 +149,12 @@ class SampleMovementController extends Controller
             $out = $items->whereIn('movement_type', ['distribution', 'destruction'])->sum('quantity');
 
             $available = max(0, $in - $out);
+
+            // Filtrer : ne montrer que les produits avec quantité disponible > 0
+            if ($available <= 0) {
+                return null;
+            }
+
             $alertThreshold = $product ? (int) $product->stock_alerte : 10;
 
             // Découpage par lots disponibles
