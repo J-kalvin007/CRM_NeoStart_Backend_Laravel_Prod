@@ -229,6 +229,8 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('activity-types', App\Http\Controllers\Api\V1\ActivityTypeController::class);
         Route::apiResource('activity-results', App\Http\Controllers\Api\V1\ActivityResultController::class);
         Route::apiResource('event-formats', App\Http\Controllers\Api\V1\EventFormatController::class);
+        Route::apiResource('duo-activity-types', App\Http\Controllers\Api\V1\DuoActivityTypeController::class);
+        Route::apiResource('trio-activity-types', App\Http\Controllers\Api\V1\TrioActivityTypeController::class);
 
 
         Route::post('contacts/check-duplicates', [ContactController::class, 'checkDuplicates']);
