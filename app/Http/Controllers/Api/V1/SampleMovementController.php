@@ -80,7 +80,29 @@ class SampleMovementController extends Controller
             ->get();
 
         if ($movements->isEmpty()) {
-            $products = \App\Models\Product::where('statut', 'actif')->get();
+            // Récupérer les produits assignés aux unités organisationnelles du délégué
+            $query = \App\Models\Product::where('statut', 'actif');
+
+            // Si l'utilisateur a des unités organisationnelles, filtrer les produits assignés
+            $userScopes = \Illuminate\Support\Facades\DB::table('user_scopes')
+                ->where('user_id', $user->id)
+                ->where('is_active', true)
+                ->get();
+            if ($userScopes->isNotEmpty()) {
+                $unitIds = $userScopes->pluck('organizational_unit_id')->toArray();
+                $productIds = \Illuminate\Support\Facades\DB::table('organizational_unit_product')
+                    ->whereIn('organizational_unit_id', $unitIds)
+                    ->pluck('product_id')
+                    ->unique()
+                    ->toArray();
+
+                if (!empty($productIds)) {
+                    $query->whereIn('id', $productIds);
+                }
+            }
+
+            $products = $query->get();
+
             foreach ($products as $idx => $p) {
                 SampleMovement::create([
                     'user_id' => $user->id,
@@ -97,8 +119,29 @@ class SampleMovementController extends Controller
                 ->get();
         }
 
-        $stock = $movements->groupBy('product_id')->map(function ($items, $productId) {
+        // Récupérer les IDs des produits assignés aux unités organisationnelles du délégué
+        $assignedProductIds = [];
+        $userScopes = \Illuminate\Support\Facades\DB::table('user_scopes')
+            ->where('user_id', $user->id)
+            ->where('is_active', true)
+            ->get();
+        if ($userScopes->isNotEmpty()) {
+            $unitIds = $userScopes->pluck('organizational_unit_id')->toArray();
+            $assignedProductIds = \Illuminate\Support\Facades\DB::table('organizational_unit_product')
+                ->whereIn('organizational_unit_id', $unitIds)
+                ->pluck('product_id')
+                ->unique()
+                ->toArray();
+        }
+
+        $stock = $movements->groupBy('product_id')->map(function ($items, $productId) use ($assignedProductIds) {
             $product = $items->first()->product;
+
+            // Filtrer : ne montrer que les produits assignés aux unités du délégué
+            // ou s'il n'y a pas d'assignation, tous les produits
+            if (!empty($assignedProductIds) && !in_array($productId, $assignedProductIds)) {
+                return null;
+            }
 
             // Types d'entrées : reception, attribution, retour
             $in = $items->whereIn('movement_type', ['reception', 'attribution', 'retour'])->sum('quantity');
@@ -137,7 +180,7 @@ class SampleMovementController extends Controller
                 'status'               => $available <= $alertThreshold ? 'Critique' : 'Normal',
                 'lots'                 => $lots,
             ];
-        })->values();
+        })->filter()->values();
 
         return response()->json($stock);
     }
