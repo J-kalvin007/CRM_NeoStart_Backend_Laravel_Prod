@@ -430,7 +430,11 @@ class ContactController extends Controller
     )]
     public function destroy(string $id)
     {
-        Contact::findOrFail($id)->delete();
+        $record = Contact::findOrFail($id);
+        abort_unless(auth()->user()->canDeleteSharedRecord($record->user_id, $record->statut_validation), 403,
+            "Un prescripteur validé ne peut être supprimé que par votre superviseur ou l'administration.");
+        $record->delete();
+
         return response()->json(null, 204);
     }
 

@@ -134,6 +134,38 @@ class User extends Authenticatable
         return static::withoutGlobalScopes()->whereIn('id', $this->teamMemberIds());
     }
 
+    /**
+     * Suppression d'une fiche partagée (établissement, prescripteur) :
+     * administration et direction toujours ; la hiérarchie pour les fiches de son équipe ;
+     * le créateur tant que la fiche n'est pas validée.
+     */
+    public function canDeleteSharedRecord(?string $ownerId, ?string $statutValidation): bool
+    {
+        if ($this->isAdminOrDirection() || ($ownerId !== null && $this->manages($ownerId))) {
+            return true;
+        }
+
+        return $ownerId !== null && $ownerId === $this->id && $statutValidation !== 'valide';
+    }
+
+    /** Modification d'un élément personnel (événement…) : son auteur, sa hiérarchie, l'administration. */
+    public function canEditRecordOf(?string $ownerId): bool
+    {
+        return $this->isAdminOrDirection()
+            || ($ownerId !== null && ($ownerId === $this->id || $this->manages($ownerId)));
+    }
+
+    /** Administration et direction (périmètre global). */
+    public function isAdminOrDirection(): bool
+    {
+        return $this->can('scope:global') || $this->hasAnyRole([
+            'superadmin', 'super-admin', 'admin',
+            'directeur_commercial', 'directeur-commercial',
+            'directeur_marketing', 'directeur-marketing',
+            'directeur_regional', 'directeur-regional',
+        ]);
+    }
+
     /** Vrai si $userId fait partie de l'équipe encadrée. */
     public function manages(string $userId): bool
     {

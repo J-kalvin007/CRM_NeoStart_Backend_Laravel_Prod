@@ -165,10 +165,29 @@ class TourPlanController extends Controller
     #[OA\Delete(path: '/api/v1/tour-plans/{id}', summary: 'Supprimer un plan de tournée', security: [['bearerAuth' => []]], tags: ['TourPlans'],
         responses: [new OA\Response(response: 204, description: 'Supprimé avec succès')]
     )]
+    /**
+     * Retrait d'un planning : le délégué retire le sien tant qu'il n'est pas validé
+     * (brouillon, soumis, refusé) ; la hiérarchie peut retirer ceux de son équipe.
+     * Les visites rattachées sont conservées et détachées du planning.
+     */
     public function destroy(string $id)
     {
         $tourPlan = TourPlan::findOrFail($id);
+        $user = auth()->user();
+        $isGlobal = $user->can('scope:global') || $user->hasAnyRole(['superadmin', 'super-admin', 'admin']);
+        $isOwner = $tourPlan->user_id === $user->id;
+
+        if (!$isGlobal && !$user->manages($tourPlan->user_id)) {
+            abort_unless($isOwner, 403, "Ce planning ne vous appartient pas.");
+            abort_unless(in_array($tourPlan->statut, ['brouillon', 'soumis', 'rejete', 'refuse'], true), 422,
+                'Un planning validé ne peut plus être retiré.');
+        }
+
+        Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
+            ->where('tour_plan_id', $tourPlan->id)
+            ->update(['tour_plan_id' => null]);
         $tourPlan->delete();
+
         return response()->json(null, 204);
     }
 

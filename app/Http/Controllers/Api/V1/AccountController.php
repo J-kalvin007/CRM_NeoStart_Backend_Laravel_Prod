@@ -377,7 +377,11 @@ class AccountController extends Controller
     )]
     public function destroy(string $id)
     {
-        Account::findOrFail($id)->delete();
+        $record = Account::findOrFail($id);
+        abort_unless(auth()->user()->canDeleteSharedRecord($record->user_id, $record->statut_validation), 403,
+            "Un établissement validé ne peut être supprimé que par votre superviseur ou l'administration.");
+        $record->delete();
+
         return response()->json(null, 204);
     }
 
