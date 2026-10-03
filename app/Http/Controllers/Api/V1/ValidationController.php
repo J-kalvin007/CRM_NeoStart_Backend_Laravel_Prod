@@ -79,7 +79,7 @@ class ValidationController extends Controller
             });
 
         $pendingActivities = \App\Models\Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
-            ->with(['contact', 'account', 'delegue', 'user'])
+            ->with(['contact', 'account', 'delegue', 'user', 'products', 'sampleMovements.product'])
             ->tap($inTeam)
             ->where(function ($q) {
                 $q->whereIn('report_status', ['submitted', 'soumis', 'en_attente'])
@@ -93,17 +93,26 @@ class ValidationController extends Controller
             })
             ->get()
             ->map(function ($act) {
-                $contactName = $act->contact?->name ?? $act->contact_name ?? 'Dr. Praticien';
-                $accountName = $act->account?->name ?? $act->establishment ?? 'Établissement';
+                $contactName = $act->contact ? trim(($act->contact->titre ? $act->contact->titre . ' ' : '') . ($act->contact->prenom ? $act->contact->prenom . ' ' : '') . $act->contact->nom) : ($act->contact_name ?? null);
+                $accountName = $act->account ? ($act->account->nom ?? $act->account->name) : ($act->establishment ?? null);
                 return [
                     'id' => (string) $act->id,
                     'type' => 'activity_report',
                     'activity_type' => $act->activity_type,
                     'date_activite' => $act->date_activite?->toDateString(),
                     'heure_debut' => $act->heure_debut,
+                    'heure_fin' => $act->heure_fin,
+                    'duree_minutes' => $act->duree_minutes ?? $act->duration,
+                    'duration' => $act->duration ?? $act->duree_minutes,
                     'nom' => $contactName,
+                    'contact_name' => $contactName,
                     'etablissement' => $accountName,
+                    'establishment' => $accountName,
+                    'specialite' => $act->contact?->specialite ?? $act->specialty,
+                    'resultat' => $act->resultat ?? $act->meta['resultat'] ?? null,
                     'report_content' => $act->report_content ?? $act->notes,
+                    'notes' => $act->notes,
+                    'signature' => $act->signature,
                     'statut' => $act->statut,
                     'report_status' => $act->report_status,
                     'created_by' => $act->delegue?->name ?? ($act->user ? ($act->user->name ?: $act->user->email) : 'Délégué Médical'),
