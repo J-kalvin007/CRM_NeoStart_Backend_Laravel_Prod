@@ -91,7 +91,6 @@ class ExpenseController extends Controller
         $user = Auth::user();
 
         $data['user_id'] = $user->id;
-        $data['subsidiary_id'] = $user->subsidiary_id;
         $data['status'] = 'draft';
 
         $expense = Expense::create($data);

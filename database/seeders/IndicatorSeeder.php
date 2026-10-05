@@ -5,7 +5,7 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use App\Models\Subsidiary;
+
 
 class IndicatorSeeder extends Seeder
 {
@@ -14,11 +14,7 @@ class IndicatorSeeder extends Seeder
      */
     public function run(): void
     {
-        $subsidiary = Subsidiary::first();
-        if (!$subsidiary) {
-            $this->command->info('No subsidiary found. Please seed subsidiaries first.');
-            return;
-        }
+
 
         $indicators = [
             [
@@ -31,7 +27,7 @@ class IndicatorSeeder extends Seeder
                 'data_source_field' => 'id',
                 'unit' => 'visites',
                 'is_active' => true,
-                'subsidiary_id' => $subsidiary->id,
+
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
@@ -45,7 +41,7 @@ class IndicatorSeeder extends Seeder
                 'data_source_field' => 'id',
                 'unit' => '%',
                 'is_active' => true,
-                'subsidiary_id' => $subsidiary->id,
+
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
@@ -59,7 +55,7 @@ class IndicatorSeeder extends Seeder
                 'data_source_field' => 'amount',
                 'unit' => 'FCFA',
                 'is_active' => true,
-                'subsidiary_id' => $subsidiary->id,
+
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
@@ -73,7 +69,7 @@ class IndicatorSeeder extends Seeder
                 'data_source_field' => 'quantity',
                 'unit' => 'unités',
                 'is_active' => true,
-                'subsidiary_id' => $subsidiary->id,
+
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
@@ -87,7 +83,7 @@ class IndicatorSeeder extends Seeder
                 'data_source_field' => 'id',
                 'unit' => 'commandes',
                 'is_active' => true,
-                'subsidiary_id' => $subsidiary->id,
+
                 'created_at' => now(),
                 'updated_at' => now(),
             ],

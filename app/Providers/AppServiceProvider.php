@@ -12,14 +12,6 @@ use App\Models\Campaign;
 use App\Observers\CampaignObserver;
 use App\Models\Task;
 use App\Observers\TaskObserver;
-use App\Models\Region;
-use App\Observers\RegionObserver;
-use App\Models\Territory;
-use App\Observers\TerritoryObserver;
-use App\Models\Zone;
-use App\Observers\ZoneObserver;
-use App\Models\Sector;
-use App\Observers\SectorObserver;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -41,10 +33,5 @@ class AppServiceProvider extends ServiceProvider
         Activity::observe(ActivityObserver::class);
         Campaign::observe(CampaignObserver::class);
         Task::observe(TaskObserver::class);
-        
-        Region::observe(RegionObserver::class);
-        Territory::observe(TerritoryObserver::class);
-        Zone::observe(ZoneObserver::class);
-        Sector::observe(SectorObserver::class);
     }
 }

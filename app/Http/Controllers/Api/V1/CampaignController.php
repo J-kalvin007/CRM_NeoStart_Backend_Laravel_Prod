@@ -20,7 +20,7 @@ class CampaignController extends Controller
     )]
     public function index()
     {
-        return response()->json(Campaign::with(['products', 'teams'])->get());
+        return response()->json(Campaign::with(['products', 'country'])->get());
     }
 
     #[OA\Post(
@@ -60,8 +60,6 @@ class CampaignController extends Controller
             'statut' => 'nullable|string|in:brouillon,validation,active,terminee,suspendue',
             'product_ids' => 'nullable|array',
             'product_ids.*' => 'uuid|exists:products,id',
-            'team_ids' => 'nullable|array',
-            'team_ids.*' => 'uuid|exists:teams,id',
         ]);
 
         $campaign = Campaign::create($validated);
@@ -69,11 +67,8 @@ class CampaignController extends Controller
         if (!empty($validated['product_ids'])) {
             $campaign->products()->sync($validated['product_ids']);
         }
-        if (!empty($validated['team_ids'])) {
-            $campaign->teams()->sync($validated['team_ids']);
-        }
 
-        return response()->json($campaign->load(['products', 'teams']), 201);
+        return response()->json($campaign->load(['products', 'country']), 201);
     }
 
     #[OA\Get(
@@ -91,7 +86,7 @@ class CampaignController extends Controller
     )]
     public function show(string $id)
     {
-        return response()->json(Campaign::with(['products', 'teams', 'activities'])->findOrFail($id));
+        return response()->json(Campaign::with(['products', 'country', 'activities'])->findOrFail($id));
     }
 
     #[OA\Put(
@@ -132,8 +127,6 @@ class CampaignController extends Controller
             'statut' => 'sometimes|string|in:brouillon,validation,active,terminee,suspendue',
             'product_ids' => 'nullable|array',
             'product_ids.*' => 'uuid|exists:products,id',
-            'team_ids' => 'nullable|array',
-            'team_ids.*' => 'uuid|exists:teams,id',
         ]);
 
         $campaign->update($validated);
@@ -141,11 +134,8 @@ class CampaignController extends Controller
         if (isset($validated['product_ids'])) {
             $campaign->products()->sync($validated['product_ids']);
         }
-        if (isset($validated['team_ids'])) {
-            $campaign->teams()->sync($validated['team_ids']);
-        }
 
-        return response()->json($campaign->load(['products', 'teams']));
+        return response()->json($campaign->load(['products', 'country']));
     }
 
     #[OA\Delete(
@@ -246,53 +236,5 @@ class CampaignController extends Controller
         return response()->json($campaign->load('products'));
     }
 
-    #[OA\Post(
-        path: '/api/v1/campaigns/{id}/teams',
-        summary: 'Assigner une équipe à la campagne',
-        security: [['bearerAuth' => []]],
-        tags: ['Campaigns'],
-        parameters: [
-            new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))
-        ],
-        requestBody: new OA\RequestBody(
-            required: true,
-            content: new OA\JsonContent(
-                properties: [
-                    new OA\Property(property: 'team_id', type: 'string', format: 'uuid')
-                ]
-            )
-        ),
-        responses: [
-            new OA\Response(response: 200, description: 'Équipe assignée')
-        ]
-    )]
-    public function attachTeam(Request $request, string $id)
-    {
-        $campaign = Campaign::findOrFail($id);
-        $validated = $request->validate([
-            'team_id' => 'required|uuid|exists:teams,id'
-        ]);
-        $campaign->teams()->syncWithoutDetaching([$validated['team_id']]);
-        return response()->json($campaign->load('teams'));
-    }
 
-    #[OA\Delete(
-        path: '/api/v1/campaigns/{id}/teams/{team_id}',
-        summary: 'Retirer une équipe de la campagne',
-        security: [['bearerAuth' => []]],
-        tags: ['Campaigns'],
-        parameters: [
-            new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid')),
-            new OA\Parameter(name: 'team_id', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))
-        ],
-        responses: [
-            new OA\Response(response: 200, description: 'Équipe retirée')
-        ]
-    )]
-    public function detachTeam(string $id, string $team_id)
-    {
-        $campaign = Campaign::findOrFail($id);
-        $campaign->teams()->detach($team_id);
-        return response()->json($campaign->load('teams'));
-    }
 }

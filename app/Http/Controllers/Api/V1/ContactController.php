@@ -94,50 +94,13 @@ class ContactController extends Controller
             }
         }
 
-        // Filtrage additionnel par périmètre organisationnel sélectionné (header X-Organizational-Unit-Id)
-        $perimeterUnitId = app()->bound('active_perimeter_unit_id') ? app('active_perimeter_unit_id') : null;
         $isGlobalAdmin   = $user && ($user->can('scope:global') || $user->hasAnyRole(['superadmin', 'admin']));
-
-        if ($perimeterUnitId && $user && !$isGlobalAdmin) {
-            // Utilisateurs non-admin : filtre strict par UserScope dans le périmètre
-            $allUnitIds = $this->getDescendantUnitIds([$perimeterUnitId]);
-            $userIdsInUnit = \Illuminate\Support\Facades\DB::table('user_scopes')
-                ->whereIn('organizational_unit_id', $allUnitIds)
-                ->where('is_active', true)
-                ->pluck('user_id')
-                ->unique()
-                ->toArray();
-            if (!empty($userIdsInUnit)) {
-                $query->whereIn('contacts.user_id', $userIdsInUnit);
-            }
-        }
-        // Pour le superadmin : le périmètre topbar est informatif seulement
-        // → il voit TOUS les contacts sans restriction supplémentaire
 
         $perPage = $request->get('per_page', 500);
         return ContactResource::collection($query->paginate($perPage));
     }
 
-    /**
-     * Récupère tous les IDs descendants récursivement
-     */
-    private function getDescendantUnitIds(array $parentIds): array
-    {
-        if (empty($parentIds)) return [];
-        $allIds = $parentIds;
-        $currentParentIds = $parentIds;
-        while (true) {
-            $childrenIds = \Illuminate\Support\Facades\DB::table('organizational_units')
-                ->whereIn('parent_id', $currentParentIds)
-                ->where('is_active', true)
-                ->pluck('id')
-                ->toArray();
-            if (empty($childrenIds)) break;
-            $allIds = array_merge($allIds, $childrenIds);
-            $currentParentIds = $childrenIds;
-        }
-        return array_unique($allIds);
-    }
+
 
 
     #[OA\Post(
@@ -174,8 +137,8 @@ class ContactController extends Controller
 
         $countryId = null;
         if ($request->account_id) {
-            $account = Account::with('organizationalUnit')->find($request->account_id);
-            // $countryId = $account?->organizationalUnit?->country_id; // TODO: Adapt if organizational units have a country mapping
+            $account = Account::with('country')->find($request->account_id);
+            $countryId = $account?->country_id;
         }
 
         $excludeId = $request->exclude_id ?: null;
@@ -262,8 +225,8 @@ class ContactController extends Controller
         // Détection de doublons (Bloque la requête si doublon)
         $countryId = null;
         if (!empty($validated['account_id'])) {
-            $account = Account::with('organizationalUnit')->find($validated['account_id']);
-            // $countryId = $account?->organizationalUnit?->country_id;
+            $account = Account::with('country')->find($validated['account_id']);
+            $countryId = $account?->country_id;
         }
         $duplicateService->abortIfDuplicateContact($countryId, $validated);
 
@@ -296,7 +259,7 @@ class ContactController extends Controller
         }
 
         if ($isDelegue) {
-            $supervisors = \App\Models\User::role('superviseur')->where('team_id', $user->team_id)->get();
+            $supervisors = \App\Models\User::role('superviseur')->get();
             if ($supervisors->isNotEmpty()) {
                 \Illuminate\Support\Facades\Notification::send($supervisors, new \App\Notifications\PendingValidationNotification($contact, $user));
             }
@@ -404,8 +367,8 @@ class ContactController extends Controller
         $accountId = $validated['account_id'] ?? $contact->account_id;
         $countryId = null;
         if ($accountId) {
-            $account = Account::with('organizationalUnit')->find($accountId);
-            // $countryId = $account?->organizationalUnit?->country_id;
+            $account = Account::with('country')->find($accountId);
+            $countryId = $account?->country_id;
         }
         $dataForDuplicateCheck = array_merge($contact->toArray(), $validated);
         $duplicateService->abortIfDuplicateContact($countryId, $dataForDuplicateCheck, $contact->id);

@@ -20,10 +20,8 @@ class UserResource extends JsonResource
             }),
             'manager_id' => $this->manager_id,
             'manager' => new UserResource($this->whenLoaded('manager')),
-            'scopes' => OrganizationalUnitResource::collection($this->whenLoaded('scopes')),
-            'scope_ids' => $this->whenLoaded('scopes', function () {
-                return $this->scopes->pluck('id');
-            }),
+            'country_id' => $this->country_id,
+            'country' => $this->whenLoaded('country'),
             'last_login_at' => $this->last_login_at,
             'otp_enabled' => (bool) $this->otp_enabled,
             'created_at' => $this->created_at,

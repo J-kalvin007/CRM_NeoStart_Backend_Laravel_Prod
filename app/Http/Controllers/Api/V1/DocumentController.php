@@ -59,8 +59,6 @@ class DocumentController extends Controller
             return response()->json(['error' => 'A file or file_path is required'], 422);
         }
 
-        $data['subsidiary_id'] = Auth::user()->subsidiary_id;
-
         $document = Document::create($data);
         $viewers->prepare($document);
 

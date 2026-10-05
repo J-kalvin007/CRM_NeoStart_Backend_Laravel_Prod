@@ -43,10 +43,6 @@ class Campaign extends Model
         return $this->belongsToMany(Product::class, 'campaign_product');
     }
 
-    public function teams()
-    {
-        return $this->belongsToMany(Team::class, 'campaign_team');
-    }
 
     public function activities()
     {

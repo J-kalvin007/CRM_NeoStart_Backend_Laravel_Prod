@@ -23,7 +23,7 @@ class UpdateAccountRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'organizational_unit_id' => 'sometimes|required|uuid|exists:organizational_units,id',
+            'country_id' => 'sometimes|required|uuid|exists:countries,id',
             'account_type_id' => 'nullable|uuid|exists:account_types,id',
             'user_id'         => 'nullable|uuid|exists:users,id',
             'delegue_id'      => 'nullable|uuid|exists:users,id',

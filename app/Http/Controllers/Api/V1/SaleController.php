@@ -68,7 +68,6 @@ class SaleController extends Controller
 
         $sale = Sale::create([
             'user_id' => Auth::id(),
-            'subsidiary_id' => Auth::user()->subsidiary_id ?? null,
             'account_id' => $data['account_id'],
             'sale_date' => $data['date_releve'],
             'mois_concerne' => $data['mois_concerne'],

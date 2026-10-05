@@ -77,7 +77,6 @@ class ContactResource extends JsonResource
             'potential_id'    => $this->potential_id,
             'influence_id'    => $this->influence_id,
             'user_id'         => $this->user_id,
-            'subsidiary_id'   => $this->subsidiary_id ?? null,
 
             // ── Relations chargées (whenLoaded) ───────────────────────────
             'contact_type' => $this->whenLoaded('contactType', fn() => [

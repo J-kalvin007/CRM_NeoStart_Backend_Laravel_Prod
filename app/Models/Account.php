@@ -16,7 +16,7 @@ class Account extends Model
     use HasActivityLogs;
 
     protected $fillable = [
-        'organizational_unit_id', 'user_id', 'delegue_id', 'account_type_id',
+        'country_id', 'user_id', 'delegue_id', 'account_type_id',
         'nom', 'adresse', 'ville', 'quartier', 'zone_quartier',
         'responsable', 'responsable_prenom', 'responsable_nom',
         'gps_lat', 'gps_lng', 'telephone', 'whatsapp', 'email',
@@ -33,8 +33,8 @@ class Account extends Model
         'produits_disponibles'  => 'array',
     ];
 
-    public function organizationalUnit() { return $this->belongsTo(OrganizationalUnit::class); }
     public function potential()    { return $this->belongsTo(Potential::class); }
+    public function country()      { return $this->belongsTo(Country::class); }
     public function owner()        { return $this->belongsTo(User::class, 'user_id'); }
     public function user()         { return $this->belongsTo(User::class, 'user_id'); }
     public function delegue()      { return $this->belongsTo(User::class, 'delegue_id'); }

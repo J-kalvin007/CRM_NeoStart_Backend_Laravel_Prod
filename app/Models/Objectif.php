@@ -19,10 +19,9 @@ class Objectif extends Model
 
     protected $fillable = [
         'user_id',
-        'team_id',
         'indicator_id',
         'objectif_type_id',
-        'organizational_unit_id',
+        'country_id',
         'assigned_by_user_id',
         'date_debut',
         'date_fin',
@@ -50,11 +49,6 @@ class Objectif extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function team()
-    {
-        return $this->belongsTo(Team::class);
-    }
-
     public function product()
     {
         return $this->belongsTo(Product::class);
@@ -63,6 +57,11 @@ class Objectif extends Model
     public function indicator()
     {
         return $this->belongsTo(Indicator::class);
+    }
+    
+    public function country()
+    {
+        return $this->belongsTo(Country::class);
     }
     
     public function type()
@@ -75,10 +74,6 @@ class Objectif extends Model
         return $this->belongsTo(User::class, 'assigned_by_user_id');
     }
 
-    public function organizationalUnit()
-    {
-        return $this->belongsTo(OrganizationalUnit::class, 'organizational_unit_id');
-    }
 
     /* ─── Business Logic ─────────────────────────────────────── */
 

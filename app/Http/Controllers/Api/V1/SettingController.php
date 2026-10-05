@@ -14,9 +14,6 @@ class SettingController extends Controller
         path: '/api/v1/settings',
         summary: 'Lister les paramètres publics',
         tags: ['Settings'],
-        parameters: [
-            new OA\Parameter(name: 'subsidiary_id', in: 'query', required: false, schema: new OA\Schema(type: 'string', format: 'uuid'))
-        ],
         responses: [
             new OA\Response(response: 200, description: 'Liste des paramètres')
         ]
@@ -24,15 +21,6 @@ class SettingController extends Controller
     public function index(Request $request)
     {
         $query = Setting::query();
-        
-        if ($request->filled('subsidiary_id')) {
-            // Récupérer les paramètres de la filiale OU les paramètres globaux (subsidiary_id null)
-            $query->where('subsidiary_id', $request->subsidiary_id)
-                  ->orWhereNull('subsidiary_id');
-        } else {
-            $query->whereNull('subsidiary_id');
-        }
-
         $settings = $query->get()->mapWithKeys(function ($item) {
             // Si c'est un lien de logo, on peut renvoyer l'URL complète
             if ($item->key === 'logo_path' && $item->value) {
@@ -58,7 +46,6 @@ class SettingController extends Controller
                     properties: [
                         new OA\Property(property: 'key', type: 'string'),
                         new OA\Property(property: 'value', type: 'string'),
-                        new OA\Property(property: 'subsidiary_id', type: 'string', format: 'uuid', nullable: true),
                         new OA\Property(property: 'file', type: 'string', format: 'binary', nullable: true),
                     ]
                 )
@@ -73,7 +60,6 @@ class SettingController extends Controller
         $request->validate([
             'key' => 'required|string|max:100',
             'value' => 'nullable|string',
-            'subsidiary_id' => 'nullable|uuid|exists:subsidiaries,id',
             'file' => 'nullable|file|image|mimes:jpeg,png,jpg,svg|max:2048',
         ]);
 
@@ -86,13 +72,8 @@ class SettingController extends Controller
         }
 
         $setting = Setting::updateOrCreate(
-            [
-                'key' => $request->key,
-                'subsidiary_id' => $request->subsidiary_id
-            ],
-            [
-                'value' => $value
-            ]
+            ['key' => $request->key],
+            ['value' => $value]
         );
 
         $responseValue = $setting->value;
@@ -103,7 +84,6 @@ class SettingController extends Controller
         return response()->json([
             'key' => $setting->key,
             'value' => $responseValue,
-            'subsidiary_id' => $setting->subsidiary_id
         ], 200);
     }
 }

@@ -3,7 +3,7 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use App\Models\{User, Country, Subsidiary, Team, AccountType, ContactType, ProductType, Account, Contact, Category, Product, TourPlan, Activity, SampleMovement, Objectif, Campaign, KolProfile};
+use App\Models\{User, Country, Team, AccountType, ContactType, ProductType, Account, Contact, Category, Product, TourPlan, Activity, SampleMovement, Objectif, Campaign, KolProfile};
 use Illuminate\Support\Str;
 use Carbon\Carbon;
 
@@ -18,7 +18,7 @@ class FullTestDataSeeder extends Seeder
         }
 
         $country = Country::first();
-        $subsidiary = Subsidiary::first();
+
         $team = Team::first();
 
         // 1. Types de configuration (Agnostique)
@@ -35,7 +35,7 @@ class FullTestDataSeeder extends Seeder
         // 2. Création de Comptes (Accounts)
         $hospital = Account::firstOrCreate(['nom' => 'Hôpital Pitié Salpêtrière'], [
             'account_type_id' => $hospitalType->id,
-            'subsidiary_id' => $subsidiary->id,
+
             'user_id' => $admin->id,
             'email' => 'contact@pitie.fr',
             'telephone' => '0123456789',
@@ -62,7 +62,7 @@ class FullTestDataSeeder extends Seeder
         $cardioCat = Category::firstOrCreate(['nom' => 'Cardiologie'], ['slug' => 'cardiologie', 'is_active' => true]);
         $product = Product::firstOrCreate(['code' => 'CARDIO-100'], [
             'product_type_id' => $drugType->id,
-            'subsidiary_id' => $subsidiary->id,
+
             'nom' => 'CardioMax',
             'pght' => 12.50,
             'ppv' => 15.00,

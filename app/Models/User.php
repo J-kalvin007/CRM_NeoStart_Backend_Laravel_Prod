@@ -33,6 +33,7 @@ class User extends Authenticatable
         'phone',
 
         'manager_id',
+        'country_id',
         'status',
         'fcm_token',
         'last_login_at',
@@ -70,14 +71,15 @@ class User extends Authenticatable
         ];
     }
 
-    public function scopes()
-    {
-        return $this->belongsToMany(OrganizationalUnit::class, 'user_scopes', 'user_id', 'organizational_unit_id')->withTimestamps();
-    }
 
     public function locations()
     {
         return $this->hasMany(UserLocation::class);
+    }
+
+    public function country()
+    {
+        return $this->belongsTo(Country::class);
     }
 
     /**

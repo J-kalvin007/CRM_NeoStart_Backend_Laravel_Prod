@@ -19,8 +19,7 @@ use OpenApi\Attributes as OA;
  *   - L'icône de l'onglet navigateur / favicon (favicon_path) — formats : png, ico — max 512 Ko
  *
  * Les paramètres sont stockés dans la table `settings` avec une clé normalisée.
- * Si subsidiary_id est NULL → paramètre global (toutes filiales).
- * Si subsidiary_id est fourni → paramètre spécifique à la filiale (prioritaire sur le global).
+ * Les paramètres sont globaux (sans filiale).
  */
 #[OA\Tag(
     name: 'App Branding',
@@ -53,20 +52,10 @@ class AppBrandingController extends Controller
         summary: 'Récupérer la configuration de branding de l\'application',
         description: <<<'DESC'
 Retourne le nom, le logo et la favicon de l'application.
-- Si `subsidiary_id` est fourni, les paramètres spécifiques à la filiale surchargent les globaux.
 - Les URLs de logo et favicon sont des URLs absolues prêtes à l'emploi.
 - **Accessible sans authentification** pour permettre l'affichage avant la connexion.
 DESC,
         tags: ['App Branding'],
-        parameters: [
-            new OA\Parameter(
-                name: 'subsidiary_id',
-                in: 'query',
-                required: false,
-                description: 'UUID de la filiale. Si fourni, les paramètres filiale-specific surchargent les globaux.',
-                schema: new OA\Schema(type: 'string', format: 'uuid')
-            )
-        ],
         responses: [
             new OA\Response(
                 response: 200,
@@ -83,30 +72,15 @@ DESC,
     )]
     public function show(Request $request): JsonResponse
     {
-        $subsidiaryId = $request->query('subsidiary_id');
-
         // Récupérer les settings globaux
-        $globalSettings = Setting::whereNull('subsidiary_id')
-            ->whereIn('key', ['app_name', 'logo_path', 'favicon_path'])
+        $globalSettings = Setting::whereIn('key', ['app_name', 'logo_path', 'favicon_path'])
             ->pluck('value', 'key')
             ->toArray();
 
-        // Récupérer les settings de la filiale si demandé, et les fusionner (ils ont priorité)
-        if ($subsidiaryId) {
-            $subsidiarySettings = Setting::where('subsidiary_id', $subsidiaryId)
-                ->whereIn('key', ['app_name', 'logo_path', 'favicon_path'])
-                ->pluck('value', 'key')
-                ->toArray();
-
-            $merged = array_merge($globalSettings, $subsidiarySettings);
-        } else {
-            $merged = $globalSettings;
-        }
-
         return response()->json([
-            'app_name'    => $merged['app_name']    ?? null,
-            'logo_url'    => isset($merged['logo_path'])    ? asset('storage/' . $merged['logo_path'])    : null,
-            'favicon_url' => isset($merged['favicon_path']) ? asset('storage/' . $merged['favicon_path']) : null,
+            'app_name'    => $globalSettings['app_name']    ?? null,
+            'logo_url'    => isset($globalSettings['logo_path'])    ? asset('storage/' . $globalSettings['logo_path'])    : null,
+            'favicon_url' => isset($globalSettings['favicon_path']) ? asset('storage/' . $globalSettings['favicon_path']) : null,
         ]);
     }
 
@@ -117,7 +91,7 @@ DESC,
     #[OA\Put(
         path: '/api/v1/branding/name',
         summary: 'Mettre à jour le nom de l\'application',
-        description: 'Met à jour la clé `app_name` dans la table settings. Passer `subsidiary_id` pour un réglage par filiale.',
+        description: 'Met à jour la clé `app_name` dans la table settings.',
         security: [['bearerAuth' => []]],
         tags: ['App Branding'],
         requestBody: new OA\RequestBody(
@@ -126,7 +100,6 @@ DESC,
                 required: ['app_name'],
                 properties: [
                     new OA\Property(property: 'app_name', type: 'string', maxLength: 100, example: 'MyCRM Pro'),
-                    new OA\Property(property: 'subsidiary_id', type: 'string', format: 'uuid', nullable: true, description: 'Laisser null pour un paramètre global'),
                 ]
             )
         ),
@@ -138,7 +111,6 @@ DESC,
                     properties: [
                         new OA\Property(property: 'key', type: 'string', example: 'app_name'),
                         new OA\Property(property: 'value', type: 'string', example: 'MyCRM Pro'),
-                        new OA\Property(property: 'subsidiary_id', type: 'string', format: 'uuid', nullable: true),
                     ]
                 )
             ),
@@ -149,19 +121,17 @@ DESC,
     public function updateName(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'app_name'      => 'required|string|max:100',
-            'subsidiary_id' => 'nullable|uuid|exists:subsidiaries,id',
+            'app_name' => 'required|string|max:100',
         ]);
 
         $setting = Setting::updateOrCreate(
-            ['key' => 'app_name', 'subsidiary_id' => $data['subsidiary_id'] ?? null],
+            ['key' => 'app_name'],
             ['value' => $data['app_name']]
         );
 
         return response()->json([
-            'key'           => $setting->key,
-            'value'         => $setting->value,
-            'subsidiary_id' => $setting->subsidiary_id,
+            'key'   => $setting->key,
+            'value' => $setting->value,
         ]);
     }
 
@@ -197,13 +167,6 @@ DESC,
                             format: 'binary',
                             description: 'Fichier logo (jpeg, jpg, png, webp — max 2 Mo)'
                         ),
-                        new OA\Property(
-                            property: 'subsidiary_id',
-                            type: 'string',
-                            format: 'uuid',
-                            nullable: true,
-                            description: 'Laisser vide pour un logo global'
-                        ),
                     ]
                 )
             )
@@ -215,7 +178,6 @@ DESC,
                 content: new OA\JsonContent(
                     properties: [
                         new OA\Property(property: 'logo_url', type: 'string', format: 'uri'),
-                        new OA\Property(property: 'subsidiary_id', type: 'string', format: 'uuid', nullable: true),
                     ]
                 )
             ),
@@ -226,20 +188,17 @@ DESC,
     public function uploadLogo(Request $request): JsonResponse
     {
         $request->validate([
-            'logo'          => [
+            'logo' => [
                 'required',
                 'file',
                 'image',
                 'mimes:' . implode(',', self::LOGO_MIMES),
                 'max:' . self::LOGO_MAX_KB,
             ],
-            'subsidiary_id' => 'nullable|uuid|exists:subsidiaries,id',
         ]);
 
-        $subsidiaryId = $request->input('subsidiary_id');
-
         // Supprimer l'ancien fichier s'il existe
-        $this->deleteOldFile('logo_path', $subsidiaryId);
+        $this->deleteOldFile('logo_path', null);
 
         // Stocker le nouveau logo
         $path = $request->file('logo')->storeAs(
@@ -249,13 +208,12 @@ DESC,
         );
 
         Setting::updateOrCreate(
-            ['key' => 'logo_path', 'subsidiary_id' => $subsidiaryId],
+            ['key' => 'logo_path'],
             ['value' => $path]
         );
 
         return response()->json([
-            'logo_url'      => asset('storage/' . $path),
-            'subsidiary_id' => $subsidiaryId,
+            'logo_url' => asset('storage/' . $path),
         ]);
     }
 
@@ -291,13 +249,6 @@ DESC,
                             format: 'binary',
                             description: 'Fichier favicon (png ou ico — max 512 Ko, recommandé 32×32 ou 64×64 px)'
                         ),
-                        new OA\Property(
-                            property: 'subsidiary_id',
-                            type: 'string',
-                            format: 'uuid',
-                            nullable: true,
-                            description: 'Laisser vide pour une favicon globale'
-                        ),
                     ]
                 )
             )
@@ -309,7 +260,6 @@ DESC,
                 content: new OA\JsonContent(
                     properties: [
                         new OA\Property(property: 'favicon_url', type: 'string', format: 'uri'),
-                        new OA\Property(property: 'subsidiary_id', type: 'string', format: 'uuid', nullable: true),
                     ]
                 )
             ),
@@ -320,19 +270,16 @@ DESC,
     public function uploadFavicon(Request $request): JsonResponse
     {
         $request->validate([
-            'favicon'       => [
+            'favicon' => [
                 'required',
                 'file',
                 'mimes:' . implode(',', self::FAVICON_MIMES),
                 'max:' . self::FAVICON_MAX_KB,
             ],
-            'subsidiary_id' => 'nullable|uuid|exists:subsidiaries,id',
         ]);
 
-        $subsidiaryId = $request->input('subsidiary_id');
-
         // Supprimer l'ancien fichier s'il existe
-        $this->deleteOldFile('favicon_path', $subsidiaryId);
+        $this->deleteOldFile('favicon_path', null);
 
         // Stocker la nouvelle favicon
         $path = $request->file('favicon')->storeAs(
@@ -342,13 +289,12 @@ DESC,
         );
 
         Setting::updateOrCreate(
-            ['key' => 'favicon_path', 'subsidiary_id' => $subsidiaryId],
+            ['key' => 'favicon_path'],
             ['value' => $path]
         );
 
         return response()->json([
-            'favicon_url'   => asset('storage/' . $path),
-            'subsidiary_id' => $subsidiaryId,
+            'favicon_url' => asset('storage/' . $path),
         ]);
     }
 
@@ -362,14 +308,6 @@ DESC,
         description: 'Supprime le fichier logo du stockage et retire l\'entrée de la table settings.',
         security: [['bearerAuth' => []]],
         tags: ['App Branding'],
-        parameters: [
-            new OA\Parameter(
-                name: 'subsidiary_id',
-                in: 'query',
-                required: false,
-                schema: new OA\Schema(type: 'string', format: 'uuid')
-            )
-        ],
         responses: [
             new OA\Response(response: 204, description: 'Logo supprimé avec succès'),
             new OA\Response(response: 401, description: 'Non authentifié'),
@@ -377,16 +315,8 @@ DESC,
     )]
     public function deleteLogo(Request $request): JsonResponse
     {
-        $subsidiaryId = $request->query('subsidiary_id');
-        $this->deleteOldFile('logo_path', $subsidiaryId);
-
-        Setting::where('key', 'logo_path')
-            ->where(fn($q) => $subsidiaryId
-                ? $q->where('subsidiary_id', $subsidiaryId)
-                : $q->whereNull('subsidiary_id')
-            )
-            ->delete();
-
+        $this->deleteOldFile('logo_path');
+        Setting::where('key', 'logo_path')->delete();
         return response()->json(null, 204);
     }
 
@@ -400,14 +330,6 @@ DESC,
         description: 'Supprime le fichier favicon du stockage et retire l\'entrée de la table settings.',
         security: [['bearerAuth' => []]],
         tags: ['App Branding'],
-        parameters: [
-            new OA\Parameter(
-                name: 'subsidiary_id',
-                in: 'query',
-                required: false,
-                schema: new OA\Schema(type: 'string', format: 'uuid')
-            )
-        ],
         responses: [
             new OA\Response(response: 204, description: 'Favicon supprimée avec succès'),
             new OA\Response(response: 401, description: 'Non authentifié'),
@@ -415,16 +337,8 @@ DESC,
     )]
     public function deleteFavicon(Request $request): JsonResponse
     {
-        $subsidiaryId = $request->query('subsidiary_id');
-        $this->deleteOldFile('favicon_path', $subsidiaryId);
-
-        Setting::where('key', 'favicon_path')
-            ->where(fn($q) => $subsidiaryId
-                ? $q->where('subsidiary_id', $subsidiaryId)
-                : $q->whereNull('subsidiary_id')
-            )
-            ->delete();
-
+        $this->deleteOldFile('favicon_path');
+        Setting::where('key', 'favicon_path')->delete();
         return response()->json(null, 204);
     }
 
@@ -435,17 +349,11 @@ DESC,
     /**
      * Supprime l'ancien fichier physique lié à une clé de setting.
      *
-     * @param string      $key          Clé du setting (logo_path / favicon_path)
-     * @param string|null $subsidiaryId UUID de la filiale ou null pour le global
+     * @param string $key Clé du setting (logo_path / favicon_path)
      */
-    private function deleteOldFile(string $key, ?string $subsidiaryId): void
+    private function deleteOldFile(string $key): void
     {
-        $setting = Setting::where('key', $key)
-            ->where(fn($q) => $subsidiaryId
-                ? $q->where('subsidiary_id', $subsidiaryId)
-                : $q->whereNull('subsidiary_id')
-            )
-            ->first();
+        $setting = Setting::where('key', $key)->first();
 
         if ($setting && $setting->value && Storage::disk('public')->exists($setting->value)) {
             Storage::disk('public')->delete($setting->value);

@@ -21,7 +21,6 @@ class Indicator extends Model
         'data_source_field',
         'unit',
         'is_active',
-        'subsidiary_id',
     ];
 
     protected $casts = [

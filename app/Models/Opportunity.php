@@ -15,7 +15,6 @@ class Opportunity extends Model
 
     protected $fillable = [
         'user_id',
-        'subsidiary_id',
         'account_id',
         'product_id',
         'title',

@@ -38,8 +38,7 @@ class StoreObjectifRequest extends FormRequest
     {
         return [
             'user_id' => 'nullable|exists:users,id',
-            'team_id' => 'nullable|uuid|exists:teams,id',
-            'organizational_unit_id' => 'nullable|uuid|exists:organizational_units,id',
+            'country_id' => 'nullable|uuid|exists:countries,id',
             'indicator_id' => 'nullable|uuid|exists:indicators,id',
             'objectif_type_id' => 'required|uuid|exists:objectif_types,id',
             'assigned_by_user_id' => 'nullable|exists:users,id',
@@ -52,7 +51,6 @@ class StoreObjectifRequest extends FormRequest
             'product_id' => 'nullable|uuid|exists:products,id',
             'description' => 'nullable|string',
             'statut' => 'nullable|string|in:en_cours,actif,atteint,depasse,non_atteint,annule',
-            'subsidiary_id' => 'nullable|uuid|exists:subsidiaries,id',
         ];
     }
 }

@@ -14,9 +14,6 @@ class ManagerDashboardController extends Controller {
         }
 
         $subordinates = User::where('manager_id', $user->id)->get();
-        if ($subordinates->isEmpty() && $user->team_id) {
-            $subordinates = User::where('team_id', $user->team_id)->where('id', '!=', $user->id)->get();
-        }
         if ($subordinates->isEmpty()) {
             $subordinates = User::whereDoesntHave('roles', function($q) {
                 $q->whereIn('name', ['Manager', 'super_admin', 'Administrateur Groupe']);

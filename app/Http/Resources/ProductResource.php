@@ -11,6 +11,7 @@ class ProductResource extends JsonResource
     {
         return [
             'id'             => $this->id,
+            'country_id'     => $this->country_id,
             'nom'            => $this->nom,
             'code'           => $this->code,
             'marque'         => $this->marque,
@@ -40,7 +41,6 @@ class ProductResource extends JsonResource
                 'is_stockable'    => $this->productType->is_stockable,
                 'is_distributable'=> $this->productType->is_distributable,
             ]),
-            'subsidiary_id'  => $this->subsidiary_id,
             'created_at'     => $this->created_at,
             'updated_at'     => $this->updated_at,
             'deleted_at'     => $this->deleted_at,

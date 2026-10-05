@@ -6,7 +6,7 @@ use Illuminate\Database\Seeder;
 use App\Models\Laboratory;
 use App\Models\TherapeuticClass;
 use App\Models\Product;
-use App\Models\Subsidiary;
+
 use App\Models\ProductType;
 
 class PharmaSeeder extends Seeder
@@ -16,7 +16,7 @@ class PharmaSeeder extends Seeder
      */
     public function run(): void
     {
-        $subsidiary = Subsidiary::first();
+
 
         // 1. Création des Laboratoires principaux
         $laboratories = [
@@ -68,22 +68,20 @@ class PharmaSeeder extends Seeder
             ['nom' => 'Cefaclor 500mg', 'code' => 'CEF-500', 'dci' => 'Cefaclor', 'lab' => 'Novartis', 'class' => 'Antibiotiques', 'cond' => 'Boîte de 12 gélules'],
         ];
 
-        if ($subsidiary) {
-            foreach ($products as $p) {
-                Product::firstOrCreate([
-                    'code' => $p['code']
-                ], [
-                                        'product_type_id' => $prodType->id,
-                    'laboratory_id' => $labsMap[$p['lab']]->id ?? null,
-                    'therapeutic_class_id' => $classesMap[$p['class']]->id ?? null,
-                    'nom' => $p['nom'],
-                    'dci' => $p['dci'],
-                    'conditionnement' => $p['cond'],
-                    'statut' => 'actif',
-                    'stock_actuel' => 500,
-                    'stock_alerte' => 50,
-                ]);
-            }
+        foreach ($products as $p) {
+            Product::firstOrCreate([
+                'code' => $p['code']
+            ], [
+                                    'product_type_id' => $prodType->id,
+                'laboratory_id' => $labsMap[$p['lab']]->id ?? null,
+                'therapeutic_class_id' => $classesMap[$p['class']]->id ?? null,
+                'nom' => $p['nom'],
+                'dci' => $p['dci'],
+                'conditionnement' => $p['cond'],
+                'statut' => 'actif',
+                'stock_actuel' => 500,
+                'stock_alerte' => 50,
+            ]);
         }
     }
 }

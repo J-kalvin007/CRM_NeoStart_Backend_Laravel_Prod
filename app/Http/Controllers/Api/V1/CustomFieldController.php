@@ -52,8 +52,6 @@ class CustomFieldController extends Controller
             'order' => 'integer',
         ]);
 
-        $data['subsidiary_id'] = Auth::user()->subsidiary_id;
-
         $field = CustomField::create($data);
 
         return response()->json($field, 201);

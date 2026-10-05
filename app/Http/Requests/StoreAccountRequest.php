@@ -11,7 +11,7 @@ class StoreAccountRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'organizational_unit_id' => 'nullable|uuid|exists:organizational_units,id',
+            'country_id' => 'nullable|uuid|exists:countries,id',
             'account_type_id' => 'nullable|uuid|exists:account_types,id',
             'nom'             => 'required|string|max:255',
             'adresse'         => 'nullable|string',

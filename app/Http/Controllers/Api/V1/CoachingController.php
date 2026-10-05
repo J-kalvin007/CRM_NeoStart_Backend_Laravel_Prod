@@ -38,7 +38,7 @@ class CoachingController extends Controller
 
         // Profil et indicateurs réels du mois du délégué (mêmes règles que le tableau de bord superviseur)
         $delegate = User::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
-            ->with(['roles', 'scopes'])
+            ->with(['roles'])
             ->findOrFail($id);
         $dash = app(SupervisorDashboardController::class);
         $start = now()->startOfMonth()->toDateString();

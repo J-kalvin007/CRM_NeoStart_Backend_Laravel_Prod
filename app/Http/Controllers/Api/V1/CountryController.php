@@ -41,7 +41,7 @@ class CountryController extends Controller
     )]
     public function index()
     {
-        return CountryResource::collection(Country::with('subsidiaries')->get());
+        return CountryResource::collection(Country::all());
     }
 
     #[OA\Post(
@@ -104,7 +104,7 @@ class CountryController extends Controller
     )]
     public function show(string $id)
     {
-        $country = Country::with('subsidiaries')->findOrFail($id);
+        $country = Country::findOrFail($id);
         return new CountryResource($country);
     }
 
@@ -154,7 +154,7 @@ class CountryController extends Controller
 
         $country->update($validated);
 
-        return new CountryResource($country->load('subsidiaries'));
+        return new CountryResource($country);
     }
 
     #[OA\Delete(
@@ -177,10 +177,10 @@ class CountryController extends Controller
     {
         $country = Country::findOrFail($id);
 
-        // Protection : vérifier qu'aucune filiale n'est encore rattachée
-        if ($country->subsidiaries()->exists()) {
+        // Protection : vérifier qu'aucun compte n'est encore rattaché
+        if ($country->accounts()->exists() || $country->users()->exists()) {
             return response()->json([
-                'message' => 'Impossible de supprimer ce pays : des filiales y sont encore rattachées.'
+                'message' => 'Impossible de supprimer ce pays : des données (comptes ou utilisateurs) y sont encore rattachées.'
             ], 409);
         }
 

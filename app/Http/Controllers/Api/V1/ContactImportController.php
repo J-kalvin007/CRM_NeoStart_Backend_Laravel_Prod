@@ -125,15 +125,14 @@ class ContactImportController extends Controller
             'file'                   => 'required|file|mimes:xlsx,xls,csv|max:10240',
             'mode'                   => 'in:create,update,upsert',
             'assign_to_user'         => 'nullable|uuid|exists:users,id',
-            'organizational_unit_id' => 'nullable|uuid|exists:organizational_units,id',
+            'country_id'             => 'nullable|uuid|exists:countries,id',
             'dry_run'                => 'boolean',
         ]);
 
         $mode         = $request->input('mode', 'upsert');
         $dryRun       = $request->boolean('dry_run', false);
         $assignUserId = $request->input('assign_to_user') ?? auth()->id();
-        $unitId       = $request->input('organizational_unit_id')
-                        ?? $this->resolveUserPrimaryUnit((string) auth()->id());
+        $countryId    = $request->input('country_id') ?? auth()->user()->country_id;
 
         // ── Lecture du fichier ─────────────────────────────────────────────
         try {
@@ -169,7 +168,7 @@ class ContactImportController extends Controller
         // Users: clé = name normalisé, valeur = id
         $users        = User::pluck('id', 'name')->toArray();
 
-        $countryUnitId = $unitId ? $this->resolveCountryUnit($unitId) : null;
+
 
         // ── Traitement ligne par ligne ─────────────────────────────────────
         $results = ['created' => 0, 'updated' => 0, 'skipped' => 0, 'errors' => [], 'preview' => []];
@@ -185,7 +184,7 @@ class ContactImportController extends Controller
                     $parsed = $this->parseRow(
                         $row, $colIdx,
                         $specialities, $potentials, $accounts, $users,
-                        $assignUserId, $countryUnitId,
+                        $assignUserId, $countryId,
                         $dryRun // en dry_run on ne crée pas les entrées manquantes
                     );
 
@@ -331,7 +330,7 @@ class ContactImportController extends Controller
         array &$accounts,
         array $users,
         ?string $defaultUserId,
-        ?string $countryUnitId,
+        ?string $countryId,
         bool $dryRun = false
     ): array {
         $data = [];
@@ -437,7 +436,7 @@ class ContactImportController extends Controller
                 $nomStructure, $typeStructure,
                 $data['ville'] ?? null,
                 $accounts,
-                $countryUnitId
+                $countryId
             );
             if ($accountId) {
                 $data['account_id'] = $accountId;
@@ -456,9 +455,8 @@ class ContactImportController extends Controller
         $data['statut_validation'] = 'valide';
 
         // ── Périmètre géographique ────────────────────────────────────────
-        if ($countryUnitId) {
-            // Lien direct pour que le filtre DynamicPerimeterScope fonctionne
-            $data['organizational_unit_id'] = $countryUnitId;
+        if ($countryId) {
+            $data['country_id'] = $countryId;
         }
 
         return $data;
@@ -507,7 +505,7 @@ class ContactImportController extends Controller
      * Trouve ou crée un Account (établissement de santé).
      * Vérifie avec normalisation pour éviter les doublons.
      */
-    private function findOrCreateAccount(string $nom, string $type, ?string $ville, array &$accounts, ?string $unitId = null): ?string
+    private function findOrCreateAccount(string $nom, string $type, ?string $ville, array &$accounts, ?string $countryId = null): ?string
     {
         $normNom = $this->normalizeStr($nom);
 
@@ -530,8 +528,8 @@ class ContactImportController extends Controller
 
         if ($existing) {
             // Mettre à jour le périmètre si non défini et qu'on en a un
-            if ($unitId && empty($existing->organizational_unit_id)) {
-                $existing->update(['organizational_unit_id' => $unitId]);
+            if ($countryId && empty($existing->country_id)) {
+                $existing->update(['country_id' => $countryId]);
             }
             $accounts[$nom] = $existing->id;
             return $existing->id;
@@ -547,7 +545,7 @@ class ContactImportController extends Controller
                 'statut'                 => 'actif',
                 'user_id'                => auth()->id(),
                 'statut_validation'      => 'valide',
-                'organizational_unit_id' => $unitId,
+                'country_id'             => $countryId,
             ]);
             $accounts[$nom]    = $account->id;
             $accounts[$nomMaj] = $account->id; // aussi dans le cache en majuscules
@@ -639,32 +637,5 @@ class ContactImportController extends Controller
         Contact::create($data);
         return 'created';
     }
-
-    // ── Helpers : périmètre ───────────────────────────────────────────────
-
-    private function resolveUserPrimaryUnit(string $userId): ?string
-    {
-        $scope = \App\Models\UserScope::where('user_id', $userId)
-            ->where('is_primary', true)->where('is_active', true)->first();
-        if ($scope) return $scope->organizational_unit_id;
-
-        $scope = \App\Models\UserScope::where('user_id', $userId)
-            ->where('is_active', true)->first();
-        return $scope?->organizational_unit_id;
-    }
-
-    private function resolveCountryUnit(string $unitId): string
-    {
-        $unit = \App\Models\OrganizationalUnit::find($unitId);
-        if (!$unit || $unit->level_order === 1) return $unitId;
-
-        $current = $unit;
-        $visited = [];
-        while ($current && $current->level_order > 1 && $current->parent_id) {
-            if (in_array($current->id, $visited)) break; // protection anti-boucle
-            $visited[] = $current->id;
-            $current = \App\Models\OrganizationalUnit::find($current->parent_id);
-        }
-        return $current?->id ?? $unitId;
-    }
 }
+

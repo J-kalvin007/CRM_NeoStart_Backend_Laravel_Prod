@@ -132,14 +132,14 @@ class AccountImportController extends Controller
             'file'                   => 'required|file|mimes:xlsx,xls,csv|max:10240',
             'mode'                   => 'in:create,update,upsert',
             'assign_to_user'         => 'nullable|uuid|exists:users,id',
-            'organizational_unit_id' => 'nullable|uuid|exists:organizational_units,id',
+            'country_id'             => 'nullable|uuid|exists:countries,id',
             'dry_run'                => 'boolean',
         ]);
 
         $mode         = $request->input('mode', 'upsert');
         $dryRun       = $request->boolean('dry_run', false);
         $assignUserId = $request->input('assign_to_user') ?? auth()->id();
-        $unitId       = $request->input('organizational_unit_id');
+        $countryId    = $request->input('country_id');
 
         try {
             $spreadsheet = IOFactory::load($request->file('file')->getRealPath());
@@ -181,7 +181,7 @@ class AccountImportController extends Controller
                 try {
                     $parsed = $this->parseRow(
                         $row, $colIdx, $accountTypes, $potentials, $users,
-                        $assignUserId, $unitId, $dryRun
+                        $assignUserId, $countryId, $dryRun
                     );
 
                     if (empty($parsed['nom'])) {
@@ -292,7 +292,7 @@ class AccountImportController extends Controller
     private function parseRow(
         array $row, array $colIdx,
         array &$accountTypes, array $potentials, array $users,
-        ?string $defaultUserId, ?string $unitId,
+        ?string $defaultUserId, ?string $countryId,
         bool $dryRun
     ): array {
         $get  = fn(string $f) => $this->getCell($row, $colIdx, $f);
@@ -392,8 +392,8 @@ class AccountImportController extends Controller
         $data['user_id']    = auth()->id(); // auteur de la création
 
         // ── Périmètre ─────────────────────────────────────────────────────
-        if ($unitId) {
-            $data['organizational_unit_id'] = $unitId;
+        if ($countryId) {
+            $data['country_id'] = $countryId;
         }
 
         $data['statut_validation'] = 'valide';

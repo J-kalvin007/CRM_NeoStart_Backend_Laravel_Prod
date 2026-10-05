@@ -25,7 +25,7 @@ class SupervisorDashboardController extends Controller
     public function dashboard(Request $request)
     {
         $user = auth()->user();
-        $team = $user->teamMembers()->with('scopes')->get();
+        $team = $user->teamMembers()->with('country')->get();
         $teamIds = $team->pluck('id')->all();
         $count = $team->count();
 
@@ -46,7 +46,7 @@ class SupervisorDashboardController extends Controller
         $connectedPct = $count > 0 ? (int) round($connectedToday / $count * 100) : 0;
 
         $liveActivities = $this->visitQuery($teamIds)
-            ->with(['delegue.scopes', 'contact', 'account'])
+            ->with(['delegue.country', 'contact', 'account'])
             ->whereDate('date_activite', now()->toDateString())
             ->orderBy('heure_debut')
             ->get()
@@ -134,7 +134,7 @@ class SupervisorDashboardController extends Controller
         };
         $targetPerDelegate = $this->visitsPerDay() * $workingDays;
 
-        $team = $user->teamMembers()->with('scopes')->orderBy('name')->get();
+        $team = $user->teamMembers()->with('country')->orderBy('name')->get();
         if ($team->isEmpty()) {
             $team = collect([$user]);
         }
@@ -201,7 +201,7 @@ class SupervisorDashboardController extends Controller
         \App\Models\Activity::markMissedPastActivities();
 
         $schedules = $this->visitQuery($filteredIds)
-            ->with(['delegue.scopes', 'contact', 'account', 'products', 'duoUser', 'duoActivityType'])
+            ->with(['delegue.country', 'contact', 'account', 'products', 'duoUser', 'duoActivityType'])
             ->whereBetween('date_activite', [$start->toDateString(), $end->toDateString()])
             ->orderBy('date_activite')
             ->orderBy('heure_debut')
@@ -348,15 +348,15 @@ class SupervisorDashboardController extends Controller
         };
     }
 
-    /** Secteur = première unité organisationnelle rattachée à l'utilisateur (user_scopes). */
+    /** Secteur = Pays de l'utilisateur. */
     public function delegateSector(?User $u): string
     {
         if (!$u) {
             return '';
         }
-        $scopes = $u->relationLoaded('scopes') ? $u->scopes : $u->scopes()->get();
+        $country = $u->relationLoaded('country') ? $u->country : $u->country()->first();
 
-        return (string) ($scopes->first()?->name ?? '');
+        return (string) ($country?->name ?? '');
     }
 
     private function contactName(Activity $act): string

@@ -6,12 +6,6 @@ use App\Http\Controllers\Api\V1\SyncController;
 use App\Http\Controllers\Api\V1\ActivityReportController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CountryController;
-use App\Http\Controllers\Api\V1\SubsidiaryController;
-use App\Http\Controllers\Api\V1\RegionController;
-use App\Http\Controllers\Api\V1\TerritoryController;
-use App\Http\Controllers\Api\V1\ZoneController;
-use App\Http\Controllers\Api\V1\SectorController;
-use App\Http\Controllers\Api\V1\TeamController;
 use App\Http\Controllers\Api\V1\ConfigurationController;
 use App\Http\Controllers\Api\V1\AccountController;
 use App\Http\Controllers\Api\V1\ContactController;
@@ -50,10 +44,6 @@ use App\Http\Controllers\Api\V1\RequestController;
 
 use App\Http\Controllers\Api\V1\LaboratoryController;
 use App\Http\Controllers\Api\V1\TherapeuticClassController;
-use App\Http\Controllers\Api\V1\HierarchyConfigController;
-use App\Http\Controllers\Api\V1\DynamicOrganizationalUnitController;
-use App\Http\Controllers\Api\V1\UserScopeController;
-
 Route::get('/login', fn() => response()->json(['message' => 'Non authentifié'], 401))->name('login');
 
 Route::prefix('v1')->group(function () {
@@ -96,17 +86,11 @@ Route::prefix('v1')->group(function () {
         Route::post('/auth/invite', [AuthController::class, 'invite']);
 
         Route::apiResource('countries', CountryController::class);
-        Route::apiResource('subsidiaries', SubsidiaryController::class);
-        Route::apiResource('regions', RegionController::class);
-        Route::apiResource('territories', TerritoryController::class);
-        Route::apiResource('zones', ZoneController::class);
-        Route::apiResource('sectors', SectorController::class);
-        Route::apiResource('teams', TeamController::class);
         Route::patch('campaigns/{campaign}/status', [CampaignController::class, 'updateStatus']);
         Route::post('campaigns/{campaign}/products', [CampaignController::class, 'attachProduct']);
         Route::delete('campaigns/{campaign}/products/{product}', [CampaignController::class, 'detachProduct']);
-        Route::post('campaigns/{campaign}/teams', [CampaignController::class, 'attachTeam']);
-        Route::delete('campaigns/{campaign}/teams/{team}', [CampaignController::class, 'detachTeam']);
+        Route::post('campaigns/{campaign}/organizational-units', [CampaignController::class, 'attachOrganizationalUnit']);
+        Route::delete('campaigns/{campaign}/organizational-units/{unit}', [CampaignController::class, 'detachOrganizationalUnit']);
         Route::apiResource('campaigns', CampaignController::class);
         Route::apiResource('kol-profiles', KolProfileController::class);
 
@@ -114,6 +98,7 @@ Route::prefix('v1')->group(function () {
         Route::get('users/locations', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'usersLocations']);
         Route::post('me/location', [\App\Http\Controllers\Api\V1\LocationController::class, 'store']);
         Route::get('users/{id}/locations', [\App\Http\Controllers\Api\V1\LocationController::class, 'history']);
+        Route::post('users/bulk-update-country', [UserController::class, 'bulkUpdateCountry']);
         Route::apiResource('users', UserController::class);
         Route::apiResource('roles', RoleController::class);
         Route::get('permissions', [PermissionController::class, 'index']);
@@ -123,45 +108,6 @@ Route::prefix('v1')->group(function () {
 
 
         // Configuration (Tables paramétrables par l'Admin/Manager)
-        Route::prefix('organization')->group(function () {
-            Route::get('tree', [\App\Http\Controllers\Api\V1\OrganizationController::class, 'tree']);
-            Route::get('flat', [\App\Http\Controllers\Api\V1\OrganizationController::class, 'flat']);
-        });
-
-        // ── Dynamic Hierarchy Management ──────────────────────────
-        Route::prefix('hierarchy')->group(function () {
-            // Organization configurations
-            Route::get('configs', [\App\Http\Controllers\Api\V1\HierarchyConfigController::class, 'index']);
-            Route::post('configs', [\App\Http\Controllers\Api\V1\HierarchyConfigController::class, 'store']);
-            Route::get('configs/{id}', [\App\Http\Controllers\Api\V1\HierarchyConfigController::class, 'show']);
-            Route::put('configs/{id}', [\App\Http\Controllers\Api\V1\HierarchyConfigController::class, 'update']);
-            Route::delete('configs/{id}', [\App\Http\Controllers\Api\V1\HierarchyConfigController::class, 'destroy']);
-            Route::post('configs/{id}/clone', [\App\Http\Controllers\Api\V1\HierarchyConfigController::class, 'clone']);
-            Route::get('configs/{id}/tree', [\App\Http\Controllers\Api\V1\HierarchyConfigController::class, 'getTree']);
-
-            // Dynamic organizational units
-            Route::get('units', [\App\Http\Controllers\Api\V1\DynamicOrganizationalUnitController::class, 'index']);
-            Route::post('units', [\App\Http\Controllers\Api\V1\DynamicOrganizationalUnitController::class, 'store']);
-            Route::get('units/{id}', [\App\Http\Controllers\Api\V1\DynamicOrganizationalUnitController::class, 'show']);
-            Route::put('units/{id}', [\App\Http\Controllers\Api\V1\DynamicOrganizationalUnitController::class, 'update']);
-            Route::delete('units/{id}', [\App\Http\Controllers\Api\V1\DynamicOrganizationalUnitController::class, 'destroy']);
-            Route::put('units/{id}/move', [\App\Http\Controllers\Api\V1\DynamicOrganizationalUnitController::class, 'move']);
-            Route::get('configurations', [\App\Http\Controllers\Api\V1\DynamicOrganizationalUnitController::class, 'getConfigurations']);
-            Route::get('configurations/{configId}/levels', [\App\Http\Controllers\Api\V1\DynamicOrganizationalUnitController::class, 'getLevels']);
-
-            // User scopes management
-            Route::get('user-scopes', [\App\Http\Controllers\Api\V1\UserScopeController::class, 'index']);
-            Route::post('user-scopes', [\App\Http\Controllers\Api\V1\UserScopeController::class, 'store']);
-            Route::put('user-scopes/{id}', [\App\Http\Controllers\Api\V1\UserScopeController::class, 'update']);
-            Route::delete('user-scopes/{id}', [\App\Http\Controllers\Api\V1\UserScopeController::class, 'destroy']);
-            Route::put('user-scopes/{id}/set-primary', [\App\Http\Controllers\Api\V1\UserScopeController::class, 'setPrimary']);
-            
-            // User perimeter information
-            Route::get('accessible-units', [\App\Http\Controllers\Api\V1\UserScopeController::class, 'getAccessibleUnits']);
-            Route::get('accessible-users', [\App\Http\Controllers\Api\V1\UserScopeController::class, 'getAccessibleUsers']);
-            Route::get('manageable-units', [\App\Http\Controllers\Api\V1\UserScopeController::class, 'getManageableUnits']);
-            Route::get('units/{unitId}/hierarchy-path', [\App\Http\Controllers\Api\V1\UserScopeController::class, 'getHierarchyPath']);
-        });
 
         Route::prefix('config')->group(function () {
             Route::get('account-types', [ConfigurationController::class, 'accountTypeIndex']);

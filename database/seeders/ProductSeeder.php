@@ -5,13 +5,13 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use App\Models\Product;
 use App\Models\ProductType;
-use App\Models\Subsidiary;
+
 
 class ProductSeeder extends Seeder
 {
     public function run(): void
     {
-        $subsidiary = Subsidiary::first();
+
         $medType = ProductType::firstOrCreate(['code' => 'MED'], ['libelle' => 'Médicament']);
 
         $products = [
@@ -95,15 +95,13 @@ class ProductSeeder extends Seeder
             ]
         ];
 
-        if ($subsidiary) {
-            foreach ($products as $p) {
-                Product::firstOrCreate(
-                    ['code' => $p['code']],
-                    array_merge($p, [
-                        'product_type_id' => $medType?->id
-                    ])
-                );
-            }
+        foreach ($products as $p) {
+            Product::firstOrCreate(
+                ['code' => $p['code']],
+                array_merge($p, [
+                    'product_type_id' => $medType?->id
+                ])
+            );
         }
     }
 }

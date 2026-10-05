@@ -22,8 +22,7 @@ class StoreUserRequest extends FormRequest
             'roles.*' => ['string', 'exists:roles,name'],
             'permissions' => ['nullable', 'array'],
             'permissions.*' => ['string', 'exists:permissions,name'],
-            'scopes' => ['nullable', 'array'],
-            'scopes.*' => ['uuid', 'exists:organizational_units,id'],
+            'country_id' => ['nullable', 'uuid', 'exists:countries,id'],
             'otp_enabled' => ['nullable', 'boolean'],
         ];
     }

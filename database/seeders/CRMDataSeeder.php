@@ -3,7 +3,7 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use App\Models\Subsidiary;
+
 use App\Models\AccountType;
 use App\Models\ContactType;
 use App\Models\Account;
@@ -16,7 +16,7 @@ class CRMDataSeeder extends Seeder
 {
     public function run(): void
     {
-        $subsidiary = Subsidiary::first() ?? Subsidiary::where('code', 'SUB-FR')->first();
+
         $team = Team::with('sector.zone.territory.region')->first();
 
         $sector = $team->sector ?? null;
@@ -32,8 +32,7 @@ class CRMDataSeeder extends Seeder
             ], [
                 'name' => 'Alice Déléguée',
                 'password' => Hash::make('password'),
-                'country_id' => $subsidiary->country_id ?? null,
-                'subsidiary_id' => $subsidiary->id ?? null,
+                'country_id' => 1,
                 'region_id' => $region->id ?? null,
                 'territory_id' => $territory->id ?? null,
                 'zone_id' => $zone->id ?? null,
@@ -66,19 +65,16 @@ class CRMDataSeeder extends Seeder
         ];
 
         $createdAccounts = [];
-        if ($subsidiary) {
-            foreach ($realAccounts as $accData) {
-                $acc = Account::firstOrCreate([
-                    'nom' => $accData['nom']
-                ], [
-                    'subsidiary_id' => $subsidiary->id,
-                    'user_id' => $delegue->id,
-                    'account_type_id' => $accData['type']->id,
-                    'ville' => $accData['ville'],
-                    'statut' => 'actif',
-                ]);
-                $createdAccounts[] = $acc;
-            }
+        foreach ($realAccounts as $accData) {
+            $acc = Account::firstOrCreate([
+                'nom' => $accData['nom']
+            ], [
+                'user_id' => $delegue->id,
+                'account_type_id' => $accData['type']->id,
+                'ville' => $accData['ville'],
+                'statut' => 'actif',
+            ]);
+            $createdAccounts[] = $acc;
         }
 
         // 4. Contacts RÉELS (Praticiens Médicaux)
@@ -149,7 +145,7 @@ class CRMDataSeeder extends Seeder
         Account::firstOrCreate([
             'nom' => 'Polyclinique Internationale Pasteur'
         ], [
-            'subsidiary_id' => $subsidiary->id ?? null,
+
             'user_id' => $delegue->id,
             'account_type_id' => $cliniqueType->id,
             'ville' => 'Abidjan (Marcory)',

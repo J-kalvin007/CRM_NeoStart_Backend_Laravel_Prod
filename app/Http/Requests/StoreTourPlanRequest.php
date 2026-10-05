@@ -15,7 +15,6 @@ class StoreTourPlanRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'subsidiary_id' => 'nullable|uuid|exists:subsidiaries,id',
             'nom'           => 'required|string|max:255',
             'description'   => 'nullable|string',
             'date_debut'    => 'required|date',

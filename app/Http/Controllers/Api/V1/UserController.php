@@ -22,9 +22,6 @@ class UserController extends Controller
         summary: 'Lister les utilisateurs',
         security: [['bearerAuth' => []]],
         tags: ['Users'],
-        parameters: [
-            new OA\Parameter(name: 'team_id', in: 'query', required: false, description: 'Filtrer par équipe', schema: new OA\Schema(type: 'string', format: 'uuid'))
-        ],
         responses: [
             new OA\Response(response: 200, description: 'Liste des utilisateurs avec rôles et équipe'),
             new OA\Response(response: 401, description: 'Non authentifié'),
@@ -33,7 +30,7 @@ class UserController extends Controller
     public function index(Request $request)
     {
         $actor = $request->user();
-        $query = User::with(['roles', 'scopes']);
+        $query = User::with(['roles', 'country', 'manager']);
 
         if (!$this->hasUserPermission($actor, 'users.view-all') && !$this->hasUserPermission($actor, 'users.view')) {
             $query->whereIn('id', array_values(array_unique(array_merge([$actor->id], $actor->teamMemberIds()))));
@@ -63,7 +60,7 @@ class UserController extends Controller
                     new OA\Property(property: 'phone',         type: 'string',  nullable: true, example: '+22890000000'),
                     new OA\Property(property: 'status',        type: 'string',  enum: ['active', 'inactive'], example: 'active'),
                     new OA\Property(property: 'manager_id',    type: 'string',  format: 'uuid', nullable: true),
-                    new OA\Property(property: 'scopes',        type: 'array',   items: new OA\Items(type: 'string', format: 'uuid'), description: 'IDs des périmètres (organizational units)'),
+
                     new OA\Property(property: 'roles',         type: 'array',   items: new OA\Items(type: 'string'), example: ['delegue']),
                     new OA\Property(property: 'otp_enabled',   type: 'boolean', example: false, description: 'Activer la double authentification OTP pour cet utilisateur (défaut: false)'),
                 ]
@@ -104,30 +101,11 @@ class UserController extends Controller
             $user->syncPermissions($data['permissions']);
         }
         
-        // Validation stricte du périmètre (1 seul périmètre max si permission `restriction:single_scope`)
-        if (isset($data['scopes'])) {
-            $hasSingleScopeRestriction = $user->permissions()->where('name', 'restriction:single_scope')->exists()
-                || $user->roles()->whereHas('permissions', function ($query) {
-                    $query->where('name', 'restriction:single_scope');
-                })->exists();
-
-            if ($hasSingleScopeRestriction && count($data['scopes']) > 1) {
-                return response()->json(['message' => 'Ce rôle ne permet l\'affectation qu\'à un seul périmètre à la fois.'], 422);
-            }
-            foreach ($data['scopes'] as $index => $unitId) {
-                \App\Models\UserScope::create([
-                    'user_id' => $user->id,
-                    'organizational_unit_id' => $unitId,
-                    'is_active' => true,
-                    'is_primary' => ($index === 0)
-                ]);
-            }
-        }
 
         // Envoyer l'email d'invitation avec le mot de passe temporaire en clair
         Mail::to($user->email)->send(new UserInvitationMail($user, $temporaryPassword));
 
-        return response()->json(new UserResource($user->load(['roles', 'scopes', 'permissions'])), 201);
+        return response()->json(new UserResource($user->load(['roles', 'permissions', 'country'])), 201);
     }
 
     #[OA\Get(
@@ -149,7 +127,7 @@ class UserController extends Controller
         $actor = request()->user();
         $user = User::with([
             'roles', 
-            'scopes', 
+            'country', 
             'permissions',
             'manager',
             'contacts' => fn($q) => $q->with(['account', 'speciality'])->latest()->limit(50),
@@ -188,7 +166,7 @@ class UserController extends Controller
                     new OA\Property(property: 'phone',         type: 'string', nullable: true),
                     new OA\Property(property: 'status',        type: 'string', enum: ['active', 'inactive']),
                     new OA\Property(property: 'manager_id',    type: 'string', format: 'uuid', nullable: true),
-                    new OA\Property(property: 'scopes',        type: 'array',  items: new OA\Items(type: 'string', format: 'uuid')),
+
                     new OA\Property(property: 'roles',         type: 'array',  items: new OA\Items(type: 'string')),
                     new OA\Property(property: 'otp_enabled',   type: 'boolean', description: 'Activer ou désactiver l\'OTP'),
                 ]
@@ -219,9 +197,7 @@ class UserController extends Controller
         // Extraire les champs relations avant l'update
         $roles       = $data['roles']       ?? null;
         $permissions = $data['permissions'] ?? null;
-        $scopes      = $data['scopes']      ?? null;
-
-        unset($data['roles'], $data['permissions'], $data['scopes']);
+        unset($data['roles'], $data['permissions']);
 
         // Mettre à jour les champs du modèle (inclut manager_id)
         $user->update($data);
@@ -234,42 +210,8 @@ class UserController extends Controller
             $user->syncPermissions($permissions);
         }
 
-        // Gestion des périmètres organisationnels (UserScope)
-        if ($scopes !== null) {
-            $hasSingleScopeRestriction = $user->permissions()->where('name', 'restriction:single_scope')->exists()
-                || $user->roles()->whereHas('permissions', function ($query) {
-                    $query->where('name', 'restriction:single_scope');
-                })->exists();
 
-            if ($hasSingleScopeRestriction && count($scopes) > 1) {
-                return response()->json([
-                    'message' => "Ce rôle ne permet l'affectation qu'à un seul périmètre à la fois."
-                ], 422);
-            }
-
-            // Supprimer les anciens scopes et recréer
-            \App\Models\UserScope::where('user_id', $user->id)->update(['is_active' => false]);
-            foreach ($scopes as $unitId) {
-                \App\Models\UserScope::updateOrCreate(
-                    ['user_id' => $user->id, 'organizational_unit_id' => $unitId],
-                    ['is_active' => true, 'is_primary' => false]
-                );
-            }
-            // Définir le premier comme primaire s'il n'y en a pas
-            if (!empty($scopes)) {
-                $hasPrimary = \App\Models\UserScope::where('user_id', $user->id)
-                    ->where('is_primary', true)
-                    ->where('is_active', true)
-                    ->exists();
-                if (!$hasPrimary) {
-                    \App\Models\UserScope::where('user_id', $user->id)
-                        ->where('organizational_unit_id', $scopes[0])
-                        ->update(['is_primary' => true]);
-                }
-            }
-        }
-
-        return new UserResource($user->load(['roles', 'scopes', 'permissions']));
+        return new UserResource($user->load(['roles', 'permissions', 'country']));
     }
 
     #[OA\Delete(
@@ -311,5 +253,39 @@ class UserController extends Controller
             403,
             'Vous ne disposez pas des droits nécessaires pour gérer les utilisateurs.'
         );
+    }
+
+    #[OA\Post(
+        path: '/api/v1/users/bulk-update-country',
+        summary: 'Affecter un pays à plusieurs utilisateurs',
+        security: [['bearerAuth' => []]],
+        tags: ['Users'],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['user_ids', 'country_id'],
+                properties: [
+                    new OA\Property(property: 'user_ids', type: 'array', items: new OA\Items(type: 'string', format: 'uuid')),
+                    new OA\Property(property: 'country_id', type: 'string', format: 'uuid')
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Utilisateurs mis à jour'),
+        ]
+    )]
+    public function bulkUpdateCountry(Request $request)
+    {
+        $this->authorizeUserPermission($request, 'users.edit');
+        
+        $request->validate([
+            'user_ids' => 'required|array',
+            'user_ids.*' => 'uuid|exists:users,id',
+            'country_id' => 'required|uuid|exists:countries,id',
+        ]);
+
+        User::whereIn('id', $request->user_ids)->update(['country_id' => $request->country_id]);
+
+        return response()->json(['message' => 'Utilisateurs mis à jour avec succès']);
     }
 }

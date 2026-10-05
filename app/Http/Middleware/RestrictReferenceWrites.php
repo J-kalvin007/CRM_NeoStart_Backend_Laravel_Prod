@@ -17,7 +17,7 @@ class RestrictReferenceWrites
         'specialities', 'segmentations', 'potentials', 'influences', 'galenic-forms',
         'activity-types', 'activity-results', 'event-formats', 'objectif-types',
         'categories', 'laboratories', 'therapeutic-classes', 'products', 'digital-supports', 'custom-fields',
-        'countries', 'subsidiaries', 'regions', 'territories', 'zones', 'sectors', 'teams',
+        'countries',
         'roles', 'permissions', 'organization/', 'hierarchy/',
     ];
 

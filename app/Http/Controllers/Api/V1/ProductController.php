@@ -55,9 +55,9 @@ class ProductController extends Controller
         requestBody: new OA\RequestBody(
             required: true,
             content: new OA\JsonContent(
-                required: ['subsidiary_id', 'nom'],
+                required: ['nom'],
                 properties: [
-                    new OA\Property(property: 'subsidiary_id', type: 'string', format: 'uuid'),
+                    new OA\Property(property: 'country_id', type: 'string', format: 'uuid', nullable: true),
                     new OA\Property(property: 'product_type_id', type: 'string', format: 'uuid', nullable: true),
                     new OA\Property(property: 'nom', type: 'string', example: 'Amoxicilline 500mg'),
                     new OA\Property(property: 'code', type: 'string', example: 'AMX-500', nullable: true),
@@ -66,6 +66,10 @@ class ProductController extends Controller
                     new OA\Property(property: 'laboratory_id', type: 'string', format: 'uuid', nullable: true),
                     new OA\Property(property: 'therapeutic_class_id', type: 'string', format: 'uuid', nullable: true),
                     new OA\Property(property: 'galenic_form_id', type: 'string', format: 'uuid', nullable: true),
+                    new OA\Property(property: 'pght', type: 'number', nullable: true),
+                    new OA\Property(property: 'prix_cession', type: 'number', nullable: true),
+                    new OA\Property(property: 'ppv', type: 'number', nullable: true),
+                    new OA\Property(property: 'devise', type: 'string', nullable: true),
                     new OA\Property(property: 'dci', type: 'string', nullable: true),
                     new OA\Property(property: 'conditionnement', type: 'string', nullable: true),
                     new OA\Property(property: 'indications', type: 'string', nullable: true),
@@ -85,16 +89,9 @@ class ProductController extends Controller
     public function store(StoreProductRequest $request)
     {
         $validated = $request->validated();
-        $orgUnitIds = $validated['organizational_unit_ids'] ?? [];
-        unset($validated['organizational_unit_ids']);
-
         $product = Product::create($validated);
 
-        if (!empty($orgUnitIds)) {
-            $product->organizationalUnits()->sync($orgUnitIds);
-        }
-
-        return new ProductResource($product->load(['productType', 'laboratory', 'therapeuticClass', 'galenicForm', 'organizationalUnits']));
+        return new ProductResource($product->load(['productType', 'laboratory', 'therapeuticClass', 'galenicForm']));
     }
 
     #[OA\Get(
@@ -112,7 +109,7 @@ class ProductController extends Controller
     )]
     public function show(string $id)
     {
-        return new ProductResource(Product::with(['productType', 'subsidiary', 'laboratory', 'therapeuticClass', 'galenicForm', 'organizationalUnits'])->findOrFail($id));
+        return new ProductResource(Product::with(['productType', 'subsidiary', 'laboratory', 'therapeuticClass', 'galenicForm'])->findOrFail($id));
     }
 
     #[OA\Put(
@@ -138,7 +135,7 @@ class ProductController extends Controller
                     new OA\Property(property: 'effets_secondaires', type: 'string', nullable: true),
                     new OA\Property(property: 'stock_alerte', type: 'integer'),
                     new OA\Property(property: 'statut', type: 'string', enum: ['brouillon', 'actif', 'archive']),
-                    new OA\Property(property: 'organizational_unit_ids', type: 'array', items: new OA\Items(type: 'string', format: 'uuid'), nullable: true),
+
                 ]
             )
         ),
@@ -152,14 +149,9 @@ class ProductController extends Controller
         $product = Product::findOrFail($id);
         
         $validated = $request->validated();
-        if (isset($validated['organizational_unit_ids'])) {
-            $product->organizationalUnits()->sync($validated['organizational_unit_ids']);
-            unset($validated['organizational_unit_ids']);
-        }
-        
         $product->update($validated);
         
-        return new ProductResource($product->load(['productType', 'laboratory', 'therapeuticClass', 'galenicForm', 'organizationalUnits']));
+        return new ProductResource($product->load(['productType', 'laboratory', 'therapeuticClass', 'galenicForm']));
     }
 
     #[OA\Delete(

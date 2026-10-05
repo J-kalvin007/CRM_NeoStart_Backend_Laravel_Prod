@@ -16,7 +16,7 @@ class Product extends Model
     use HasActivityLogs;
 
     protected $fillable = [
-        'organizational_unit_id', 'product_type_id', 'laboratory_id', 'therapeutic_class_id', 'galenic_form_id',
+        'country_id', 'product_type_id', 'laboratory_id', 'therapeutic_class_id', 'galenic_form_id',
         'nom', 'code', 'marque', 'gamme',
         'pght', 'prix_cession', 'ppv', 'devise',
         'stock_actuel', 'stock_alerte',
@@ -36,7 +36,6 @@ class Product extends Model
                                       // B2B:    {"ref_fournisseur":"REF-XYZ","poids_kg":2.5}
     ];
 
-    public function organizationalUnit() { return $this->belongsTo(OrganizationalUnit::class); }
     public function productType() { return $this->belongsTo(ProductType::class); }
     public function laboratory()  { return $this->belongsTo(Laboratory::class); }
     public function therapeuticClass() { return $this->belongsTo(TherapeuticClass::class); }

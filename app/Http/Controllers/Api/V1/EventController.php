@@ -33,7 +33,6 @@ class EventController extends Controller
         ]);
 
         $data['user_id'] = Auth::id();
-        $data['subsidiary_id'] = Auth::user()->subsidiary_id;
 
         $event = Event::create($data);
 

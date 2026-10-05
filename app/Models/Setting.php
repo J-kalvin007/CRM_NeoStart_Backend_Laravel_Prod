@@ -11,13 +11,8 @@ class Setting extends Model
     use HasFactory, HasUuids;
 
     protected $fillable = [
-        'subsidiary_id',
         'key',
         'value'
     ];
-    
-    public function subsidiary()
-    {
-        return $this->belongsTo(Subsidiary::class);
-    }
+
 }

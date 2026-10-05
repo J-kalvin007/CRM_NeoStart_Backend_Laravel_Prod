@@ -8,7 +8,6 @@ use App\Http\Requests\StoreTourPlanRequest;
 use App\Http\Requests\UpdateTourPlanRequest;
 use App\Models\TourPlan;
 use App\Models\Activity;
-use App\Models\Subsidiary;
 use App\Models\User;
 use Illuminate\Http\Request;
 use OpenApi\Attributes as OA;

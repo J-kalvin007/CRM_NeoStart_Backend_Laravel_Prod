@@ -49,6 +49,7 @@ class Contact extends Model
     public function influence()    { return $this->belongsTo(Influence::class); }
     public function categories()   { return $this->belongsToMany(Category::class, 'contact_category'); }
     public function activities()   { return $this->hasMany(Activity::class); }
+    public function participatingActivities() { return $this->belongsToMany(Activity::class, 'activity_contact', 'contact_id', 'activity_id')->withTimestamps(); }
     public function kolProfile()   { return $this->hasOne(KolProfile::class); }
 
     // Accesseur pratique pour récupérer un attribut meta (ex: $contact->getMeta('rpps'))

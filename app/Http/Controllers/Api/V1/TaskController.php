@@ -39,11 +39,8 @@ class TaskController extends Controller
     {
         $data = $request->validated();
         
-        // Assigner la tâche à l'utilisateur courant par défaut, 
-        // avec son périmètre.
+        // Assigner la tâche à l'utilisateur courant par défaut
         $data['user_id'] = $data['user_id'] ?? Auth::id();
-        $data['subsidiary_id'] = Auth::user()->subsidiary_id;
-        $data['territory_id'] = Auth::user()->territory_id;
 
         $task = Task::create($data);
 

@@ -42,7 +42,6 @@ class ActivityResource extends JsonResource
             'validation_date'=> $this->validation_date,
             'rejection_reason'=> $this->rejection_reason,
             'signature'      => $this->signature,
-            'subsidiary_id'  => $this->subsidiary_id,
             'user_id'        => $this->user_id,
             'delegate_name'  => $this->delegue?->name,
             'type'           => $this->whenLoaded('type', fn() => ['id' => $this->type->id, 'nom' => $this->type->nom]),

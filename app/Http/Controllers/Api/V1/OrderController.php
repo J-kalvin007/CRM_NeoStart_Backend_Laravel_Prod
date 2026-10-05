@@ -47,7 +47,7 @@ class OrderController extends Controller
         
         $account = \App\Models\Account::firstOrCreate(
             ['nom' => $request->clientNom ?? 'Client Officine'],
-            ['subsidiary_id' => Auth::user()->subsidiary_id ?? null, 'user_id' => Auth::id()] // Type must be resolved via meta or another way, keep it simple
+            ['user_id' => Auth::id()]
         );
 
         $order = Order::create([

@@ -33,26 +33,11 @@ class AnalyticsController extends Controller
     public function executiveSummary(Request $request)
     {
         $period = $request->input('period', 'ALL');
-        $subsidiary_id = $request->input('subsidiary_id', 'ALL');
 
         // Initial queries
         $salesQuery = Sale::query();
         $contactsQuery = Contact::query();
         $activitiesQuery = Activity::query();
-
-        // Filter by subsidiary if applicable
-        if ($subsidiary_id !== 'ALL') {
-            $salesQuery->where('subsidiary_id', $subsidiary_id);
-            // Contacts and Activities might not directly have subsidiary_id, they belong to perimeter or users.
-            // For now we filter sales, or apply a complex query if necessary.
-            // A simple implementation:
-            $contactsQuery->whereHas('user', function ($q) use ($subsidiary_id) {
-                $q->where('subsidiary_id', $subsidiary_id);
-            });
-            $activitiesQuery->whereHas('delegue', function ($q) use ($subsidiary_id) {
-                $q->where('subsidiary_id', $subsidiary_id);
-            });
-        }
 
         // Filter by period
         if ($period !== 'ALL') {
@@ -75,22 +60,6 @@ class AnalyticsController extends Controller
             $q->whereHas('potential', fn($sq) => $sq->where('code', 'LOW'))->orWhereNull('potential_id');
         })->count();
 
-        // Calculate sales by subsidiary
-        $salesBySubQuery = Sale::query();
-        if ($period !== 'ALL') {
-            $salesBySubQuery->whereYear('created_at', $period);
-        }
-        $salesGroups = $salesBySubQuery->select('subsidiary_id', DB::raw('sum(amount) as total'))
-            ->groupBy('subsidiary_id')
-            ->get();
-        
-        $sales_by_subsidiary = [];
-        foreach ($salesGroups as $sg) {
-            if ($sg->subsidiary_id) {
-                $sales_by_subsidiary[$sg->subsidiary_id] = (float) $sg->total;
-            }
-        }
-
         return response()->json([
             'total_sales' => $total_sales,
             'sales_count' => $sales_count,
@@ -102,7 +71,6 @@ class AnalyticsController extends Controller
                 'moyen' => $cible_b,
                 'faible' => $cible_c,
             ],
-            'sales_by_subsidiary' => $sales_by_subsidiary
         ]);
     }
     #[OA\Get(
@@ -241,7 +209,7 @@ class AnalyticsController extends Controller
     )]
     public function usersLocations(Request $request)
     {
-        $team = auth()->user()->teamMembers()->with('scopes')->orderBy('name')->get();
+        $team = auth()->user()->teamMembers()->orderBy('name')->get();
         $today = now()->toDateString();
 
         $result = $team->map(function ($u) use ($today) {
@@ -300,7 +268,7 @@ class AnalyticsController extends Controller
                 'location_name' => $nextVisit?->account?->nom ?? '',
                 'hcp_name' => $contact ? trim(($contact->titre ?: 'Dr.') . ' ' . $contact->prenom . ' ' . $contact->nom) : '',
                 'hcp_spec' => '',
-                'sector' => (string) ($u->scopes->first()?->name ?? ''),
+                'sector' => '',
                 'phone' => $u->phone ?? '',
                 'last_seen' => ($positionAt ?? $u->last_login_at)?->toISOString(),
                 'last_check_in' => $positionAt?->format('H:i'),

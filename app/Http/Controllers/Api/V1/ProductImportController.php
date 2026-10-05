@@ -96,13 +96,13 @@ class ProductImportController extends Controller
         $request->validate([
             'file'                   => 'required|file|mimes:xlsx,xls,csv|max:10240',
             'mode'                   => 'in:create,update,upsert',
-            'organizational_unit_id' => 'required|uuid|exists:organizational_units,id',
+            'country_id'             => 'required|uuid|exists:countries,id',
             'dry_run'                => 'boolean',
         ]);
 
         $mode         = $request->input('mode', 'upsert');
         $dryRun       = $request->boolean('dry_run', false);
-        $unitId       = $request->input('organizational_unit_id');
+        $countryId    = $request->input('country_id');
 
         try {
             $spreadsheet = IOFactory::load($request->file('file')->getRealPath());
@@ -137,7 +137,7 @@ class ProductImportController extends Controller
                 if ($this->isEmptyRow($row)) { $results['skipped']++; continue; }
 
                 try {
-                    $parsed = $this->parseRow($row, $colIdx, $unitId);
+                    $parsed = $this->parseRow($row, $colIdx, $countryId);
 
                     if (empty($parsed['nom'])) {
                         $results['errors'][] = "Ligne {$lineNum} : nom manquant.";
@@ -150,7 +150,7 @@ class ProductImportController extends Controller
                         continue;
                     }
 
-                    $action = $this->upsertProduct($parsed, $mode, $unitId);
+                    $action = $this->upsertProduct($parsed, $mode, $countryId);
                     $results[$action]++;
                 } catch (\Throwable $e) {
                     $results['errors'][] = "Ligne {$lineNum} : " . $e->getMessage();
@@ -220,7 +220,7 @@ class ProductImportController extends Controller
         return trim((string)($row[$colIdx[$field]] ?? ''));
     }
 
-    private function parseRow(array $row, array $colIdx, string $unitId): array 
+    private function parseRow(array $row, array $colIdx, string $countryId): array 
     {
         $get  = fn(string $f) => $this->getCell($row, $colIdx, $f);
         $data = [];
@@ -265,26 +265,26 @@ class ProductImportController extends Controller
         }
         
         $data['statut'] = 'actif';
-        $data['organizational_unit_id'] = $unitId;
+        $data['country_id'] = $countryId;
 
         return $data;
     }
 
-    private function upsertProduct(array $data, string $mode, string $unitId): string
+    private function upsertProduct(array $data, string $mode, string $countryId): string
     {
         $existing = null;
 
         // Chercher par code exact dans l'OU, ou par nom
         if (!empty($data['code'])) {
             $existing = Product::withoutGlobalScopes()
-                ->where('organizational_unit_id', $unitId)
+                ->where('country_id', $countryId)
                 ->where('code', $data['code'])
                 ->first();
         }
         
         if (!$existing && !empty($data['nom'])) {
             $existing = Product::withoutGlobalScopes()
-                ->where('organizational_unit_id', $unitId)
+                ->where('country_id', $countryId)
                 ->where('nom', $data['nom'])
                 ->first();
         }

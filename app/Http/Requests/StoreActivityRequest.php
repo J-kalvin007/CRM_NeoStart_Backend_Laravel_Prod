@@ -33,9 +33,6 @@ class StoreActivityRequest extends FormRequest
         $merge = [
             'activity_type' => $type,
         ];
-        if (!$this->has('subsidiary_id') || empty($this->subsidiary_id)) {
-            $merge['subsidiary_id'] = $user?->subsidiary_id ?? \App\Models\Subsidiary::first()?->id;
-        }
 
         if ($this->has('statut')) {
             $st = strtolower(trim((string)$this->statut));
@@ -89,7 +86,6 @@ class StoreActivityRequest extends FormRequest
         $isDraft = $this->statut === 'brouillon';
 
         return [
-            'subsidiary_id'  => 'nullable|uuid',
             'tour_plan_id'   => 'nullable|uuid|exists:tour_plans,id',
             'contact_id'     => 'nullable|string|exists:contacts,id',
             'account_id'     => 'nullable|string|exists:accounts,id',

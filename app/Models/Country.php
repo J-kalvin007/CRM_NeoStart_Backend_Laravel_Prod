@@ -28,8 +28,18 @@ class Country extends Model
         'status' => 'boolean',
     ];
 
-    public function subsidiaries()
+    public function accounts()
     {
-        return $this->hasMany(Subsidiary::class);
+        return $this->hasMany(Account::class);
+    }
+
+    public function users()
+    {
+        return $this->hasMany(User::class);
+    }
+
+    public function products()
+    {
+        return $this->hasMany(Product::class);
     }
 }

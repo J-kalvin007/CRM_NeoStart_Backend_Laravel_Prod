@@ -38,8 +38,7 @@ class EventSeeder extends Seeder
         if ($user) {
             foreach ($events as $ev) {
                 Event::create(array_merge($ev, [
-                    'user_id' => $user->id,
-                    'subsidiary_id' => \App\Models\Subsidiary::first()?->id
+                    'user_id' => $user->id
                 ]));
             }
         }

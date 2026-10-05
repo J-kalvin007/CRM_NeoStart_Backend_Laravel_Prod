@@ -83,22 +83,8 @@ class SampleMovementController extends Controller
             // Récupérer les produits assignés aux unités organisationnelles du délégué
             $query = \App\Models\Product::where('statut', 'actif');
 
-            // Si l'utilisateur a des unités organisationnelles, filtrer les produits assignés
-            $userScopes = \Illuminate\Support\Facades\DB::table('user_scopes')
-                ->where('user_id', $user->id)
-                ->where('is_active', true)
-                ->get();
-            if ($userScopes->isNotEmpty()) {
-                $unitIds = $userScopes->pluck('organizational_unit_id')->toArray();
-                $productIds = \Illuminate\Support\Facades\DB::table('organizational_unit_product')
-                    ->whereIn('organizational_unit_id', $unitIds)
-                    ->pluck('product_id')
-                    ->unique()
-                    ->toArray();
-
-                if (!empty($productIds)) {
-                    $query->whereIn('id', $productIds);
-                }
+            if ($user->country_id) {
+                $query->where('country_id', $user->country_id);
             }
 
             $products = $query->get();
@@ -119,18 +105,13 @@ class SampleMovementController extends Controller
                 ->get();
         }
 
-        // Récupérer les IDs des produits assignés aux unités organisationnelles du délégué
+        // Récupérer les IDs des produits du pays du délégué
         $assignedProductIds = [];
-        $userScopes = \Illuminate\Support\Facades\DB::table('user_scopes')
-            ->where('user_id', $user->id)
-            ->where('is_active', true)
-            ->get();
-        if ($userScopes->isNotEmpty()) {
-            $unitIds = $userScopes->pluck('organizational_unit_id')->toArray();
-            $assignedProductIds = \Illuminate\Support\Facades\DB::table('organizational_unit_product')
-                ->whereIn('organizational_unit_id', $unitIds)
-                ->pluck('product_id')
-                ->unique()
+        if ($user->country_id) {
+            $assignedProductIds = \Illuminate\Support\Facades\DB::table('products')
+                ->where('country_id', $user->country_id)
+                ->where('statut', 'actif')
+                ->pluck('id')
                 ->toArray();
         }
 

@@ -20,7 +20,7 @@ class SettingSeeder extends Seeder
 
         foreach ($defaultSettings as $setting) {
             Setting::firstOrCreate(
-                ['key' => $setting['key'], 'subsidiary_id' => null],
+                ['key' => $setting['key']],
                 ['value' => $setting['value']]
             );
         }

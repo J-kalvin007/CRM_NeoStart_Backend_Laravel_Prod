@@ -14,7 +14,6 @@ class Expense extends Model
     use HasFactory, HasUuids, SoftDeletes, HasPerimeter;
 
     protected $fillable = [
-        'subsidiary_id',
         'user_id',
         'title',
         'type',

@@ -22,9 +22,8 @@ class DuplicateDetectionService
         $query = Contact::query();
 
         if ($countryId) {
-            $query->whereHas('account.organizationalUnit', function($q) use ($countryId) {
-                // TODO: country_id might not exist on organizational_units.
-                $q->where('country_id', $countryId);
+            $query->whereHas('account.country', function($q) use ($countryId) {
+                $q->where('id', $countryId);
             });
         }
 
@@ -57,14 +56,14 @@ class DuplicateDetectionService
      * Vérifie si un Compte en doublon existe déjà dans la même filiale.
      * Critères : (Nom ET Ville) OU (Email) OU (Téléphone)
      */
-    public function findDuplicateAccount(?string $organizationalUnitId, array $data, ?string $excludeId = null): ?Account
+    public function findDuplicateAccount(?string $countryId, array $data, ?string $excludeId = null): ?Account
     {
         $query = Account::query();
 
-        // Si une unité org est définie on restreint la recherche à ce périmètre,
-        // sinon on cherche globalement (évite de rater un doublon sans unité).
-        if ($organizationalUnitId) {
-            $query->where('organizational_unit_id', $organizationalUnitId);
+        // Si un pays est défini on restreint la recherche à ce périmètre,
+        // sinon on cherche globalement (évite de rater un doublon sans pays).
+        if ($countryId) {
+            $query->where('country_id', $countryId);
         }
 
         if ($excludeId) {
@@ -109,9 +108,9 @@ class DuplicateDetectionService
     /**
      * Lance une exception 409 Conflict si un doublon de compte est détecté.
      */
-    public function abortIfDuplicateAccount(?string $organizationalUnitId, array $data, ?string $excludeId = null): void
+    public function abortIfDuplicateAccount(?string $countryId, array $data, ?string $excludeId = null): void
     {
-        $duplicate = $this->findDuplicateAccount($organizationalUnitId, $data, $excludeId);
+        $duplicate = $this->findDuplicateAccount($countryId, $data, $excludeId);
         if ($duplicate) {
             abort(response()->json([
                 'message'        => 'Un compte similaire existe déjà dans cette filiale.',

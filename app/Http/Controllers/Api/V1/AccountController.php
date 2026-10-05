@@ -33,7 +33,7 @@ class AccountController extends Controller
     )]
     public function index(Request $request)
     {
-        $query = Account::with(['organizationalUnit', 'categories', 'accountType', 'potential', 'user', 'delegue'])
+        $query = Account::with(['country', 'categories', 'accountType', 'potential', 'user', 'delegue'])
             ->withCount('contacts')
             ->when($request->account_type, fn($q, $v) => $q->where('account_type', $v))
             ->when($request->statut, fn($q, $v) => $q->where('statut', $v))
@@ -73,33 +73,7 @@ class AccountController extends Controller
             }
         }
 
-        $perimeterUnitId = app()->bound('active_perimeter_unit_id') ? app('active_perimeter_unit_id') : null;
 
-        if ($perimeterUnitId && $user && !$isGlobalAdmin) {
-            $allUnitIds = $this->getDescendantUnitIds([$perimeterUnitId]);
-            $userIdsInUnit = \Illuminate\Support\Facades\DB::table('user_scopes')
-                ->whereIn('organizational_unit_id', $allUnitIds)
-                ->where('is_active', true)
-                ->pluck('user_id')
-                ->unique()
-                ->toArray();
-
-            if (!empty($userIdsInUnit)) {
-                // For perimeter, we just intersect with the previous userIds filter
-                $query->where(function ($q) use ($userIdsInUnit) {
-                    $q->whereIn('accounts.user_id', $userIdsInUnit)
-                      ->orWhereIn('accounts.delegue_id', $userIdsInUnit)
-                      ->orWhereIn('accounts.id', function ($sub) use ($userIdsInUnit) {
-                          $sub->select('account_id')
-                              ->from('contacts')
-                              ->whereIn('user_id', $userIdsInUnit)
-                              ->whereNotNull('account_id');
-                      });
-                });
-            } else {
-                $query->whereRaw('1 = 0');
-            }
-        }
 
         // Ordre par défaut pour éviter les sauts de pagination lors des mises à jour
         $query->orderBy('created_at', 'desc');
@@ -116,9 +90,9 @@ class AccountController extends Controller
         requestBody: new OA\RequestBody(
             required: true,
             content: new OA\JsonContent(
-                required: ['organizational_unit_id'],
+                required: ['country_id'],
                 properties: [
-                    new OA\Property(property: 'organizational_unit_id', type: 'string', format: 'uuid'),
+                    new OA\Property(property: 'country_id', type: 'string', format: 'uuid'),
                     new OA\Property(property: 'nom', type: 'string', nullable: true),
                     new OA\Property(property: 'ville', type: 'string', nullable: true),
                     new OA\Property(property: 'telephone', type: 'string', nullable: true),
@@ -133,14 +107,14 @@ class AccountController extends Controller
     public function checkDuplicates(Request $request, DuplicateDetectionService $duplicateService)
     {
         $request->validate([
-            'organizational_unit_id' => 'required|uuid|exists:organizational_units,id',
+            'country_id' => 'required|uuid|exists:countries,id',
             'nom' => 'nullable|string',
             'ville' => 'nullable|string',
             'telephone' => 'nullable|string',
             'email' => 'nullable|email',
         ]);
 
-        $duplicate = $duplicateService->findDuplicateAccount($request->organizational_unit_id, $request->all());
+        $duplicate = $duplicateService->findDuplicateAccount($request->country_id, $request->all());
 
         return response()->json([
             'is_duplicate' => $duplicate ? true : false,
@@ -158,7 +132,7 @@ class AccountController extends Controller
             content: new OA\JsonContent(
                 required: ['nom', 'account_type'],
                 properties: [
-                    new OA\Property(property: 'organizational_unit_id', type: 'string', format: 'uuid'),
+                    new OA\Property(property: 'country_id', type: 'string', format: 'uuid'),
                     new OA\Property(property: 'nom', type: 'string', example: 'Pharmacie Centrale'),
                     new OA\Property(property: 'account_type', type: 'string', enum: ['pharmacie', 'hopital', 'clinique', 'grossiste', 'cabinet', 'entreprise', 'autre']),
                     new OA\Property(property: 'adresse', type: 'string', nullable: true),
@@ -187,24 +161,10 @@ class AccountController extends Controller
 
         $user = auth()->user();
         
-        if (empty($validated['organizational_unit_id']) && $user) {
-            $primaryScope = \App\Models\UserScope::where('user_id', $user->id)
-                ->where('is_primary', true)
-                ->where('is_active', true)
-                ->first();
-                
-            if ($primaryScope) {
-                $validated['organizational_unit_id'] = $primaryScope->organizational_unit_id;
-            } else {
-                $fallbackScope = \App\Models\UserScope::where('user_id', $user->id)
-                    ->where('is_active', true)
-                    ->first();
-                if ($fallbackScope) {
-                    $validated['organizational_unit_id'] = $fallbackScope->organizational_unit_id;
-                } else {
-                    return response()->json(['message' => 'Aucun périmètre défini pour cet utilisateur.'], 422);
-                }
-            }
+        if (empty($validated['country_id']) && $user && $user->country_id) {
+            $validated['country_id'] = $user->country_id;
+        } elseif (empty($validated['country_id'])) {
+            return response()->json(['message' => 'Aucun pays défini pour cet utilisateur.'], 422);
         }
 
         if ($user && !$user->isAdminOrSupervisor()) {
@@ -233,7 +193,7 @@ class AccountController extends Controller
         }
 
         // Détection de doublons (Bloque la requête si doublon)
-        $duplicateService->abortIfDuplicateAccount($validated['organizational_unit_id'] ?? null, $validated);
+        $duplicateService->abortIfDuplicateAccount($validated['country_id'] ?? null, $validated);
 
         $user = auth()->user();
         $isDelegue = $user && !$user->isAdminOrSupervisor();
@@ -253,7 +213,7 @@ class AccountController extends Controller
         ));
 
         if ($isDelegue) {
-            $supervisors = \App\Models\User::role('superviseur')->where('team_id', $user->team_id)->get();
+            $supervisors = \App\Models\User::role('superviseur')->get();
             if ($supervisors->isNotEmpty()) {
                 \Illuminate\Support\Facades\Notification::send($supervisors, new \App\Notifications\PendingValidationNotification($account, $user));
             }
@@ -270,7 +230,7 @@ class AccountController extends Controller
             }
         }
 
-        return new AccountResource($account->load(['organizationalUnit', 'categories']));
+        return new AccountResource($account->load(['country', 'categories']));
     }
 
     #[OA\Get(
@@ -288,7 +248,7 @@ class AccountController extends Controller
     )]
     public function show(string $id)
     {
-        $account = Account::with(['organizationalUnit', 'categories', 'contacts.delegue', 'contacts.speciality', 'activities', 'user', 'delegue'])->findOrFail($id);
+        $account = Account::with(['country', 'categories', 'contacts.delegue', 'contacts.speciality', 'activities', 'user', 'delegue'])->findOrFail($id);
         return new AccountResource($account);
     }
 
@@ -341,7 +301,7 @@ class AccountController extends Controller
         }
 
         // Détection de doublons
-        $subsidiaryId = $validated['organizational_unit_id'] ?? $account->organizational_unit_id ?? null;
+        $subsidiaryId = $validated['country_id'] ?? $account->country_id ?? null;
         $dataForDuplicateCheck = array_merge($account->toArray(), $validated);
         $duplicateService->abortIfDuplicateAccount($subsidiaryId, $dataForDuplicateCheck, $account->id);
 
@@ -359,7 +319,7 @@ class AccountController extends Controller
         }
 
         $account->update($validated);
-        return new AccountResource($account->load(['organizationalUnit', 'categories', 'user', 'delegue', 'accountType']));
+        return new AccountResource($account->load(['country', 'categories', 'user', 'delegue', 'accountType']));
     }
 
     #[OA\Delete(
@@ -385,30 +345,7 @@ class AccountController extends Controller
         return response()->json(null, 204);
     }
 
-    /**
-     * Récupère tous les IDs descendants récursivement (Togo → Maritime → Lomé → ...)
-     */
-    private function getDescendantUnitIds(array $parentIds): array
-    {
-        if (empty($parentIds)) return [];
-        $allIds = $parentIds;
-        $currentParentIds = $parentIds;
 
-        while (true) {
-            $childrenIds = \Illuminate\Support\Facades\DB::table('organizational_units')
-                ->whereIn('parent_id', $currentParentIds)
-                ->where('is_active', true)
-                ->pluck('id')
-                ->toArray();
-
-            if (empty($childrenIds)) break;
-
-            $allIds = array_merge($allIds, $childrenIds);
-            $currentParentIds = $childrenIds;
-        }
-
-        return array_unique($allIds);
-    }
 
     public function validateAccount(Request $request, string $id)
     {
@@ -426,7 +363,7 @@ class AccountController extends Controller
 
         return response()->json([
             'message' => 'Établissement validé avec succès.',
-            'data'    => new AccountResource($account->load(['organizationalUnit', 'categories']))
+            'data'    => new AccountResource($account->load(['country', 'categories']))
         ]);
     }
 
@@ -453,7 +390,7 @@ class AccountController extends Controller
 
         return response()->json([
             'message' => 'Établissement rejeté avec enregistrement du motif.',
-            'data'    => new AccountResource($account->load(['organizationalUnit', 'categories']))
+            'data'    => new AccountResource($account->load(['country', 'categories']))
         ]);
     }
 }

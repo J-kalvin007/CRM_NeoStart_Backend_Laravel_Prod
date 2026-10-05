@@ -28,7 +28,6 @@ class OpportunityController extends Controller
         ]);
 
         $data['user_id'] = Auth::id();
-        $data['subsidiary_id'] = Auth::user()->subsidiary_id;
 
         $opportunity = Opportunity::create($data);
 

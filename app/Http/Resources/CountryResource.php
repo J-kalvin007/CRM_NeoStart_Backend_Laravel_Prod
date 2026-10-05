@@ -18,7 +18,6 @@ class CountryResource extends JsonResource
             'timezone'            => $this->timezone,
             'regulatory_settings' => $this->regulatory_settings,
             'status'              => (bool) $this->status,
-            'subsidiaries'        => SubsidiaryResource::collection($this->whenLoaded('subsidiaries')),
             'created_at'          => $this->created_at,
             'updated_at'          => $this->updated_at,
         ];

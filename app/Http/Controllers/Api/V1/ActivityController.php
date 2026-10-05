@@ -36,6 +36,10 @@ class ActivityController extends Controller
         Activity::markMissedPastActivities();
 
         $user = auth()->user();
+        if (!$user) {
+            return response()->json(['message' => 'Non authentifié'], 401);
+        }
+
         $isGlobal = $user->hasAnyRole(['superadmin', 'admin', 'super-admin']) || $user->can('scope:global');
         $isCommercialDirector = $user->hasAnyRole(['directeur-commercial', 'directeur_commercial']);
         $isManager = $isCommercialDirector || $user->hasAnyRole(['superviseur', 'supervisor', 'directeur_regional', 'directeur-marketing', 'directeur_marketing', 'sales_manager', 'manager']);
@@ -91,9 +95,6 @@ class ActivityController extends Controller
                         $subQ->whereHas('delegue', function ($delegueQuery) use ($user) {
                             $delegueQuery->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
                                 ->where('manager_id', $user->id);
-                            if ($user->team_id) {
-                                $delegueQuery->orWhere('team_id', $user->team_id);
-                            }
                         });
                     });
                     // Voir aussi les visites où il est le duo_user_id (visites duo qu'il anime) - tous les statuts
@@ -108,47 +109,7 @@ class ActivityController extends Controller
         ]);
     }
 
-    /**
-     * Retourne les IDs de tous les utilisateurs appartenant à une unité organisationnelle et ses descendants
-     */
-    private function getUserIdsInUnit(string $unitId): array
-    {
-        // Récupérer récursivement l'unité + tous ses enfants
-        $allUnitIds = $this->getDescendantUnitIds([$unitId]);
 
-        return \Illuminate\Support\Facades\DB::table('user_scopes')
-            ->whereIn('organizational_unit_id', $allUnitIds)
-            ->where('is_active', true)
-            ->pluck('user_id')
-            ->unique()
-            ->toArray();
-    }
-
-    /**
-     * Récupère tous les IDs descendants récursivement
-     */
-    private function getDescendantUnitIds(array $parentIds): array
-    {
-        if (empty($parentIds)) return [];
-
-        $allIds = $parentIds;
-        $currentParentIds = $parentIds;
-
-        while (true) {
-            $childrenIds = \Illuminate\Support\Facades\DB::table('organizational_units')
-                ->whereIn('parent_id', $currentParentIds)
-                ->where('is_active', true)
-                ->pluck('id')
-                ->toArray();
-
-            if (empty($childrenIds)) break;
-
-            $allIds = array_merge($allIds, $childrenIds);
-            $currentParentIds = $childrenIds;
-        }
-
-        return array_unique($allIds);
-    }
 
 
     #[OA\Post(
@@ -206,7 +167,10 @@ class ActivityController extends Controller
 
         // Si l'utilisateur est Super Administrateur, interdiction de planifier des visites
         $user = auth()->user();
-        if ($user && $user->hasAnyRole(['superadmin', 'super-admin', 'Super Administrateur', 'admin'])) {
+        if (!$user) {
+            return response()->json(['message' => 'Non authentifié'], 401);
+        }
+        if ($user->hasAnyRole(['superadmin', 'super-admin', 'Super Administrateur', 'admin'])) {
             return response()->json([
                 'message' => 'Le Super Administrateur ne peut pas planifier de visite.'
             ], 403);
@@ -414,8 +378,11 @@ class ActivityController extends Controller
 
         // Validation / refus : décision du responsable (circuit validations), jamais du délégué lui-même
         $user = auth()->user();
+        if (!$user) {
+            return response()->json(['message' => 'Non authentifié'], 401);
+        }
         $canDecide = $user->can('scope:global') || $user->hasAnyRole(['superadmin', 'super-admin', 'admin']) || ($activity->user_id && $user->manages((string) $activity->user_id));
-        $decisionStatuts = ['planifiee', 'validee', 'valide', 'refusee', 'rejetee'];
+        $decisionStatuts = ['validee', 'valide', 'refusee', 'rejetee'];
         if (!$canDecide && $targetStatus !== null && $targetStatus !== $activity->statut && in_array($targetStatus, $decisionStatuts, true)) {
             return response()->json(['message' => 'La validation ou le refus d\'une visite revient à votre responsable.'], 403);
         }
@@ -595,11 +562,14 @@ class ActivityController extends Controller
     {
         $activity = Activity::findOrFail($id);
         $user = auth()->user();
-        
-        $isSuperAdmin = $user && ($user->hasAnyRole(['superadmin', 'admin']) || $user->can('scope:global'));
-        $isOwner = $user && $activity->user_id === $user->id;
+        if (!$user) {
+            return response()->json(['message' => 'Non authentifié'], 401);
+        }
+
+        $isSuperAdmin = $user->hasAnyRole(['superadmin', 'admin']) || $user->can('scope:global');
+        $isOwner = $activity->user_id === $user->id;
         // Le superviseur peut supprimer les visites des délégués qu'il encadre
-        $isManager = $user && !$isOwner && $user->manages($activity->user_id);
+        $isManager = !$isOwner && $user->manages($activity->user_id);
 
         if (!$isSuperAdmin && !$isOwner && !$isManager) {
             return response()->json(['message' => 'Vous n\'êtes pas autorisé à supprimer cette visite.'], 403);
@@ -825,13 +795,16 @@ class ActivityController extends Controller
     public function storeDuo(Request $request)
     {
         $user = auth()->user();
-        if ($user && $user->hasAnyRole(['superadmin', 'super-admin', 'Super Administrateur', 'admin'])) {
+        if (!$user) {
+            return response()->json(['message' => 'Non authentifié'], 401);
+        }
+        if ($user->hasAnyRole(['superadmin', 'super-admin', 'Super Administrateur', 'admin'])) {
             return response()->json([
                 'message' => 'Le Super Administrateur ne peut pas planifier de visite.'
             ], 403);
         }
 
-        if ($user && $user->hasAnyRole(['delegue', 'delegue_medical', 'delegate', 'Délégué', 'Délégué Médical'])) {
+        if ($user->hasAnyRole(['delegue', 'delegue_medical', 'delegate', 'Délégué', 'Délégué Médical'])) {
             return response()->json([
                 'message' => 'Seul le superviseur, le Sales Manager ou la hiérarchie peut planifier des visites DUO.'
             ], 403);
@@ -892,11 +865,8 @@ class ActivityController extends Controller
             ], 422);
         }
 
-        $subsidiary = \App\Models\Subsidiary::first();
-
         if ($existingActivity) {
             $existingActivity->update([
-                'subsidiary_id' => $subsidiary?->id ?? $existingActivity->subsidiary_id,
                 'contact_id' => $validated['contact_id'] ?? $existingActivity->contact_id,
                 'account_id' => $validated['account_id'] ?? $existingActivity->account_id,
                 'is_duo' => true,
@@ -917,7 +887,6 @@ class ActivityController extends Controller
             $activity = $existingActivity->fresh();
         } else {
             $activity = Activity::create([
-                'subsidiary_id' => $subsidiary?->id,
                 'user_id' => $targetUserId,
                 'contact_id' => $validated['contact_id'] ?? null,
                 'account_id' => $validated['account_id']
@@ -1086,6 +1055,9 @@ class ActivityController extends Controller
     public function joinDuo(Request $request, string $id)
     {
         $user = auth()->user();
+        if (!$user) {
+            return response()->json(['message' => 'Non authentifié'], 401);
+        }
         if ($user->hasAnyRole(['superadmin', 'super-admin', 'Super Administrateur', 'admin'])) {
             return response()->json(['message' => 'Le Super Administrateur ne peut pas accompagner de visite.'], 403);
         }
@@ -1243,7 +1215,6 @@ class ActivityController extends Controller
         }
 
         $activity = Activity::create([
-            'subsidiary_id'        => $user->subsidiary_id ?? $supervisor->subsidiary_id,
             'user_id'              => $delegate->id,
             'accompanying_user_id' => $user->id,
             'is_duo'               => true,
@@ -1451,6 +1422,9 @@ class ActivityController extends Controller
     private function ensureSupervises(?string $ownerId): void
     {
         $user = auth()->user();
+        if (!$user) {
+            abort(401, 'Non authentifié');
+        }
         if ($user->can('scope:global') || $user->hasAnyRole(['superadmin', 'super-admin', 'admin'])) {
             return;
         }

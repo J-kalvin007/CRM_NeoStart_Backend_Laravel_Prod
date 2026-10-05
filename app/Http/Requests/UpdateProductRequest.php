@@ -26,15 +26,14 @@ class UpdateProductRequest extends FormRequest
         $productId = is_object($product) ? $product->id : ($product ?: $this->route('id'));
 
         return [
-            'subsidiary_id'   => 'nullable|uuid|exists:subsidiaries,id',
-            'organizational_unit_ids' => 'nullable|array',
-            'organizational_unit_ids.*' => 'uuid|exists:organizational_units,id',
+            'country_id'      => 'nullable|uuid|exists:countries,id',
             'product_type_id' => 'nullable|uuid|exists:product_types,id',
             'nom'             => 'sometimes|required|string|max:255',
             'code'            => 'nullable|string|max:100|unique:products,code,' . $productId,
             'marque'          => 'nullable|string|max:150',
             'gamme'           => 'nullable|string|max:150',
             'pght'            => 'nullable|numeric|min:0',
+            'prix_cession'    => 'nullable|numeric|min:0',
             'ppv'             => 'nullable|numeric|min:0',
             'devise'          => 'nullable|string|max:10',
             'stock_actuel'    => 'integer|min:0',

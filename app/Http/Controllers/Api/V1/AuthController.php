@@ -31,11 +31,6 @@ class AuthController extends Controller
                     new OA\Property(property: 'email', type: 'string', format: 'email', example: 'john.doe@example.com'),
                     new OA\Property(property: 'password', type: 'string', description: 'Mot de passe temporaire créé par l\'admin'),
                     new OA\Property(property: 'country_id', type: 'string', format: 'uuid', nullable: true),
-                    new OA\Property(property: 'subsidiary_id', type: 'string', format: 'uuid', nullable: true),
-                    new OA\Property(property: 'region_id', type: 'string', format: 'uuid', nullable: true),
-                    new OA\Property(property: 'territory_id', type: 'string', format: 'uuid', nullable: true),
-                    new OA\Property(property: 'zone_id', type: 'string', format: 'uuid', nullable: true),
-                    new OA\Property(property: 'sector_id', type: 'string', format: 'uuid', nullable: true),
                 ]
             )
         ),
@@ -51,11 +46,6 @@ class AuthController extends Controller
             'email' => 'required|email|unique:users,email',
             'password' => 'required|string|min:6',
             'country_id' => 'nullable|uuid',
-            'subsidiary_id' => 'nullable|uuid',
-            'region_id' => 'nullable|uuid',
-            'territory_id' => 'nullable|uuid',
-            'zone_id' => 'nullable|uuid',
-            'sector_id' => 'nullable|uuid',
         ]);
 
         $temporaryPassword = $validated['password'];
@@ -160,7 +150,7 @@ class AuthController extends Controller
 
         return response()->json([
             'token' => $token,
-            'user' => $user->load(['roles', 'permissions', 'scopes'])
+            'user' => $user->load(['roles', 'permissions', 'country', 'manager'])
         ], 200);
     }
 
@@ -233,7 +223,7 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Mot de passe mis à jour avec succès.',
             'token' => $token,
-            'user' => $user->load(['roles', 'permissions', 'scopes'])
+            'user' => $user->load(['roles', 'permissions'])
         ], 200);
     }
 
@@ -306,7 +296,7 @@ class AuthController extends Controller
 
         return response()->json([
             'token' => $token,
-            'user' => $user->load(['roles', 'permissions', 'scopes'])
+            'user' => $user->load(['roles', 'permissions'])
         ]);
     }
 
@@ -368,7 +358,7 @@ class AuthController extends Controller
     )]
     public function me(Request $request)
     {
-        return response()->json($request->user()->load(['roles', 'permissions', 'scopes']));
+        return response()->json($request->user()->load(['roles', 'permissions', 'country', 'manager']));
     }
 
     /**

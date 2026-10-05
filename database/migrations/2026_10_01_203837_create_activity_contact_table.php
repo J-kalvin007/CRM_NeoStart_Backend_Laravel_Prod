@@ -13,8 +13,8 @@ return new class extends Migration
     {
         if (!Schema::hasTable('activity_contact')) {
             Schema::create('activity_contact', function (Blueprint $table) {
-                $table->string('activity_id')->index();
-                $table->string('contact_id')->index();
+                $table->uuid('activity_id')->index();
+                $table->uuid('contact_id')->index();
                 $table->timestamps();
 
                 $table->primary(['activity_id', 'contact_id']);

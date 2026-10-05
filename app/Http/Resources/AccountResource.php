@@ -48,7 +48,7 @@ class AccountResource extends JsonResource
             'code_externe'    => $this->code_externe,
             'meta'            => $this->meta,
             'local_uuid'      => $this->local_uuid,
-            'organizational_unit_id' => $this->organizational_unit_id,
+            'country_id' => $this->country_id,
             'user_id'         => $this->user_id,
             'delegue_id'      => $this->delegue_id,
             'type'            => $this->whenLoaded('accountType', fn() => [
@@ -63,9 +63,9 @@ class AccountResource extends JsonResource
                 'name' => $this->potential->name,
                 'code' => $this->potential->code,
             ]),
-            'organizational_unit' => $this->whenLoaded('organizationalUnit', fn() => [
-                'id'   => $this->organizationalUnit->id,
-                'name' => $this->organizationalUnit->name,
+            'country' => $this->whenLoaded('country', fn() => [
+                'id'   => $this->country->id,
+                'name' => $this->country->name,
             ]),
             'user'    => $this->whenLoaded('user', fn() => [
                 'id'   => $this->user->id,

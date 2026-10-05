@@ -5,14 +5,14 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use App\Models\Account;
 use App\Models\AccountType;
-use App\Models\Subsidiary;
+
 use App\Models\User;
 
 class AccountSeeder extends Seeder
 {
     public function run(): void
     {
-        $subsidiary = Subsidiary::first();
+
         $user = User::first();
 
         $hopitalType = AccountType::firstOrCreate(['code' => 'HOP'], ['libelle' => 'Hôpital']);
@@ -77,7 +77,7 @@ class AccountSeeder extends Seeder
             ],
         ];
 
-        if ($subsidiary && $user) {
+        if ($user) {
             foreach ($accounts as $acc) {
                 Account::firstOrCreate(
                     ['nom' => $acc['nom']],

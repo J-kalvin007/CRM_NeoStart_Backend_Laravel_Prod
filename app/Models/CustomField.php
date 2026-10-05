@@ -13,7 +13,6 @@ class CustomField extends Model
     use HasFactory, HasUuids, HasPerimeter;
 
     protected $fillable = [
-        'subsidiary_id',
         'model_type',
         'name',
         'label',

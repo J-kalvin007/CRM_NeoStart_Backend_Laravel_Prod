@@ -14,8 +14,7 @@ class Document extends Model
     use HasFactory, HasUuids, SoftDeletes, HasPerimeter;
 
     protected $fillable = [
-        'subsidiary_id',
-        'organizational_unit_id',
+        'country_id',
         'speciality_id',
         'role_id',
         'documentable_id',
@@ -41,10 +40,6 @@ class Document extends Model
         return $this->morphTo();
     }
 
-    public function organizationalUnit()
-    {
-        return $this->belongsTo(OrganizationalUnit::class);
-    }
 
     public function speciality()
     {

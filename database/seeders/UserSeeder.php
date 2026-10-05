@@ -5,12 +5,7 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use App\Models\User;
 use App\Models\Country;
-use App\Models\Subsidiary;
-use App\Models\Region;
-use App\Models\Territory;
-use App\Models\Zone;
-use App\Models\Sector;
-use App\Models\Team;
+
 use Illuminate\Support\Facades\Hash;
 
 class UserSeeder extends Seeder
@@ -18,8 +13,6 @@ class UserSeeder extends Seeder
     public function run(): void
     {
         $country = Country::first();
-        $subsidiary = Subsidiary::first();
-        $team = Team::first();
 
         // 1. Super Admin
         $admin = User::firstOrCreate([
@@ -50,9 +43,7 @@ class UserSeeder extends Seeder
                 $manager->assignRole($r);
             }
         }
-        if ($team) {
-            $team->update(['manager_id' => $manager->id]);
-        }
+
 
         // 3. Délégués
         $delegatesData = [

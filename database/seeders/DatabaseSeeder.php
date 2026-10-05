@@ -4,12 +4,6 @@ namespace Database\Seeders;
 
 use App\Models\User;
 use App\Models\Country;
-use App\Models\Subsidiary;
-use App\Models\Region;
-use App\Models\Territory;
-use App\Models\Zone;
-use App\Models\Sector;
-use App\Models\Team;
 use App\Models\Role;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
@@ -60,37 +54,13 @@ class DatabaseSeeder extends Seeder
         }
 
         // 2. Create sample Hierarchy
-        $country = Country::firstOrCreate(['iso_code' => 'FRA'], [
-            'name' => 'France',
-            'currency' => 'EUR',
+        $country = Country::firstOrCreate(['iso_code' => 'TGO'], [
+            'name' => 'Togo',
+            'currency' => 'XOF',
             'language' => 'fr',
-            'timezone' => 'Europe/Paris',
+            'timezone' => 'Africa/Lome',
             'status' => true
         ]);
-
-        $subsidiary = Subsidiary::firstOrCreate(['code' => 'SUB-FR'], [
-            'country_id' => $country->id,
-            'name' => 'Filiale France',
-            'status' => true
-        ]);
-
-        $region = Region::firstOrCreate(['name' => 'Île-de-France'], [
-            'subsidiary_id' => $subsidiary->id
-        ]);
-
-        $territory = Territory::firstOrCreate(['name' => 'Paris'], [
-            'region_id' => $region->id
-        ]);
-
-        $zone = Zone::firstOrCreate(['name' => 'Paris Centre', 'code' => 'Z-PC'], [
-            'territory_id' => $territory->id
-        ]);
-
-        $sector = Sector::firstOrCreate(['name' => 'Secteur 1 (Louvre)', 'code' => 'S-LOU'], [
-            'zone_id' => $zone->id
-        ]);
-
-        $team = Team::firstOrCreate(['name' => 'Équipe Paris Centre']);
 
         // 3. Create Super Admin
         $admin = User::firstOrCreate(['email' => 'admin@crm.local'], [
@@ -103,11 +73,15 @@ class DatabaseSeeder extends Seeder
             $admin->assignRole('super-admin');
         }
 
-        $this->call([
+        $seeders = [
             SpecialitySeeder::class,
             SegmentationSeeder::class,
             PotentialSeeder::class,
             InfluenceSeeder::class,
+        ];
+        
+        // These base seeders can just run or we can conditionally add them too
+        $seeders = array_merge($seeders, [
             GalenicFormSeeder::class,
             ActivityTypeSeeder::class,
             ActivityResultSeeder::class,
@@ -119,10 +93,14 @@ class DatabaseSeeder extends Seeder
             TrioActivityTypeSeeder::class,
             PharmaSeeder::class,
             UserSeeder::class,
-            AccountSeeder::class,
-            ContactSeeder::class,
-            ProductSeeder::class,
-            ActivitySeeder::class,
+        ]);
+
+        if (\App\Models\Account::count() === 0) $seeders[] = AccountSeeder::class;
+        if (\App\Models\Contact::count() === 0) $seeders[] = ContactSeeder::class;
+        if (\App\Models\Product::count() === 0) $seeders[] = ProductSeeder::class;
+        if (\App\Models\Activity::count() === 0) $seeders[] = ActivitySeeder::class;
+
+        $seeders = array_merge($seeders, [
             StockSeeder::class,
             EventSeeder::class,
             ExpenseSeeder::class,
@@ -134,5 +112,7 @@ class DatabaseSeeder extends Seeder
             ConversationMessageSeeder::class,
             OrderSeeder::class,
         ]);
+
+        $this->call($seeders);
     }
 }
