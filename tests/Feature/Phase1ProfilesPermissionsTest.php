@@ -120,7 +120,7 @@ class Phase1ProfilesPermissionsTest extends TestCase
         ]);
 
         $response->assertStatus(403)
-            ->assertJson(['message' => 'Seul le superviseur ou la hiérarchie peut planifier des visites DUO.']);
+            ->assertJson(['message' => 'Seul le superviseur, le Sales Manager ou la hiérarchie peut planifier des visites DUO.']);
     }
 
     /**

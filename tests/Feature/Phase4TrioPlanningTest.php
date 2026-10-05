@@ -67,6 +67,7 @@ class Phase4TrioPlanningTest extends TestCase
         $trio = Activity::create([
             'user_id'              => $this->delegate->id,
             'accompanying_user_id' => $this->salesManager->id,
+            'is_trio'              => true,
             'date_activite'        => now()->addDays(3)->toDateString(),
             'heure_debut'          => '10:00',
             'heure_fin'            => '11:00',
@@ -91,6 +92,7 @@ class Phase4TrioPlanningTest extends TestCase
         $trio = Activity::create([
             'user_id'              => $this->delegate->id,
             'accompanying_user_id' => $this->salesManager->id,
+            'is_trio'              => true,
             'date_activite'        => now()->addDays(4)->toDateString(),
             'heure_debut'          => '14:00',
             'heure_fin'            => '15:00',
@@ -103,13 +105,13 @@ class Phase4TrioPlanningTest extends TestCase
         $response = $this->postJson("/api/v1/trio/{$trio->id}/valider");
 
         $response->assertStatus(200)
-            ->assertJsonPath('data.statut', 'validee');
+            ->assertJsonPath('data.statut', 'planifiee');
 
         // Vérification de la visibilité sur le planning du délégué sans aucune action de sa part
         Sanctum::actingAs($this->delegate);
         $planning = $this->getJson("/api/v1/activities/{$trio->id}");
         $planning->assertStatus(200)
-            ->assertJsonPath('data.statut', 'validee');
+            ->assertJsonPath('data.statut', 'planifiee');
     }
 
     /**
@@ -133,6 +135,7 @@ class Phase4TrioPlanningTest extends TestCase
         $trio = Activity::create([
             'user_id'              => $this->delegate->id,
             'accompanying_user_id' => $this->salesManager->id,
+            'is_trio'              => true,
             'date_activite'        => $date,
             'heure_debut'          => '10:00',
             'heure_fin'            => '11:00',

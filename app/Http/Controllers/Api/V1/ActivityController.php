@@ -54,6 +54,7 @@ class ActivityController extends Controller
                 'duoActivityType',
                 'products' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class),
                 'sampleMovements' => fn($q) => $q->where('movement_type', 'distribution')->with('product'),
+                'objections.product',
             ])
             ->when($request->user_id, fn($q, $v) => $q->where('activities.user_id', $v))
             ->when($request->activity_type, fn($q, $v) => $q->where('activity_type', $v))
@@ -90,9 +91,10 @@ class ActivityController extends Controller
                     }
                 } elseif ($isManager) {
                     // S'il est superviseur/manager, voit les visites de son équipe ou des délégués sous lui
-                    // Inclut : planifiées, en attente, en cours, réalisées, manquées, annulées, brouillons, et toutes les visites duo
+                    // Inclut tout sauf les brouillons, que le délégué n'a pas encore soumis
                     $q->orWhere(function ($subQ) use ($user) {
-                        $subQ->whereHas('delegue', function ($delegueQuery) use ($user) {
+                        $subQ->where('activities.statut', '!=', 'brouillon')
+                            ->whereHas('delegue', function ($delegueQuery) use ($user) {
                             $delegueQuery->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
                                 ->where('manager_id', $user->id);
                         });
@@ -208,9 +210,9 @@ class ActivityController extends Controller
         // - visite_duo : quand c'est une visite en duo
 
         $isManagerRole = $user->hasRole(['superadmin', 'admin', 'superviseur', 'supervisor', 'manager']);
-        // Un délégué ne crée pas une visite déjà validée, refusée ou manquée : elle part en validation
-        if (!$isManagerRole && in_array($data['statut'] ?? null, ['validee', 'valide', 'refusee', 'rejetee', 'manquee', 'annulee'], true)) {
-            $data['statut'] = 'en_attente';
+        // Un délégué ne crée pas une visite déjà validée, refusée ou manquée : elle reste à soumettre
+        if (!$isManagerRole && in_array($data['statut'] ?? null, ['validee', 'valide', 'refusee', 'rejetee', 'manquee', 'annulee', 'en_attente'], true)) {
+            $data['statut'] = 'brouillon';
         }
 
         if (!isset($data['statut']) || $data['statut'] === 'planifiee') {
@@ -221,8 +223,9 @@ class ActivityController extends Controller
                 // Le superviseur valide directement la visite
                 $data['statut'] = 'planifiee';
             } else {
-                // Le délégué soumet pour validation
-                $data['statut'] = 'en_attente';
+                // Le délégué planifie un brouillon : il choisit ensuite les visites à soumettre
+                // au superviseur (POST tour-plans), qui les passe en attente de validation
+                $data['statut'] = 'brouillon';
             }
         }
 
@@ -329,7 +332,8 @@ class ActivityController extends Controller
                 'tourPlan',
                 'duoActivityType',
                 'products' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class),
-                'sampleMovements'
+                'sampleMovements' => fn($q) => $q->with('product'),
+                'objections.product',
             ])->findOrFail($id);
         return new ActivityResource($activity);
     }
@@ -623,6 +627,32 @@ class ActivityController extends Controller
             ], 422);
         }
 
+        // Visite déjà réalisée : la décision porte sur son compte-rendu, la visite reste réalisée
+        if (in_array($activity->statut, ['realisee', 'effectuee', 'terminee'], true)) {
+            $approved = $st === 'validee' || $st === 'validated';
+            $activity->update([
+                'report_status' => $approved ? 'validated' : 'rejected',
+                'rejection_reason' => $approved ? null : $rejectionReason,
+                'is_locked' => $approved,
+                'validated_by_id' => auth()->id(),
+                'validation_date' => now(),
+            ]);
+            if ($activity->user) {
+                NotificationController::sendNotification(
+                    $activity->user,
+                    $approved ? 'Compte-rendu validé' : 'Compte-rendu rejeté',
+                    $approved ? 'Votre compte-rendu a été validé.' : "Votre compte-rendu a été rejeté. Motif : {$rejectionReason}",
+                    'report_validation',
+                    'delegate',
+                    ['activity_id' => (string) $activity->id]
+                );
+            }
+            return response()->json([
+                'message' => $approved ? 'Compte-rendu validé.' : 'Compte-rendu rejeté.',
+                'data' => new ActivityResource($activity->load(['delegue', 'contact', 'account', 'products'])),
+            ]);
+        }
+
         $notes = $activity->notes;
         if (in_array($st, ['rejetee', 'refusee']) && $rejectionReason) {
             $notes = $notes ? $notes . "\n[Rejeté]: " . $rejectionReason : "[Rejeté]: " . $rejectionReason;
@@ -751,14 +781,26 @@ class ActivityController extends Controller
 
     public function reschedule(Request $request, string $id)
     {
-        $activity = Activity::findOrFail($id);
+        $activity = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($id);
+        $user = auth()->user();
+
+        // Le délégué reprogramme ses propres visites ; le superviseur celles de son équipe
+        $isOwner = (string) $activity->user_id === (string) $user->id;
+        $isGlobal = $user->can('scope:global') || $user->hasAnyRole(['superadmin', 'super-admin', 'admin']);
+        if (!$isOwner && !$isGlobal && !$user->manages((string) $activity->user_id)) {
+            return response()->json(['message' => "Cette visite n'appartient pas à un délégué de votre équipe."], 403);
+        }
 
         if ($activity->is_locked) {
             return response()->json(['message' => 'Cette activité est verrouillée et ne peut pas être reprogrammée.'], 403);
         }
 
+        if (in_array($activity->statut, ['realisee', 'effectuee', 'terminee', 'annulee'], true)) {
+            return response()->json(['message' => 'Une visite réalisée ou annulée ne peut pas être reprogrammée.'], 422);
+        }
+
         $validated = $request->validate([
-            'date_activite' => 'required|date',
+            'date_activite' => 'required|date|after_or_equal:today',
             'heure_debut'   => 'nullable|string',
             'heure_fin'     => 'nullable|string',
             'motif'         => 'required|string', // Justificatif obligatoire
@@ -785,6 +827,20 @@ class ActivityController extends Controller
         }
 
         $activity->update($updateData);
+
+        // Reprogrammation par le superviseur : le délégué est prévenu du nouveau créneau
+        if (!$isOwner && $activity->delegue) {
+            $when = \Carbon\Carbon::parse($validated['date_activite'])->format('d/m/Y')
+                . (!empty($validated['heure_debut']) ? ' à ' . substr($validated['heure_debut'], 0, 5) : '');
+            NotificationController::sendNotification(
+                $activity->delegue,
+                'Visite reprogrammée',
+                "{$user->name} a reprogrammé votre visite au {$when}. Motif : {$validated['motif']}",
+                'planning',
+                'delegate',
+                ['activity_id' => (string) $activity->id]
+            );
+        }
 
         return response()->json([
             'message' => 'Visite reprogrammée avec succès sans nécessiter de nouvelle validation manager.',
@@ -827,10 +883,7 @@ class ActivityController extends Controller
 
         // Vérifier que le type d'activité duo existe si fourni
         if (!empty($validated['duo_type'])) {
-            $duoTypeExists = \Illuminate\Support\Facades\DB::table('duo_activity_types')
-                ->where('name', $validated['duo_type'])
-                ->exists();
-            if (!$duoTypeExists) {
+            if (!$this->activityTypeId('duo_activity_types', $validated['duo_type'])) {
                 return response()->json(['message' => 'Le type d\'activité duo sélectionné est invalide.'], 422);
             }
         }
@@ -1164,10 +1217,7 @@ class ActivityController extends Controller
 
         // Vérifier que le type d'activité trio existe si fourni
         if (!empty($validated['activity_type'])) {
-            $trioTypeExists = \Illuminate\Support\Facades\DB::table('trio_activity_types')
-                ->where('name', $validated['activity_type'])
-                ->exists();
-            if (!$trioTypeExists) {
+            if (!$this->activityTypeId('trio_activity_types', $validated['activity_type'])) {
                 return response()->json(['message' => 'Le type d\'activité trio sélectionné est invalide.'], 422);
             }
         }
@@ -1434,10 +1484,19 @@ class ActivityController extends Controller
     /** ID du type d'activité DUO (duo_activity_types.name). */
     private function duoTypeId(?string $name): ?string
     {
-        if (!$name) {
+        return $this->activityTypeId('duo_activity_types', $name);
+    }
+
+    /** Type DUO / Trio désigné par son nom ou son code (l'application envoie le code, ex. « coaching »). */
+    private function activityTypeId(string $table, ?string $value): ?string
+    {
+        $v = mb_strtolower(trim((string) $value));
+        if ($v === '') {
             return null;
         }
-        return \Illuminate\Support\Facades\DB::table('duo_activity_types')->where('name', $name)->value('id');
+        return \Illuminate\Support\Facades\DB::table($table)
+            ->where(fn ($q) => $q->whereRaw('LOWER(name) = ?', [$v])->orWhereRaw('LOWER(code) = ?', [$v]))
+            ->value('id');
     }
 
     private function notifyDuoSupervisor(Activity $activity, string $title, string $message, string $type, array $extra = []): void

@@ -55,7 +55,8 @@ class ClmAnalyticController extends Controller
             'slides_data' => 'required|array',
             'slides_data.*.slide_index' => 'required|integer|min:0',
             'slides_data.*.duration_seconds' => 'required|integer|min:0',
-            'completed' => 'nullable|boolean'
+            'completed' => 'nullable|boolean',
+            'presented_at' => 'nullable|date',
         ]);
 
         $docId = $validated['document_id'];
@@ -80,7 +81,8 @@ class ClmAnalyticController extends Controller
             'contact_id' => $contactId,
             'total_duration_seconds' => $validated['total_duration_seconds'],
             'slides_data' => $validated['slides_data'],
-            'completed' => $validated['completed'] ?? false
+            'completed' => $validated['completed'] ?? false,
+            'presented_at' => $validated['presented_at'] ?? now(),
         ]);
 
         return response()->json($analytic, 201);

@@ -37,7 +37,8 @@ class Phase9MultiLevelPlanningTest extends TestCase
         $this->salesManager = User::factory()->create();
         $this->salesManager->assignRole('sales_manager');
 
-        $this->supervisor = User::factory()->create();
+        // Le Sales Manager ne voit que son équipe : superviseur rattaché à lui
+        $this->supervisor = User::factory()->create(['manager_id' => $this->salesManager->id]);
         $this->supervisor->assignRole('superviseur');
 
         $this->delegate = User::factory()->create(['manager_id' => $this->supervisor->id]);

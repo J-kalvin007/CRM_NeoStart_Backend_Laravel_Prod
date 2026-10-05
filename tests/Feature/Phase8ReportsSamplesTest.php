@@ -112,8 +112,10 @@ class Phase8ReportsSamplesTest extends TestCase
             'statut' => 'validee',
         ]);
 
+        // La décision porte sur le compte-rendu : la visite reste réalisée
         $response->assertStatus(200)
-            ->assertJsonPath('data.statut', 'validee');
+            ->assertJsonPath('data.statut', 'realisee')
+            ->assertJsonPath('data.report_status', 'validated');
     }
 
     /**

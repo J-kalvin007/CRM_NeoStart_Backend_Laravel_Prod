@@ -51,21 +51,27 @@ class TourPlanController extends Controller
             'statut'        => $request->input('statut', 'soumis'),
         ]));
 
+        // Visites soumises : celles choisies par le délégué (ou, sans sélection, toutes celles de la période),
+        // uniquement les siennes et encore à soumettre (brouillon, ou en attente sans planning)
         $activityIds = $request->input('activity_ids', []);
-        if (!empty($activityIds) && is_array($activityIds)) {
-            Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
-                ->whereIn('id', $activityIds)
-                ->update([
-                    'tour_plan_id' => $plan->id,
-                ]);
-            $plan->update(['nb_activites_planifiees' => count($activityIds)]);
-        } else {
-            $linkedCount = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
-                ->where('user_id', $user->id)
-                ->whereBetween('date_activite', [$plan->date_debut, $plan->date_fin])
-                ->update(['tour_plan_id' => $plan->id]);
-            $plan->update(['nb_activites_planifiees' => $linkedCount]);
+        $toSubmit = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
+            ->where('user_id', $user->id)
+            ->where(function ($q) {
+                $q->where('statut', 'brouillon')
+                  ->orWhere(fn ($q2) => $q2->where('statut', 'en_attente')->whereNull('tour_plan_id'));
+            })
+            ->when(
+                !empty($activityIds) && is_array($activityIds),
+                fn ($q) => $q->whereIn('id', $activityIds),
+                fn ($q) => $q->whereBetween('date_activite', [$plan->date_debut, $plan->date_fin])
+            );
+
+        $linkedCount = $toSubmit->update(['tour_plan_id' => $plan->id, 'statut' => 'en_attente']);
+        if ($linkedCount === 0) {
+            $plan->delete();
+            return response()->json(['message' => 'Aucune visite à soumettre : les visites choisies sont déjà soumises ou traitées.'], 422);
         }
+        $plan->update(['nb_activites_planifiees' => $linkedCount]);
 
         // Notification in-app et email aux managers
         $managers = collect();
@@ -182,6 +188,11 @@ class TourPlanController extends Controller
                 'Un planning validé ne peut plus être retiré.');
         }
 
+        // Les visites encore en attente redeviennent des brouillons, à resoumettre au besoin
+        Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
+            ->where('tour_plan_id', $tourPlan->id)
+            ->where('statut', 'en_attente')
+            ->update(['statut' => 'brouillon']);
         Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
             ->where('tour_plan_id', $tourPlan->id)
             ->update(['tour_plan_id' => null]);

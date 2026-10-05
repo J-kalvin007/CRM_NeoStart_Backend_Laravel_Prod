@@ -79,6 +79,32 @@ class ActivityResource extends JsonResource
                     'remarques'         => $p->pivot->remarques ?? null,
                 ])
             ),
+            // Compte-rendu : résultat global et prochaine action saisis par le délégué
+            'resultat'       => $this->meta['resultat'] ?? null,
+            'actions'        => $this->meta['prochaine_action'] ?? null,
+            'objections'     => $this->whenLoaded('objections', fn() =>
+                $this->objections->map(fn($o) => [
+                    'objection_id'         => $o->id,
+                    'title'                => $o->title,
+                    'product_id'           => $o->product_id,
+                    'product_name'         => $o->product?->nom,
+                    'recommended_argument' => $o->recommended_argument,
+                    'physician_reaction'   => $o->pivot->physician_reaction,
+                    'notes'                => $o->pivot->notes,
+                ])
+            ),
+            // Échantillons remis lors de la visite (mouvements de stock de distribution)
+            'samples'        => $this->whenLoaded('sampleMovements', fn() =>
+                $this->sampleMovements
+                    ->filter(fn($m) => ($m->movement_type ?? 'distribution') === 'distribution')
+                    ->values()
+                    ->map(fn($m) => [
+                        'product_id'   => $m->product_id,
+                        'product_name' => $m->product?->nom,
+                        'quantity'     => abs((int) $m->quantity),
+                        'lot_number'   => $m->lot_number,
+                    ])
+            ),
             'sample_movements' => $this->whenLoaded('sampleMovements', fn() =>
                 $this->sampleMovements->map(fn($movement) => [
                     'id' => $movement->id,

@@ -98,8 +98,9 @@ class ActivityReportController extends Controller
         if ($request->has('signature') && !empty($request->input('signature'))) {
             $data['signature'] = $request->input('signature');
         }
-        if ($request->has('prochain_rdv') && !empty($request->input('prochain_rdv'))) {
-            $data['prochain_rdv'] = $request->input('prochain_rdv');
+        // Prochaine visite (date et heure) ; une valeur vide efface celle enregistrée
+        if ($request->has('prochain_rdv')) {
+            $data['prochain_rdv'] = $request->filled('prochain_rdv') ? $request->input('prochain_rdv') : null;
         }
         if ($request->has('heure_fin') && !empty($request->input('heure_fin'))) {
             $data['heure_fin'] = $request->input('heure_fin');
@@ -113,6 +114,20 @@ class ActivityReportController extends Controller
         if ($request->has('gps_fin_lng') && !empty($request->input('gps_fin_lng'))) {
             $data['gps_fin_lng'] = $request->input('gps_fin_lng');
         }
+
+        // Résultat global et prochaine action : conservés dans meta pour la consultation du compte-rendu
+        $meta = $activity->meta ?? [];
+        foreach (['resultat' => 'resultat', 'actions' => 'prochaine_action'] as $input => $key) {
+            if ($request->has($input)) {
+                $value = trim((string) $request->input($input));
+                if ($value === '') {
+                    unset($meta[$key]);
+                } else {
+                    $meta[$key] = $value;
+                }
+            }
+        }
+        $data['meta'] = $meta;
 
         $activity->update($data);
 
@@ -131,7 +146,7 @@ class ActivityReportController extends Controller
             );
         }
 
-        return response()->json(new ActivityResource($activity->load(['delegue', 'contact', 'account', 'products'])));
+        return response()->json(new ActivityResource($activity->load(['delegue', 'contact', 'account', 'products', 'sampleMovements.product', 'objections.product'])));
     }
 
     #[OA\Post(

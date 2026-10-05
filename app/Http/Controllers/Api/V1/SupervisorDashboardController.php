@@ -19,7 +19,8 @@ use Illuminate\Support\Facades\DB;
  */
 class SupervisorDashboardController extends Controller
 {
-    public const COMPLETED = ['realisee', 'effectuee', 'validee'];
+    // Visites réellement effectuées (« validee » = créneau validé, la visite n'a pas encore eu lieu)
+    public const COMPLETED = ['realisee', 'effectuee', 'terminee'];
     private const LEAVE_TYPES = ['conge', 'absence', 'indisponibilite', 'leave', 'Congé Annuel', 'Congé Maladie'];
 
     public function dashboard(Request $request)
@@ -258,6 +259,8 @@ class SupervisorDashboardController extends Controller
             'specialty' => trim(($act->account?->nom ?? '') . ($act->notes ? ' • ' . $act->notes : ''), ' •'),
             'type' => $actType,
             'status' => $this->statusLabel($act->statut),
+            'statut' => $statut,
+            'report_status' => $act->report_status,
             'isDuo' => $act->hasActiveDuo(),
             'sector' => $this->delegateSector($act->delegue),
             'color' => in_array($statut, self::COMPLETED) ? '#00816E' : ($statut === 'manquee' ? '#D32F2F' : '#0050CB'),
@@ -275,8 +278,10 @@ class SupervisorDashboardController extends Controller
             'can_duo' => !$act->hasActiveDuo() && $act->user_id !== $supervisor->id && !$isClosed && !$isPast,
             // Le superviseur qui anime ce DUO peut le modifier ou l'annuler tant qu'il n'est pas passé
             'can_manage_duo' => $act->hasActiveDuo() && $act->duo_user_id === $supervisor->id && !$isPast,
-            // Visite modifiable / reprogrammable / supprimable par le superviseur
+            // Visite modifiable / supprimable par le superviseur
             'can_edit' => !$act->is_locked && !$isClosed,
+            // Reprogrammable : toute visite non réalisée ni annulée, y compris une visite manquée
+            'can_reschedule' => !$act->is_locked && !in_array($statut, ['realisee', 'effectuee', 'terminee', 'annulee'], true),
         ];
     }
 
@@ -286,6 +291,8 @@ class SupervisorDashboardController extends Controller
         return Activity::withoutGlobalScopes()
             ->whereNull('deleted_at')
             ->whereIn('user_id', $userIds)
+            // Brouillons non soumis par le délégué : invisibles pour la hiérarchie
+            ->where('statut', '!=', 'brouillon')
             ->whereNotIn('activity_type', self::LEAVE_TYPES);
     }
 
