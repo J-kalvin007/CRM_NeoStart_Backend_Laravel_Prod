@@ -31,6 +31,10 @@ class Phase3DuoPlanningTest extends TestCase
 
         $this->delegate = User::factory()->create(['manager_id' => $this->supervisor->id]);
         $this->delegate->assignRole('delegue_medical');
+
+        // Types DUO du référentiel (l'application envoie le code)
+        \App\Models\DuoActivityType::create(['name' => 'Coaching', 'code' => 'COACHING', 'is_active' => true]);
+        \App\Models\DuoActivityType::create(['name' => 'Formation', 'code' => 'FORMATION', 'is_active' => true]);
     }
 
     /**

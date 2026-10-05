@@ -182,6 +182,8 @@ class EndToEndScenariosTest extends TestCase
             'statut'            => 'actif',
         ]);
 
+        \App\Models\TrioActivityType::create(['name' => 'Visite Stratégique', 'code' => 'VIS_STRATEGIQUE', 'is_active' => true]);
+
         // Étape 1 & 2: Le Sales Manager crée le TRIO et le transmet au Superviseur
         Sanctum::actingAs($this->salesManager);
 
@@ -192,7 +194,7 @@ class EndToEndScenariosTest extends TestCase
             'date_activite' => '2026-12-05',
             'heure_debut'   => '14:00',
             'heure_fin'     => '15:00',
-            'activity_type' => 'visite',
+            'activity_type' => 'Visite Stratégique',
             'notes'         => 'Revue stratégique hôpital avec la direction',
         ]);
 
@@ -206,7 +208,7 @@ class EndToEndScenariosTest extends TestCase
 
         $valResponse = $this->postJson("/api/v1/activities/{$trioId}/validate-trio");
         $valResponse->assertStatus(200)
-            ->assertJsonPath('data.statut', 'validee');
+            ->assertJsonPath('data.statut', 'planifiee');
 
         // Étape 4 à 8: Le Délégué réalise la visite et soumet son rapport
         Sanctum::actingAs($this->delegate);

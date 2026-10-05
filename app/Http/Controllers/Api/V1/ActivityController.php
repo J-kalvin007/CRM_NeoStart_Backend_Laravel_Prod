@@ -87,9 +87,10 @@ class ActivityController extends Controller
                     }
                 } elseif ($isManager) {
                     // S'il est superviseur/manager, voit les visites de son équipe ou des délégués sous lui
-                    // Inclut : planifiées, en attente, en cours, réalisées, manquées, annulées, brouillons, et toutes les visites duo
+                    // Inclut tout sauf les brouillons, que le délégué n'a pas encore soumis
                     $q->orWhere(function ($subQ) use ($user) {
-                        $subQ->whereHas('delegue', function ($delegueQuery) use ($user) {
+                        $subQ->where('activities.statut', '!=', 'brouillon')
+                            ->whereHas('delegue', function ($delegueQuery) use ($user) {
                             $delegueQuery->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
                                 ->where('manager_id', $user->id);
                             if ($user->team_id) {
@@ -656,6 +657,32 @@ class ActivityController extends Controller
             ], 422);
         }
 
+        // Visite déjà réalisée : la décision porte sur son compte-rendu, la visite reste réalisée
+        if (in_array($activity->statut, ['realisee', 'effectuee', 'terminee'], true)) {
+            $approved = $st === 'validee' || $st === 'validated';
+            $activity->update([
+                'report_status' => $approved ? 'validated' : 'rejected',
+                'rejection_reason' => $approved ? null : $rejectionReason,
+                'is_locked' => $approved,
+                'validated_by_id' => auth()->id(),
+                'validation_date' => now(),
+            ]);
+            if ($activity->user) {
+                NotificationController::sendNotification(
+                    $activity->user,
+                    $approved ? 'Compte-rendu validé' : 'Compte-rendu rejeté',
+                    $approved ? 'Votre compte-rendu a été validé.' : "Votre compte-rendu a été rejeté. Motif : {$rejectionReason}",
+                    'report_validation',
+                    'delegate',
+                    ['activity_id' => (string) $activity->id]
+                );
+            }
+            return response()->json([
+                'message' => $approved ? 'Compte-rendu validé.' : 'Compte-rendu rejeté.',
+                'data' => new ActivityResource($activity->load(['delegue', 'contact', 'account', 'products'])),
+            ]);
+        }
+
         $notes = $activity->notes;
         if (in_array($st, ['rejetee', 'refusee']) && $rejectionReason) {
             $notes = $notes ? $notes . "\n[Rejeté]: " . $rejectionReason : "[Rejeté]: " . $rejectionReason;
@@ -883,10 +910,7 @@ class ActivityController extends Controller
 
         // Vérifier que le type d'activité duo existe si fourni
         if (!empty($validated['duo_type'])) {
-            $duoTypeExists = \Illuminate\Support\Facades\DB::table('duo_activity_types')
-                ->where('name', $validated['duo_type'])
-                ->exists();
-            if (!$duoTypeExists) {
+            if (!$this->activityTypeId('duo_activity_types', $validated['duo_type'])) {
                 return response()->json(['message' => 'Le type d\'activité duo sélectionné est invalide.'], 422);
             }
         }
@@ -1221,10 +1245,7 @@ class ActivityController extends Controller
 
         // Vérifier que le type d'activité trio existe si fourni
         if (!empty($validated['activity_type'])) {
-            $trioTypeExists = \Illuminate\Support\Facades\DB::table('trio_activity_types')
-                ->where('name', $validated['activity_type'])
-                ->exists();
-            if (!$trioTypeExists) {
+            if (!$this->activityTypeId('trio_activity_types', $validated['activity_type'])) {
                 return response()->json(['message' => 'Le type d\'activité trio sélectionné est invalide.'], 422);
             }
         }
@@ -1489,10 +1510,19 @@ class ActivityController extends Controller
     /** ID du type d'activité DUO (duo_activity_types.name). */
     private function duoTypeId(?string $name): ?string
     {
-        if (!$name) {
+        return $this->activityTypeId('duo_activity_types', $name);
+    }
+
+    /** Type DUO / Trio désigné par son nom ou son code (l'application envoie le code, ex. « coaching »). */
+    private function activityTypeId(string $table, ?string $value): ?string
+    {
+        $v = mb_strtolower(trim((string) $value));
+        if ($v === '') {
             return null;
         }
-        return \Illuminate\Support\Facades\DB::table('duo_activity_types')->where('name', $name)->value('id');
+        return \Illuminate\Support\Facades\DB::table($table)
+            ->where(fn ($q) => $q->whereRaw('LOWER(name) = ?', [$v])->orWhereRaw('LOWER(code) = ?', [$v]))
+            ->value('id');
     }
 
     private function notifyDuoSupervisor(Activity $activity, string $title, string $message, string $type, array $extra = []): void

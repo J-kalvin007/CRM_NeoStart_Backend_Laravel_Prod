@@ -19,7 +19,8 @@ use Illuminate\Support\Facades\DB;
  */
 class SupervisorDashboardController extends Controller
 {
-    public const COMPLETED = ['realisee', 'effectuee', 'validee'];
+    // Visites réellement effectuées (« validee » = créneau validé, la visite n'a pas encore eu lieu)
+    public const COMPLETED = ['realisee', 'effectuee', 'terminee'];
     private const LEAVE_TYPES = ['conge', 'absence', 'indisponibilite', 'leave', 'Congé Annuel', 'Congé Maladie'];
 
     public function dashboard(Request $request)
@@ -290,6 +291,8 @@ class SupervisorDashboardController extends Controller
         return Activity::withoutGlobalScopes()
             ->whereNull('deleted_at')
             ->whereIn('user_id', $userIds)
+            // Brouillons non soumis par le délégué : invisibles pour la hiérarchie
+            ->where('statut', '!=', 'brouillon')
             ->whereNotIn('activity_type', self::LEAVE_TYPES);
     }
 
