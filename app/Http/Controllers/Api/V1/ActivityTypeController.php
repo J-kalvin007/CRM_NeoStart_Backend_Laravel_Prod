@@ -47,7 +47,8 @@ class ActivityTypeController extends Controller
             'name' => 'required|string|max:255',
             'code' => 'required|string|max:100|unique:activity_types',
             'description' => 'nullable|string',
-            'is_active' => 'boolean'
+            'is_active' => 'boolean',
+            'is_multi' => 'boolean'
         ]);
 
         $item = ActivityType::create($validated);
@@ -100,7 +101,8 @@ class ActivityTypeController extends Controller
             'name' => 'sometimes|string|max:255',
             'code' => 'sometimes|string|max:100|unique:activity_types,code,' . $item->id,
             'description' => 'nullable|string',
-            'is_active' => 'boolean'
+            'is_active' => 'boolean',
+            'is_multi' => 'boolean'
         ]);
 
         $item->update($validated);

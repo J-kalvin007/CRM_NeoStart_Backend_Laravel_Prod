@@ -30,6 +30,8 @@ class StoreAccountTypeRequest extends FormRequest
             'icone'       => 'nullable|string|max:100',
             'is_active'   => 'boolean',
             'ordre'       => 'integer|min:0',
+            'activity_type_ids'   => 'nullable|array',
+            'activity_type_ids.*' => 'string|exists:activity_types,id',
         ];
     }
 }

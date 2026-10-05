@@ -14,6 +14,9 @@ class AccountTypeResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        return parent::toArray($request);
+        $data = parent::toArray($request);
+        $data['activity_types'] = $this->whenLoaded('activityTypes', fn() => $this->activityTypes);
+        $data['activity_type_ids'] = $this->whenLoaded('activityTypes', fn() => $this->activityTypes->pluck('id'));
+        return $data;
     }
 }

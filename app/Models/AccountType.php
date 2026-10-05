@@ -25,6 +25,11 @@ class AccountType extends Model
         return $this->hasMany(Account::class);
     }
 
+    public function activityTypes()
+    {
+        return $this->belongsToMany(ActivityType::class, 'account_type_activity_type');
+    }
+
     public function scopeActive($query)
     {
         return $query->whereIn('statut', ['actif', 'valide'])->orWhere('is_active', true);

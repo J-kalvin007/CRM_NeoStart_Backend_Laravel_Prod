@@ -40,10 +40,11 @@ class ConfigurationController extends Controller
     public function accountTypeIndex()
     {
         $user = auth()->user();
+        $query = AccountType::with('activityTypes');
         if ($user && $user->isAdminOrSupervisor()) {
-            return AccountTypeResource::collection(AccountType::all());
+            return AccountTypeResource::collection($query->get());
         }
-        return AccountTypeResource::collection(AccountType::active()->get());
+        return AccountTypeResource::collection($query->active()->get());
     }
 
     #[OA\Post(
@@ -79,7 +80,13 @@ class ConfigurationController extends Controller
         } else {
             $validated['statut'] = 'valide';
         }
-        return new AccountTypeResource(AccountType::create($validated));
+        $type = AccountType::create($validated);
+
+        if ($request->has('activity_type_ids') && is_array($request->input('activity_type_ids'))) {
+            $type->activityTypes()->sync($request->input('activity_type_ids'));
+        }
+
+        return new AccountTypeResource($type->load('activityTypes'));
     }
 
     #[OA\Put(
@@ -94,7 +101,12 @@ class ConfigurationController extends Controller
     {
         $type = AccountType::findOrFail($id);
         $type->update($request->validated());
-        return new AccountTypeResource($type);
+
+        if ($request->has('activity_type_ids') && is_array($request->input('activity_type_ids'))) {
+            $type->activityTypes()->sync($request->input('activity_type_ids'));
+        }
+
+        return new AccountTypeResource($type->load('activityTypes'));
     }
 
     #[OA\Delete(
