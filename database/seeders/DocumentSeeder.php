@@ -15,17 +15,28 @@ class DocumentSeeder extends Seeder
         $products = \App\Models\Product::all();
         if ($products->isNotEmpty()) {
             foreach ($products as $product) {
-                \App\Models\Document::firstOrCreate(
+                $filePath = 'docs/presentation_' . strtolower($product->code ?: 'prod') . '.pdf';
+                $title = "E-Detailing {$product->nom} — Présentation Tablette";
+
+                if (str_contains(strtolower($product->nom), 'amoxicilline')) {
+                    $filePath = 'docs/soutenance_amoxicilline.pptx';
+                    $title = 'Présentation e-Detailing Soutenance Amoxicilline 500mg';
+                } elseif (str_contains(strtolower($product->nom), 'augmentin')) {
+                    $filePath = 'docs/compte_rendu_augmentin.pdf';
+                    $title = 'Compte-rendu & Notice Visite Augmentin 1g';
+                }
+
+                \App\Models\Document::updateOrCreate(
                     [
                         'documentable_id' => $product->id,
                         'documentable_type' => 'App\\Models\\Product',
                         'type' => 'presentation',
                     ],
                     [
-                        'title' => "E-Detailing {$product->nom} — Présentation Tablette",
+                        'title' => $title,
                         'description' => "Support e-Detailing officiel pour la présentation de {$product->nom}.",
-                        'file_path' => 'storage/docs/presentation_' . strtolower($product->code ?: 'prod') . '.pdf',
-                        'version' => '1.0',
+                        'file_path' => $filePath,
+                        'version' => '2.0',
                         'is_active' => true,
                         'expiration_date' => now()->addYears(2),
                         'status' => 'approved',
@@ -41,7 +52,7 @@ class DocumentSeeder extends Seeder
                     [
                         'title' => "RCP & Notice Technique {$product->nom}",
                         'description' => "Fiche Posologie et Résumé des Caractéristiques du Produit {$product->nom}.",
-                        'file_path' => 'storage/docs/rcp_' . strtolower($product->code ?: 'prod') . '.pdf',
+                        'file_path' => 'docs/rcp_' . strtolower($product->code ?: 'prod') . '.pdf',
                         'version' => '1.0',
                         'is_active' => true,
                         'expiration_date' => now()->addYears(2),

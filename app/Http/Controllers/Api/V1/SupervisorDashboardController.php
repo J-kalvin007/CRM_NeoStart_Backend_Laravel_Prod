@@ -198,6 +198,8 @@ class SupervisorDashboardController extends Controller
             return true;
         })->pluck('id')->all();
 
+        \App\Models\Activity::markMissedPastActivities();
+
         $schedules = $this->visitQuery($filteredIds)
             ->with(['delegue.scopes', 'contact', 'account', 'products', 'duoUser', 'duoActivityType'])
             ->whereBetween('date_activite', [$start->toDateString(), $end->toDateString()])
