@@ -13,9 +13,12 @@ return new class extends Migration
      */
     public function up(): void
     {
+        Schema::disableForeignKeyConstraints();
+
         // 1. Drop columns from tables that reference legacy geography tables
         Schema::table('objectifs', function (Blueprint $table) {
             if (Schema::hasColumn('objectifs', 'team_id')) {
+                try { $table->dropForeign(['team_id']); } catch (\Throwable $e) {}
                 $table->dropColumn('team_id');
             }
         });
@@ -49,6 +52,7 @@ return new class extends Migration
             }
         }
 
+        Schema::enableForeignKeyConstraints();
         echo "✓✓✓ Legacy geography tables removed successfully ✓✓✓\n";
     }
 

@@ -11,11 +11,13 @@ return new class extends Migration
      */
     public function up(): void
     {
+        Schema::disableForeignKeyConstraints();
         Schema::dropIfExists('organizational_unit_product');
         Schema::dropIfExists('user_scopes');
         Schema::dropIfExists('organizational_units');
         Schema::dropIfExists('hierarchy_level_definitions');
         Schema::dropIfExists('organization_configs');
+        Schema::enableForeignKeyConstraints();
     }
 
     public function down(): void
