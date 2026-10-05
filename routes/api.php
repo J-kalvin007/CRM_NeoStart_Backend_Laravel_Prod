@@ -294,6 +294,7 @@ Route::prefix('v1')->group(function () {
 
         // ── Événements & Marketing ─────────────────────────────
         Route::apiResource('events', EventController::class);
+        Route::get('contacts/{contact}/presented-documents', [DocumentController::class, 'presentedToContact']);
         Route::apiResource('documents', DocumentController::class);
         Route::apiResource('digital-supports', \App\Http\Controllers\Api\V1\DigitalSupportController::class);
         Route::apiResource('pharmacovigilance-reports', \App\Http\Controllers\Api\V1\PharmacovigilanceReportController::class);

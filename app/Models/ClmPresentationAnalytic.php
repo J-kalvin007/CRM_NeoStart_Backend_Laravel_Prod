@@ -18,12 +18,14 @@ class ClmPresentationAnalytic extends Model
         'total_duration_seconds',
         'slides_data',
         'completed',
+        'presented_at',
     ];
 
     protected $casts = [
         'slides_data' => 'array',
         'completed' => 'boolean',
         'total_duration_seconds' => 'integer',
+        'presented_at' => 'datetime',
     ];
 
     public function activity()

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\ClmPresentationAnalytic;
 use App\Models\Document;
 use Illuminate\Http\Request;
 use App\Services\DocumentViewerService;
@@ -31,6 +32,43 @@ class DocumentController extends Controller
         return response()->json([
             'data' => $documents
         ]);
+    }
+
+    /**
+     * Documents présentés à un prescripteur : nombre de présentations, date et heure de chacune.
+     * Délégué : ses présentations ; hiérarchie : celles de son équipe ; administration : toutes.
+     */
+    public function presentedToContact(Request $request, string $contact)
+    {
+        $user = $request->user();
+        $isGlobal = $user->can('scope:global') || $user->hasAnyRole(['superadmin', 'super-admin', 'admin']);
+
+        $rows = ClmPresentationAnalytic::with(['document.documentable', 'user'])
+            ->where('contact_id', $contact)
+            ->whereHas('document')
+            ->when(!$isGlobal, fn ($q) => $q->whereIn('user_id', array_merge([$user->id], $user->teamMemberIds())))
+            ->get()
+            ->sortByDesc(fn ($a) => $a->presented_at ?? $a->created_at);
+
+        $data = $rows->groupBy('document_id')->map(function ($items) use ($request) {
+            $first = $items->first();
+            return [
+                'document' => $this->format($first->document, $request),
+                'presentations_count' => $items->count(),
+                'last_presented_at' => ($first->presented_at ?? $first->created_at)?->toIso8601String(),
+                'presentations' => $items->map(fn ($a) => [
+                    'id' => $a->id,
+                    'presented_at' => ($a->presented_at ?? $a->created_at)?->toIso8601String(),
+                    'duration_seconds' => $a->total_duration_seconds,
+                    'slides_count' => is_array($a->slides_data) ? count($a->slides_data) : 0,
+                    'completed' => (bool) $a->completed,
+                    'activity_id' => $a->activity_id,
+                    'delegate_name' => $a->user?->name,
+                ])->values(),
+            ];
+        })->values();
+
+        return response()->json(['data' => $data]);
     }
 
     public function store(Request $request, DocumentViewerService $viewers)

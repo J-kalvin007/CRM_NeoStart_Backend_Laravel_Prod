@@ -58,6 +58,15 @@ class AllActionsNotificationTest extends TestCase
 
     public function test_tour_plan_submission_triggers_notifications()
     {
+        // Une visite brouillon à soumettre dans la période (un planning vide est refusé)
+        \App\Models\Activity::create([
+            'user_id' => $this->delegate->id,
+            'activity_type' => 'visite',
+            'date_activite' => '2026-09-23',
+            'heure_debut' => '09:00:00',
+            'statut' => 'brouillon',
+        ]);
+
         $response = $this->actingAs($this->delegate, 'sanctum')
             ->postJson('/api/v1/tour-plans', [
                 'nom' => 'Plan de tournée S38',

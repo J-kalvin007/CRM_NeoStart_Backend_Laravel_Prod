@@ -59,9 +59,12 @@ class ObjectionController extends Controller
             'notes' => 'nullable|string'
         ]);
 
-        $activity->objections()->attach($validated['objection_id'], [
-            'physician_reaction' => $validated['physician_reaction'],
-            'notes' => $validated['notes'],
+        // Nouvelle soumission du compte-rendu : met à jour l'objection au lieu de la dupliquer
+        $activity->objections()->syncWithoutDetaching([
+            $validated['objection_id'] => [
+                'physician_reaction' => $validated['physician_reaction'],
+                'notes' => $validated['notes'] ?? null,
+            ],
         ]);
 
         return response()->json(['message' => 'Objection enregistrée pour la visite avec succès.'], 200);

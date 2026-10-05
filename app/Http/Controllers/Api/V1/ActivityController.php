@@ -50,6 +50,7 @@ class ActivityController extends Controller
                 'duoActivityType',
                 'products' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class),
                 'sampleMovements' => fn($q) => $q->where('movement_type', 'distribution')->with('product'),
+                'objections.product',
             ])
             ->when($request->user_id, fn($q, $v) => $q->where('activities.user_id', $v))
             ->when($request->activity_type, fn($q, $v) => $q->where('activity_type', $v))
@@ -244,9 +245,9 @@ class ActivityController extends Controller
         // - visite_duo : quand c'est une visite en duo
 
         $isManagerRole = $user->hasRole(['superadmin', 'admin', 'superviseur', 'supervisor', 'manager']);
-        // Un délégué ne crée pas une visite déjà validée, refusée ou manquée : elle part en validation
-        if (!$isManagerRole && in_array($data['statut'] ?? null, ['validee', 'valide', 'refusee', 'rejetee', 'manquee', 'annulee'], true)) {
-            $data['statut'] = 'en_attente';
+        // Un délégué ne crée pas une visite déjà validée, refusée ou manquée : elle reste à soumettre
+        if (!$isManagerRole && in_array($data['statut'] ?? null, ['validee', 'valide', 'refusee', 'rejetee', 'manquee', 'annulee', 'en_attente'], true)) {
+            $data['statut'] = 'brouillon';
         }
 
         if (!isset($data['statut']) || $data['statut'] === 'planifiee') {
@@ -257,8 +258,9 @@ class ActivityController extends Controller
                 // Le superviseur valide directement la visite
                 $data['statut'] = 'planifiee';
             } else {
-                // Le délégué soumet pour validation
-                $data['statut'] = 'en_attente';
+                // Le délégué planifie un brouillon : il choisit ensuite les visites à soumettre
+                // au superviseur (POST tour-plans), qui les passe en attente de validation
+                $data['statut'] = 'brouillon';
             }
         }
 
@@ -365,7 +367,8 @@ class ActivityController extends Controller
                 'tourPlan',
                 'duoActivityType',
                 'products' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class),
-                'sampleMovements'
+                'sampleMovements' => fn($q) => $q->with('product'),
+                'objections.product',
             ])->findOrFail($id);
         return new ActivityResource($activity);
     }
@@ -781,14 +784,26 @@ class ActivityController extends Controller
 
     public function reschedule(Request $request, string $id)
     {
-        $activity = Activity::findOrFail($id);
+        $activity = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($id);
+        $user = auth()->user();
+
+        // Le délégué reprogramme ses propres visites ; le superviseur celles de son équipe
+        $isOwner = (string) $activity->user_id === (string) $user->id;
+        $isGlobal = $user->can('scope:global') || $user->hasAnyRole(['superadmin', 'super-admin', 'admin']);
+        if (!$isOwner && !$isGlobal && !$user->manages((string) $activity->user_id)) {
+            return response()->json(['message' => "Cette visite n'appartient pas à un délégué de votre équipe."], 403);
+        }
 
         if ($activity->is_locked) {
             return response()->json(['message' => 'Cette activité est verrouillée et ne peut pas être reprogrammée.'], 403);
         }
 
+        if (in_array($activity->statut, ['realisee', 'effectuee', 'terminee', 'annulee'], true)) {
+            return response()->json(['message' => 'Une visite réalisée ou annulée ne peut pas être reprogrammée.'], 422);
+        }
+
         $validated = $request->validate([
-            'date_activite' => 'required|date',
+            'date_activite' => 'required|date|after_or_equal:today',
             'heure_debut'   => 'nullable|string',
             'heure_fin'     => 'nullable|string',
             'motif'         => 'required|string', // Justificatif obligatoire
@@ -815,6 +830,20 @@ class ActivityController extends Controller
         }
 
         $activity->update($updateData);
+
+        // Reprogrammation par le superviseur : le délégué est prévenu du nouveau créneau
+        if (!$isOwner && $activity->delegue) {
+            $when = \Carbon\Carbon::parse($validated['date_activite'])->format('d/m/Y')
+                . (!empty($validated['heure_debut']) ? ' à ' . substr($validated['heure_debut'], 0, 5) : '');
+            NotificationController::sendNotification(
+                $activity->delegue,
+                'Visite reprogrammée',
+                "{$user->name} a reprogrammé votre visite au {$when}. Motif : {$validated['motif']}",
+                'planning',
+                'delegate',
+                ['activity_id' => (string) $activity->id]
+            );
+        }
 
         return response()->json([
             'message' => 'Visite reprogrammée avec succès sans nécessiter de nouvelle validation manager.',

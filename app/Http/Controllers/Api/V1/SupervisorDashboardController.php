@@ -258,6 +258,8 @@ class SupervisorDashboardController extends Controller
             'specialty' => trim(($act->account?->nom ?? '') . ($act->notes ? ' • ' . $act->notes : ''), ' •'),
             'type' => $actType,
             'status' => $this->statusLabel($act->statut),
+            'statut' => $statut,
+            'report_status' => $act->report_status,
             'isDuo' => $act->hasActiveDuo(),
             'sector' => $this->delegateSector($act->delegue),
             'color' => in_array($statut, self::COMPLETED) ? '#00816E' : ($statut === 'manquee' ? '#D32F2F' : '#0050CB'),
@@ -275,8 +277,10 @@ class SupervisorDashboardController extends Controller
             'can_duo' => !$act->hasActiveDuo() && $act->user_id !== $supervisor->id && !$isClosed && !$isPast,
             // Le superviseur qui anime ce DUO peut le modifier ou l'annuler tant qu'il n'est pas passé
             'can_manage_duo' => $act->hasActiveDuo() && $act->duo_user_id === $supervisor->id && !$isPast,
-            // Visite modifiable / reprogrammable / supprimable par le superviseur
+            // Visite modifiable / supprimable par le superviseur
             'can_edit' => !$act->is_locked && !$isClosed,
+            // Reprogrammable : toute visite non réalisée ni annulée, y compris une visite manquée
+            'can_reschedule' => !$act->is_locked && !in_array($statut, ['realisee', 'effectuee', 'terminee', 'annulee'], true),
         ];
     }
 

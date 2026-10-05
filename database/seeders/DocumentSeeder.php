@@ -26,7 +26,10 @@ class DocumentSeeder extends Seeder
                     $title = 'Compte-rendu & Notice Visite Augmentin 1g';
                 }
 
-                \App\Models\Document::updateOrCreate(
+                // Aucun document sans fichier réel : déposer le fichier dans storage/app/public/docs puis relancer
+                $rcpPath = 'docs/rcp_' . strtolower($product->code ?: 'prod') . '.pdf';
+
+                if (\Illuminate\Support\Facades\Storage::disk('public')->exists($filePath)) \App\Models\Document::updateOrCreate(
                     [
                         'documentable_id' => $product->id,
                         'documentable_type' => 'App\\Models\\Product',
@@ -43,7 +46,7 @@ class DocumentSeeder extends Seeder
                     ]
                 );
 
-                \App\Models\Document::firstOrCreate(
+                if (\Illuminate\Support\Facades\Storage::disk('public')->exists($rcpPath)) \App\Models\Document::firstOrCreate(
                     [
                         'documentable_id' => $product->id,
                         'documentable_type' => 'App\\Models\\Product',
@@ -52,7 +55,7 @@ class DocumentSeeder extends Seeder
                     [
                         'title' => "RCP & Notice Technique {$product->nom}",
                         'description' => "Fiche Posologie et Résumé des Caractéristiques du Produit {$product->nom}.",
-                        'file_path' => 'docs/rcp_' . strtolower($product->code ?: 'prod') . '.pdf',
+                        'file_path' => $rcpPath,
                         'version' => '1.0',
                         'is_active' => true,
                         'expiration_date' => now()->addYears(2),
