@@ -53,7 +53,7 @@
             {{-- Warning box --}}
             <div style="background-color: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; padding: 16px 20px; margin-bottom: 28px;">
                 <p style="margin: 0; font-size: 13.5px; color: #92400e; line-height: 1.6;">
-                    ⚠️ <strong>Action requise dès la première connexion :</strong><br>
+                    <strong>Action requise dès la première connexion :</strong><br>
                     Pour des raisons de sécurité, vous serez <strong>obligé de définir un nouveau mot de passe</strong> lors de votre première connexion. Votre nouveau mot de passe devra contenir <strong>au moins 8 caractères</strong>.
                 </p>
             </div>
