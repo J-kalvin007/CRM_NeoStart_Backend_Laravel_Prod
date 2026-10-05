@@ -33,6 +33,8 @@ class ActivityResource extends JsonResource
             'duo_activity_type'             => $this->when($this->is_duo, fn () => $this->duoActivityType?->name),
             'is_trio'                      => $this->isTrio(),
             'trio_sales_manager'           => $this->when($this->isTrio() && $this->relationLoaded('accompanyingUser'), fn () => $this->accompanyingUser ? ['id' => (string) $this->accompanyingUser->id, 'name' => $this->accompanyingUser->name] : null),
+            'trio_status'                  => $this->trio_status ?? ($this->isTrio() && $this->statut === 'en_attente' ? 'pending' : null),
+            'trio_rejection_reason'        => $this->trio_rejection_reason,
             'duo_status'                   => $this->duo_status,
             'duo_delegue_status'           => $this->duo_delegue_status,
             'duo_delegue_rejection_reason' => $this->duo_delegue_rejection_reason,

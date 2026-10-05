@@ -1270,6 +1270,7 @@ class ActivityController extends Controller
             'is_duo'               => true,
             'is_trio'              => true,
             'duo_user_id'          => $supervisor->id,
+            'trio_status'          => 'pending',
             'contact_id'           => $validated['contact_id'] ?? null,
             'account_id'           => $validated['account_id'] ?? $contact?->account_id,
             'date_activite'        => $validated['date_activite'],

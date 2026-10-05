@@ -11,110 +11,41 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Remove columns from users table
-        Schema::table('users', function (Blueprint $table) {
-            $columns = ['sector_id', 'zone_id', 'territory_id', 'subsidiary_id', 'region_id'];
-            foreach ($columns as $column) {
-                if (Schema::hasColumn('users', $column)) {
-                    $table->dropColumn($column);
-                    echo "✓ Removed {$column} from users\n";
+        // Helper function to safely drop columns
+        $safeDropColumn = function ($tableName, $columns) {
+            foreach ((array) $columns as $column) {
+                try {
+                    if (Schema::hasColumn($tableName, $column)) {
+                        Schema::table($tableName, function (Blueprint $table) use ($column) {
+                            $table->dropColumn($column);
+                        });
+                        echo "✓ Removed {$column} from {$tableName}\n";
+                    }
+                } catch (\Exception $e) {
+                    echo "⚠ Skipped {$column} from {$tableName} (may have constraints)\n";
                 }
             }
-        });
+        };
+
+        // Remove columns from users table
+        $safeDropColumn('users', ['sector_id', 'zone_id', 'territory_id', 'subsidiary_id', 'region_id']);
 
         // Remove columns from activities table
-        Schema::table('activities', function (Blueprint $table) {
-            $columns = ['sector_id', 'zone_id', 'territory_id', 'subsidiary_id', 'region_id'];
-            foreach ($columns as $column) {
-                if (Schema::hasColumn('activities', $column)) {
-                    $table->dropColumn($column);
-                    echo "✓ Removed {$column} from activities\n";
-                }
-            }
-        });
+        $safeDropColumn('activities', ['sector_id', 'zone_id', 'territory_id', 'subsidiary_id', 'region_id']);
 
         // Remove columns from documents table
-        Schema::table('documents', function (Blueprint $table) {
-            $columns = ['subsidiary_id', 'region_id'];
-            foreach ($columns as $column) {
-                if (Schema::hasColumn('documents', $column)) {
-                    $table->dropColumn($column);
-                    echo "✓ Removed {$column} from documents\n";
-                }
-            }
-        });
+        $safeDropColumn('documents', ['subsidiary_id', 'region_id']);
 
-        // Remove columns from expenses table
-        Schema::table('expenses', function (Blueprint $table) {
-            if (Schema::hasColumn('expenses', 'subsidiary_id')) {
-                $table->dropColumn('subsidiary_id');
-                echo "✓ Removed subsidiary_id from expenses\n";
-            }
-        });
-
-        // Remove columns from events table
-        Schema::table('events', function (Blueprint $table) {
-            if (Schema::hasColumn('events', 'subsidiary_id')) {
-                $table->dropColumn('subsidiary_id');
-                echo "✓ Removed subsidiary_id from events\n";
-            }
-        });
-
-        // Remove columns from sales table
-        Schema::table('sales', function (Blueprint $table) {
-            if (Schema::hasColumn('sales', 'subsidiary_id')) {
-                $table->dropColumn('subsidiary_id');
-                echo "✓ Removed subsidiary_id from sales\n";
-            }
-        });
-
-        // Remove columns from orders table
-        Schema::table('orders', function (Blueprint $table) {
-            if (Schema::hasColumn('orders', 'subsidiary_id')) {
-                $table->dropColumn('subsidiary_id');
-                echo "✓ Removed subsidiary_id from orders\n";
-            }
-        });
-
-        // Remove columns from opportunities table
-        Schema::table('opportunities', function (Blueprint $table) {
-            if (Schema::hasColumn('opportunities', 'subsidiary_id')) {
-                $table->dropColumn('subsidiary_id');
-                echo "✓ Removed subsidiary_id from opportunities\n";
-            }
-        });
-
-        // Remove columns from tasks table
-        Schema::table('tasks', function (Blueprint $table) {
-            if (Schema::hasColumn('tasks', 'subsidiary_id')) {
-                $table->dropColumn('subsidiary_id');
-                echo "✓ Removed subsidiary_id from tasks\n";
-            }
-        });
-
-        // Remove columns from indicators table
-        Schema::table('indicators', function (Blueprint $table) {
-            if (Schema::hasColumn('indicators', 'subsidiary_id')) {
-                $table->dropColumn('subsidiary_id');
-                echo "✓ Removed subsidiary_id from indicators\n";
-            }
-        });
-
-        // Remove columns from products table
-        Schema::table('products', function (Blueprint $table) {
-            if (Schema::hasColumn('products', 'subsidiary_id')) {
-                $table->dropColumn('subsidiary_id');
-                echo "✓ Removed subsidiary_id from products\n";
-            }
-        });
-
-        // Remove columns from settings table
-        Schema::table('settings', function (Blueprint $table) {
-            if (Schema::hasColumn('settings', 'subsidiary_id')) {
-                $table->dropColumn('subsidiary_id');
-                echo "✓ Removed subsidiary_id from settings\n";
-            }
-        });
+        // Remove columns from other tables
+        $safeDropColumn('expenses', 'subsidiary_id');
+        $safeDropColumn('events', 'subsidiary_id');
+        $safeDropColumn('sales', 'subsidiary_id');
+        $safeDropColumn('orders', 'subsidiary_id');
+        $safeDropColumn('opportunities', 'subsidiary_id');
+        $safeDropColumn('tasks', 'subsidiary_id');
+        $safeDropColumn('indicators', 'subsidiary_id');
+        $safeDropColumn('products', 'subsidiary_id');
+        $safeDropColumn('settings', 'subsidiary_id');
 
         echo "✓✓✓ All legacy geography columns removed successfully ✓✓✓\n";
     }

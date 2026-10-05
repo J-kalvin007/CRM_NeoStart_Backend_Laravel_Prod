@@ -13,6 +13,12 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // Check if teams table exists first
+        if (!Schema::hasTable('teams')) {
+            echo "⚠ Teams table does not exist, skipping migration\n";
+            return;
+        }
+
         // Check if column already exists
         if (!Schema::hasColumn('teams', 'country_id')) {
             // 1. Add country_id to teams table
