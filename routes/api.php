@@ -108,6 +108,8 @@ Route::prefix('v1')->group(function () {
 
 
         // Configuration (Tables paramétrables par l'Admin/Manager)
+        Route::get('configurations', [ConfigurationController::class, 'configurations']);
+        Route::get('account-types', [ConfigurationController::class, 'accountTypeIndex']);
 
         Route::prefix('config')->group(function () {
             Route::get('account-types', [ConfigurationController::class, 'accountTypeIndex']);

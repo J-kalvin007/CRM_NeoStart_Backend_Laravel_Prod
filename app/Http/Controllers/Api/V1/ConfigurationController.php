@@ -47,6 +47,19 @@ class ConfigurationController extends Controller
         return AccountTypeResource::collection($query->active()->get());
     }
 
+    public function configurations()
+    {
+        $user = auth()->user();
+        $query = AccountType::with('activityTypes');
+        $types = ($user && $user->isAdminOrSupervisor())
+            ? $query->get()
+            : $query->active()->get();
+
+        return response()->json([
+            'accountTypes' => AccountTypeResource::collection($types),
+        ]);
+    }
+
     #[OA\Post(
         path: '/api/v1/config/account-types',
         summary: 'Créer un nouveau type de compte',
