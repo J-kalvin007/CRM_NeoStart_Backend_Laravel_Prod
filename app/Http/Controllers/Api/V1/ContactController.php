@@ -101,7 +101,7 @@ class ContactController extends Controller
         }
 
         $perPage = $request->get('per_page', 500);
-        return ContactResource::collection($query->paginate($perPage));
+        return ContactResource::collection($query->orderBy('created_at', 'desc')->paginate($perPage));
     }
 
 
@@ -471,6 +471,34 @@ class ContactController extends Controller
      * DELETE /api/v1/contacts/bulk-delete
      * Body: { "ids": ["uuid1", "uuid2", ...] }
      */
+    public function bulkUpdate(Request $request)
+    {
+        $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'required',
+            'user_id' => 'nullable|exists:users,id',
+            'account_id' => 'nullable|exists:accounts,id',
+            'speciality_id' => 'nullable|exists:specialities,id',
+            'statut' => 'nullable|string',
+        ]);
+
+        $updateData = array_filter([
+            'user_id' => $request->user_id,
+            'account_id' => $request->account_id,
+            'speciality_id' => $request->speciality_id,
+            'statut' => $request->statut,
+        ], fn($v) => !is_null($v));
+
+        if (!empty($updateData)) {
+            Contact::withoutGlobalScopes()->whereIn('id', $request->ids)->update($updateData);
+        }
+
+        return response()->json([
+            'message' => 'Mise à jour en masse des prescripteurs effectuée avec succès.',
+            'updated_count' => count($request->ids),
+        ]);
+    }
+
     public function bulkDelete(Request $request): \Illuminate\Http\JsonResponse
     {
         $request->validate([

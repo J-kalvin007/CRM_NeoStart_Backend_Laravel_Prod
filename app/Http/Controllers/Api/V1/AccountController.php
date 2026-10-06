@@ -37,7 +37,17 @@ class AccountController extends Controller
             ->with(['country', 'categories', 'accountType', 'potential', 'user', 'delegue'])
             ->withCount('contacts')
             ->when($request->account_type, fn($q, $v) => $q->where('account_type', $v))
-            ->when($request->statut, fn($q, $v) => $q->where('statut', $v))
+            ->when($request->statut, fn($q, $v) => $q->where(function ($sq) use ($v) {
+                if (in_array($v, ['valide', 'actif'])) {
+                    $sq->whereIn('statut', ['valide', 'actif'])->orWhere('statut_validation', 'valide');
+                } elseif (in_array($v, ['en_attente', 'pending'])) {
+                    $sq->whereIn('statut', ['en_attente', 'pending'])->orWhereIn('statut_validation', ['en_attente', 'pending']);
+                } elseif ($v === 'rejete') {
+                    $sq->where('statut', 'rejete')->orWhere('statut_validation', 'rejete');
+                } else {
+                    $sq->where('statut', $v)->orWhere('statut_validation', $v);
+                }
+            }))
             ->when($request->search, fn($q, $v) => $q->where(function ($q) use ($v) {
                 $q->where('nom', 'like', "%$v%")
                   ->orWhere('ville', 'like', "%$v%")
@@ -53,7 +63,10 @@ class AccountController extends Controller
             if ($isGlobalAdmin) {
                 $requestedCountryId = $request->header('X-Country-Id');
                 if ($requestedCountryId && $requestedCountryId !== 'group' && $requestedCountryId !== 'default') {
-                    $query->where('accounts.country_id', $requestedCountryId);
+                    $query->where(function ($q) use ($requestedCountryId) {
+                        $q->where('accounts.country_id', $requestedCountryId)
+                          ->orWhereNull('accounts.country_id');
+                    });
                 }
             } else {
                 $userIds = [$user->id];
@@ -83,7 +96,12 @@ class AccountController extends Controller
             }
 
             if (!$user->isAdminOrSupervisor()) {
-                $query->whereIn('statut', ['actif', 'valide']);
+                $query->where(function ($sq) use ($user) {
+                    $sq->whereIn('statut', ['actif', 'valide'])
+                       ->orWhereIn('statut_validation', ['actif', 'valide'])
+                       ->orWhere('accounts.user_id', $user->id)
+                       ->orWhere('accounts.delegue_id', $user->id);
+                });
             }
         }
 
@@ -218,13 +236,23 @@ class AccountController extends Controller
             $validated['nom'] = mb_strtoupper($validated['nom'], 'UTF-8');
         }
 
+        $primaryDelegueId = !empty($validated['delegue_ids'][0])
+            ? $validated['delegue_ids'][0]
+            : ($validated['delegue_id'] ?? null);
+
         $account = Account::create(array_merge(
             $validated,
             [
                 'user_id' => $user->id ?? null,
+                'delegue_id' => $primaryDelegueId,
+                'statut' => $isDelegue ? 'en_attente' : 'valide',
                 'statut_validation' => $statutValidation,
             ]
         ));
+
+        if (!empty($validated['contact_ids']) && is_array($validated['contact_ids'])) {
+            \App\Models\Contact::whereIn('id', $validated['contact_ids'])->update(['account_id' => $account->id]);
+        }
 
         if ($isDelegue) {
             $supervisors = \App\Models\User::role('superviseur')->get();
@@ -245,6 +273,47 @@ class AccountController extends Controller
         }
 
         return new AccountResource($account->load(['country', 'categories']));
+    }
+
+    public function bulkUpdate(Request $request)
+    {
+        $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'required',
+            'account_type_id' => 'nullable|exists:account_types,id',
+            'delegue_id' => 'nullable|exists:users,id',
+            'statut' => 'nullable|string',
+        ]);
+
+        $updateData = array_filter([
+            'account_type_id' => $request->account_type_id,
+            'delegue_id' => $request->delegue_id,
+            'statut' => $request->statut,
+        ], fn($v) => !is_null($v));
+
+        if (!empty($updateData)) {
+            Account::whereIn('id', $request->ids)->update($updateData);
+        }
+
+        return response()->json([
+            'message' => 'Mise à jour en masse effectuée avec succès.',
+            'updated_count' => count($request->ids),
+        ]);
+    }
+
+    public function bulkDelete(Request $request)
+    {
+        $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'required',
+        ]);
+
+        Account::whereIn('id', $request->ids)->delete();
+
+        return response()->json([
+            'message' => 'Suppression en masse effectuée avec succès.',
+            'deleted_count' => count($request->ids),
+        ]);
     }
 
     #[OA\Get(
@@ -330,6 +399,19 @@ class AccountController extends Controller
                 }
             }
             unset($validated['potentiel']);
+        }
+
+        if (isset($validated['statut'])) {
+            if (in_array($validated['statut'], ['valide', 'actif'])) {
+                $validated['statut_validation'] = 'valide';
+                $validated['statut'] = 'actif';
+            } elseif ($validated['statut'] === 'rejete') {
+                $validated['statut_validation'] = 'rejete';
+                $validated['statut'] = 'inactif';
+            } elseif (in_array($validated['statut'], ['en_attente', 'pending'])) {
+                $validated['statut_validation'] = 'en_attente';
+                $validated['statut'] = 'en_attente';
+            }
         }
 
         $account->update($validated);

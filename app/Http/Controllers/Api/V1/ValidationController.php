@@ -265,6 +265,30 @@ class ValidationController extends Controller
             return response()->json(['message' => 'Demande approuvée avec succès', 'data' => $req]);
         }
 
+        if (in_array($type, ['objectif', 'objective', 'objectif_attribution'])) {
+            $objectif = \App\Models\Objectif::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($id);
+            if ($objectif->user_id) {
+                $this->ensureManaged($objectif->user_id);
+            }
+            $objectif->update([
+                'statut' => 'valide',
+            ]);
+
+            $recipient = $objectif->user;
+            if ($recipient) {
+                NotificationController::sendNotification(
+                    $recipient,
+                    'Attribution d\'objectif approuvée',
+                    "L'attribution de votre objectif a été approuvée par votre manager.",
+                    'objective',
+                    'delegate',
+                    ['id' => (string) $objectif->id, 'type' => 'objective']
+                );
+            }
+
+            return response()->json(['message' => 'Attribution d\'objectif approuvée avec succès', 'data' => $objectif]);
+        }
+
         $model = $this->getModel($type, $id);
         $model->update([
             'statut_validation' => 'valide',
@@ -441,6 +465,30 @@ class ValidationController extends Controller
             return response()->json(['message' => 'Demande refusée avec succès', 'data' => $req]);
         }
 
+        if (in_array($type, ['objectif', 'objective', 'objectif_attribution'])) {
+            $objectif = \App\Models\Objectif::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($id);
+            if ($objectif->user_id) {
+                $this->ensureManaged($objectif->user_id);
+            }
+            $objectif->update([
+                'statut' => 'annule',
+            ]);
+
+            $recipient = $objectif->user;
+            if ($recipient) {
+                NotificationController::sendNotification(
+                    $recipient,
+                    'Attribution d\'objectif refusée',
+                    "L'attribution de votre objectif a été refusée par votre manager." . ($reason ? " Motif : {$reason}" : ""),
+                    'objective',
+                    'delegate',
+                    ['id' => (string) $objectif->id, 'type' => 'objective']
+                );
+            }
+
+            return response()->json(['message' => 'Attribution d\'objectif refusée avec succès', 'data' => $objectif]);
+        }
+
         $model = $this->getModel($type, $id);
         $model->update([
             'statut_validation' => 'rejete',
@@ -495,7 +543,7 @@ class ValidationController extends Controller
             'action' => 'required|in:approve,reject',
             'rejection_reason' => 'required_if:action,reject|nullable|string|min:2',
             'items' => 'required|array|min:1|max:200',
-            'items.*.type' => 'required|string|in:contact,account,visit,activity_report,tour_plan,expense,sample,sample_request,request,delegate_request',
+            'items.*.type' => 'required|string|in:contact,account,visit,activity_report,tour_plan,expense,sample,sample_request,request,delegate_request,objectif,objective,objectif_attribution',
             'items.*.id' => 'required|string',
         ], [
             'rejection_reason.required_if' => 'Le motif du rejet est obligatoire.',

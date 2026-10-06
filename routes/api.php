@@ -163,6 +163,8 @@ Route::prefix('v1')->group(function () {
         Route::post('validations/{type}/{id}/reject', [ValidationController::class, 'reject']);
 
         Route::post('accounts/check-duplicates', [AccountController::class, 'checkDuplicates']);
+        Route::post('accounts/bulk-update', [AccountController::class, 'bulkUpdate']);
+        Route::post('accounts/bulk-delete', [AccountController::class, 'bulkDelete']);
         Route::post('accounts/{account}/valider', [AccountController::class, 'validateAccount']);
         Route::post('accounts/{account}/rejeter', [AccountController::class, 'rejectAccount']);
         Route::post('accounts/{account}/validate', [AccountController::class, 'validateAccount']);
@@ -184,6 +186,7 @@ Route::prefix('v1')->group(function () {
         Route::post('contacts/import', [\App\Http\Controllers\Api\V1\ContactImportController::class, 'import']);
         Route::get('contacts/import/template', [\App\Http\Controllers\Api\V1\ContactImportController::class, 'downloadTemplate']);
         Route::delete('contacts/bulk-delete', [ContactController::class, 'bulkDelete']);
+        Route::post('contacts/bulk-update', [ContactController::class, 'bulkUpdate']);
         Route::post('contacts/{contact}/valider', [ContactController::class, 'validateContact']);
         Route::post('contacts/{contact}/rejeter', [ContactController::class, 'rejectContact']);
         Route::post('contacts/{contact}/validate', [ContactController::class, 'validateContact']);
