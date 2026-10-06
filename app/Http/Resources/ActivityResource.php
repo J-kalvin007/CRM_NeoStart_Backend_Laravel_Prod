@@ -44,9 +44,18 @@ class ActivityResource extends JsonResource
             'validation_date'=> $this->validation_date,
             'rejection_reason'=> $this->rejection_reason,
             'signature'      => $this->signature,
-            'user_id'        => $this->user_id,
-            'delegate_name'  => $this->delegue?->name,
-            'type'           => $this->whenLoaded('type', fn() => ['id' => $this->type->id, 'nom' => $this->type->nom]),
+            'type'           => $this->whenLoaded('activityType', fn() => [
+                'id'   => $this->activityType->id,
+                'code' => $this->activityType->code,
+                'name' => $this->activityType->name,
+                'nom'  => $this->activityType->name,
+            ], fn() => $this->whenLoaded('type', fn() => [
+                'id'   => $this->type->id,
+                'code' => $this->type->code,
+                'name' => $this->type->name ?? $this->type->nom,
+                'nom'  => $this->type->nom ?? $this->type->name,
+            ])),
+            'activity_type_name' => $this->activityType?->name ?? $this->type?->name ?? $this->type?->nom ?? $this->activity_type,
             'user'           => $this->whenLoaded('delegue', fn() => ['id' => $this->delegue->id, 'name' => $this->delegue->name, 'email' => $this->delegue->email]),
             'delegue'        => $this->whenLoaded('delegue', fn() => [
                 'id'    => $this->delegue->id,

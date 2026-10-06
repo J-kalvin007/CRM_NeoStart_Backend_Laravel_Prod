@@ -27,11 +27,10 @@ return new class extends Migration
                 $table->foreign('country_id')->references('id')->on('countries')->onDelete('set null');
             });
 
-            // 2. Simplifier la migration des données (teams to country)
             DB::statement("
-                UPDATE teams t
-                SET t.country_id = (SELECT id FROM countries LIMIT 1)
-                WHERE t.country_id IS NULL
+                UPDATE teams
+                SET country_id = (SELECT id FROM countries LIMIT 1)
+                WHERE country_id IS NULL
             ");
 
             echo "✓ Teams table updated with country_id for simplified hierarchy\n";

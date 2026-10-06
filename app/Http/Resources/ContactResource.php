@@ -109,13 +109,7 @@ class ContactResource extends JsonResource
                 'name' => $this->influence->name,    // ← "name"
             ]),
 
-            'account' => $this->whenLoaded('account', fn() => [
-                'id'      => $this->account->id,
-                'nom'     => $this->account->nom,    // Account garde "nom"
-                'type'    => $this->account->type ?? null,
-                'adresse' => $this->account->adresse,
-                'ville'   => $this->account->ville ?? null,
-            ]),
+            'account' => $this->whenLoaded('account', fn() => new AccountResource($this->account)),
 
             // Délégué lié au prescripteur
             'delegue' => $this->whenLoaded('delegue', fn() => [
@@ -125,9 +119,17 @@ class ContactResource extends JsonResource
             ]),
 
             // Champ pratique pour l'affichage liste
-            'account_name' => $this->account?->nom
-                              ?? data_get($this->meta, 'etablissement')
-                              ?? null,
+            'account_name' => (function($contact) {
+                if ($contact->account) {
+                    $acc = $contact->account;
+                    $typeStr = $acc->accountType?->libelle ?? $acc->accountType?->name ?? $acc->accountType?->code ?? $acc->type ?? data_get($acc->meta, 'type');
+                    if (!empty($typeStr) && is_string($typeStr) && $acc->nom && !str_starts_with(mb_strtolower($acc->nom), mb_strtolower(trim($typeStr)))) {
+                        return trim($typeStr) . ' ' . $acc->nom;
+                    }
+                    return $acc->nom;
+                }
+                return data_get($contact->meta, 'etablissement');
+            })($this),
 
             // ── Dates ─────────────────────────────────────────────────────
             'created_at' => $this->created_at,

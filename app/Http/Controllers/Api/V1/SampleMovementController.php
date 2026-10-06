@@ -43,6 +43,7 @@ class SampleMovementController extends Controller
             ->when($request->filled('product_id'), fn($q) => $q->where('product_id', $request->product_id))
             ->when($request->filled('movement_type'), fn($q) => $q->where('movement_type', $request->movement_type))
             ->when($request->filled('lot_number'), fn($q) => $q->where('lot_number', 'like', "%{$request->lot_number}%"))
+            ->when($request->filled('contact_id'), fn($q) => $q->where('contact_id', $request->contact_id))
             ->when($request->filled('date_from'), fn($q) => $q->whereDate('created_at', '>=', $request->date_from))
             ->when($request->filled('date_to'), fn($q) => $q->whereDate('created_at', '<=', $request->date_to));
 

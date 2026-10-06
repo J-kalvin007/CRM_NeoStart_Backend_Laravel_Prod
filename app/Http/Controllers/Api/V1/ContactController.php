@@ -36,10 +36,10 @@ class ContactController extends Controller
     )]
     public function index(Request $request)
     {
-        $query = Contact::with([
+        $query = Contact::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
+            ->with([
                 // L'account doit être chargé sans le DynamicPerimeterScope car un établissement
                 // peut appartenir à un autre utilisateur (ex: admin) que le délégué qui consulte.
-                // withoutGlobalScopes() sur la relation garantit que le nom s'affiche toujours.
                 'account' => fn($q) => $q->withoutGlobalScopes(),
                 'categories', 'speciality', 'contactType', 'potential', 'influence', 'segmentation', 'delegue',
             ])
@@ -77,14 +77,20 @@ class ContactController extends Controller
 
         $user = auth()->user();
         if ($user) {
-            $isGlobalAdminLocal = $user->can('scope:global') || $user->hasAnyRole(['superadmin', 'admin', 'Administrateur Groupe', 'Administrateur Pays', 'Direction Générale']);
+            $isGlobalAdminLocal = $user->can('scope:global') || $user->hasAnyRole(['superadmin', 'admin', 'super-admin', 'Administrateur Groupe', 'Administrateur Pays', 'Direction Générale']);
             $isSupervisor = $user->hasAnyRole(['superviseur', 'Manager', 'supervisor', 'manager', 'directeur-commercial', 'directeur_commercial', 'directeur-marketing', 'directeur_marketing', 'sales_manager']);
             
-            if (!$isGlobalAdminLocal) {
+            if ($isGlobalAdminLocal) {
+                $requestedCountryId = $request->header('X-Country-Id');
+                if ($requestedCountryId && $requestedCountryId !== 'group' && $requestedCountryId !== 'default') {
+                    $query->whereHas('user', fn($q) => $q->where('country_id', $requestedCountryId));
+                }
+            } else {
                 if ($isSupervisor) {
                     $teamMemberIds = array_merge([$user->id], $user->teamMemberIds());
                     $query->whereIn('contacts.user_id', $teamMemberIds);
-                } elseif ($user->hasRole('delegue_medical')) {
+                } else {
+                    // Délégué médical : il ne voit STRICTEMENT que ses propres prescripteurs
                     $query->where('contacts.user_id', $user->id);
                 }
             }
@@ -93,8 +99,6 @@ class ContactController extends Controller
                 $query->whereIn('statut', ['actif', 'valide']);
             }
         }
-
-        $isGlobalAdmin   = $user && ($user->can('scope:global') || $user->hasAnyRole(['superadmin', 'admin']));
 
         $perPage = $request->get('per_page', 500);
         return ContactResource::collection($query->paginate($perPage));

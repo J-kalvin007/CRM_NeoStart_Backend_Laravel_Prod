@@ -91,7 +91,6 @@ class DatabaseSeeder extends Seeder
             DuoActivityTypesSeeder::class,
             DuoActivityTypeSeeder::class,
             TrioActivityTypeSeeder::class,
-            PharmaSeeder::class,
             UserSeeder::class,
         ]);
 

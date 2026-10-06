@@ -33,7 +33,8 @@ class AccountController extends Controller
     )]
     public function index(Request $request)
     {
-        $query = Account::with(['country', 'categories', 'accountType', 'potential', 'user', 'delegue'])
+        $query = Account::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
+            ->with(['country', 'categories', 'accountType', 'potential', 'user', 'delegue'])
             ->withCount('contacts')
             ->when($request->account_type, fn($q, $v) => $q->where('account_type', $v))
             ->when($request->statut, fn($q, $v) => $q->where('statut', $v))
@@ -44,13 +45,17 @@ class AccountController extends Controller
             }));
 
         $user = auth()->user();
-        $isGlobalAdmin = false;
         
         if ($user) {
-            $isGlobalAdmin = $user->can('scope:global') || $user->hasAnyRole(['superadmin', 'admin', 'Administrateur Groupe', 'Administrateur Pays', 'Direction Générale']);
+            $isGlobalAdmin = $user->can('scope:global') || $user->hasAnyRole(['superadmin', 'admin', 'super-admin', 'Administrateur Groupe', 'Administrateur Pays', 'Direction Générale']);
             $isSupervisor = $user->hasAnyRole(['superviseur', 'Manager', 'supervisor', 'manager', 'directeur-commercial', 'directeur_commercial', 'directeur-marketing', 'directeur_marketing', 'sales_manager']);
 
-            if (!$isGlobalAdmin) {
+            if ($isGlobalAdmin) {
+                $requestedCountryId = $request->header('X-Country-Id');
+                if ($requestedCountryId && $requestedCountryId !== 'group' && $requestedCountryId !== 'default') {
+                    $query->where('accounts.country_id', $requestedCountryId);
+                }
+            } else {
                 $userIds = [$user->id];
                 if ($isSupervisor) {
                     $userIds = array_merge($userIds, $user->teamMemberIds());
@@ -64,6 +69,15 @@ class AccountController extends Controller
                               ->from('contacts')
                               ->whereIn('user_id', $userIds)
                               ->whereNotNull('account_id');
+                      })
+                      ->orWhereIn('accounts.id', function ($sub) use ($userIds) {
+                          $sub->select('account_id')
+                              ->from('account_contact')
+                              ->whereIn('contact_id', function ($cSub) use ($userIds) {
+                                  $cSub->select('id')
+                                       ->from('contacts')
+                                       ->whereIn('user_id', $userIds);
+                              });
                       });
                 });
             }

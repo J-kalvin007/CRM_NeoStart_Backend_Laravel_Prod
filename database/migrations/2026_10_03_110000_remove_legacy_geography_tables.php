@@ -16,18 +16,30 @@ return new class extends Migration
         // 1. Drop columns from tables that reference legacy geography tables
         Schema::table('objectifs', function (Blueprint $table) {
             if (Schema::hasColumn('objectifs', 'team_id')) {
+                try {
+                    $table->dropIndex('objectifs_team_id_date_debut_date_fin_index');
+                } catch (\Throwable $e) {}
+                try {
+                    $table->dropForeign(['team_id']);
+                } catch (\Throwable $e) {}
                 $table->dropColumn('team_id');
             }
         });
 
         Schema::table('campaigns', function (Blueprint $table) {
             if (Schema::hasColumn('campaigns', 'team_id')) {
+                try {
+                    $table->dropForeign(['team_id']);
+                } catch (\Throwable $e) {}
                 $table->dropColumn('team_id');
             }
         });
 
         Schema::table('campaign_equipes', function (Blueprint $table) {
             if (Schema::hasColumn('campaign_equipes', 'team_id')) {
+                try {
+                    $table->dropForeign(['team_id']);
+                } catch (\Throwable $e) {}
                 $table->dropColumn('team_id');
             }
         });

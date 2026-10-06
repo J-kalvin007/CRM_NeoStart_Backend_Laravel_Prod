@@ -57,7 +57,7 @@ class TourPlanController extends Controller
         $toSubmit = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
             ->where('user_id', $user->id)
             ->where(function ($q) {
-                $q->where('statut', 'brouillon')
+                $q->whereIn('statut', ['brouillon', 'planifiee'])
                   ->orWhere(fn ($q2) => $q2->where('statut', 'en_attente')->whereNull('tour_plan_id'));
             })
             ->when(

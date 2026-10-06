@@ -121,6 +121,17 @@ class Activity extends Model
         return $this->belongsTo(\App\Models\DuoActivityType::class, 'duo_activity_type_id');
     }
 
+    /** Type d'activité dynamique (activity_types) */
+    public function activityType()
+    {
+        return $this->belongsTo(\App\Models\ActivityType::class, 'activity_type_id');
+    }
+
+    public function type()
+    {
+        return $this->belongsTo(\App\Models\ActivityType::class, 'activity_type_id');
+    }
+
     /** DUO actif : proposé/accepté et non refusé par le délégué */
     public function hasActiveDuo(): bool
     {
@@ -206,6 +217,10 @@ class Activity extends Model
      */
     public static function checkOverlap(string $userId, mixed $date, ?string $startTime = null, ?string $endTime = null, ?int $durationMinutes = null, ?string $excludeId = null): bool
     {
+        // Contrôle de chevauchement désactivé (un délégué peut planifier plusieurs visites au même créneau)
+        return false;
+
+        /*
         $dateStr = $date instanceof \DateTimeInterface ? $date->format('Y-m-d') : date('Y-m-d', strtotime((string)$date));
 
         if (empty($startTime)) {
@@ -257,6 +272,7 @@ class Activity extends Model
         }
 
         return false;
+        */
     }
 }
 

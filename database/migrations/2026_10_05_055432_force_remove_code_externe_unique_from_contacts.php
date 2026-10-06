@@ -12,18 +12,19 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('contacts', function (Blueprint $table) {
-            // Use DB::select to check if the index exists before dropping
-            $indexesFound = DB::select("SHOW INDEXES FROM contacts WHERE Key_name = 'contacts_code_externe_unique'");
-            if (!empty($indexesFound)) {
-                $table->dropUnique('contacts_code_externe_unique');
-            }
+        if (DB::getDriverName() === 'mysql') {
+            Schema::table('contacts', function (Blueprint $table) {
+                $indexesFound = DB::select("SHOW INDEXES FROM contacts WHERE Key_name = 'contacts_code_externe_unique'");
+                if (!empty($indexesFound)) {
+                    $table->dropUnique('contacts_code_externe_unique');
+                }
 
-            $compositeFound = DB::select("SHOW INDEXES FROM contacts WHERE Key_name = 'contacts_user_id_code_externe_unique'");
-            if (empty($compositeFound)) {
-                $table->unique(['user_id', 'code_externe']);
-            }
-        });
+                $compositeFound = DB::select("SHOW INDEXES FROM contacts WHERE Key_name = 'contacts_user_id_code_externe_unique'");
+                if (empty($compositeFound)) {
+                    $table->unique(['user_id', 'code_externe']);
+                }
+            });
+        }
     }
 
     /**

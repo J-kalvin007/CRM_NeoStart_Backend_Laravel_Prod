@@ -9,10 +9,22 @@ class AccountResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        // Résoudre le type d'établissement depuis la relation accountType
+        // Résoudre le type d'établissement depuis la relation accountType ou propriété type/meta
         $accountTypeLabel = null;
-        if ($this->relationLoaded('accountType') && $this->accountType) {
-            $accountTypeLabel = $this->accountType->libelle ?? $this->accountType->code;
+        if ($this->accountType) {
+            $accountTypeLabel = $this->accountType->libelle ?? $this->accountType->name ?? $this->accountType->code;
+        }
+        if (empty($accountTypeLabel)) {
+            $accountTypeLabel = $this->type ?? data_get($this->meta, 'type');
+        }
+
+        // Concaténer le type et le nom de l'établissement si le type existe
+        $nomAffichage = $this->nom;
+        if (!empty($accountTypeLabel) && is_string($accountTypeLabel) && trim($accountTypeLabel) !== '') {
+            $typeClean = trim($accountTypeLabel);
+            if ($nomAffichage && !str_starts_with(mb_strtolower($nomAffichage), mb_strtolower($typeClean))) {
+                $nomAffichage = $typeClean . ' ' . $nomAffichage;
+            }
         }
 
         // Résoudre le potentiel depuis la relation potential
@@ -25,7 +37,7 @@ class AccountResource extends JsonResource
             'id'              => $this->id,
             'account_type_id' => $this->account_type_id,
             'account_type'    => $accountTypeLabel, // string pour le mobile
-            'nom'             => $this->nom,
+            'nom'             => $nomAffichage,
             'adresse'         => $this->adresse,
             'ville'           => $this->ville,
             'quartier'        => $this->quartier,

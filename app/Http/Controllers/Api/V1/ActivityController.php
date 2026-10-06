@@ -52,6 +52,8 @@ class ActivityController extends Controller
                 'account' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class),
                 'accompanyingUser' => fn($q) => $q->withoutGlobalScopes(),
                 'duoActivityType',
+                'activityType',
+                'type',
                 'products' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class),
                 'sampleMovements' => fn($q) => $q->where('movement_type', 'distribution')->with('product'),
                 'objections.product',
@@ -67,7 +69,15 @@ class ActivityController extends Controller
             ->when($request->tour_plan_id, fn($q, $v) => $q->where('tour_plan_id', $v))
             ->orderByDesc('date_activite');
 
-        // Restreindre la visibilité si pas d'accès global
+        // RÈGLE STRICTE SUR LES BROUILLONS :
+        // Une visite en 'brouillon' ne doit JAMAIS être visible par quiconque d'autre que son propre créateur/délégué.
+        // Tant que la visite n'est pas soumise, personne d'autre (y compris Super Admin / Manager) n'a le droit de la voir.
+        $query->where(function ($q) use ($user) {
+            $q->where('activities.user_id', $user->id)
+              ->orWhere('activities.statut', '!=', 'brouillon');
+        });
+
+        // Restreindre la visibilité supplémentaire si pas d'accès global
         if (!$isGlobal) {
             $query->where(function ($q) use ($user, $isManager, $isCommercialDirector) {
                 // Voit toujours ses propres visites ou là où il est accompagnant
@@ -335,6 +345,12 @@ class ActivityController extends Controller
                 'sampleMovements' => fn($q) => $q->with('product'),
                 'objections.product',
             ])->findOrFail($id);
+
+        $user = auth()->user();
+        if ($user && $activity->statut === 'brouillon' && (string) $activity->user_id !== (string) $user->id) {
+            abort(403, "Une visite en brouillon n'a pas encore été soumise et ne peut être consultée que par son auteur.");
+        }
+
         return new ActivityResource($activity);
     }
 
@@ -386,7 +402,7 @@ class ActivityController extends Controller
             return response()->json(['message' => 'Non authentifié'], 401);
         }
         $canDecide = $user->can('scope:global') || $user->hasAnyRole(['superadmin', 'super-admin', 'admin']) || ($activity->user_id && $user->manages((string) $activity->user_id));
-        $decisionStatuts = ['validee', 'valide', 'refusee', 'rejetee'];
+        $decisionStatuts = ['validee', 'valide', 'refusee', 'rejetee', 'planifiee', 'planifiée'];
         if (!$canDecide && $targetStatus !== null && $targetStatus !== $activity->statut && in_array($targetStatus, $decisionStatuts, true)) {
             return response()->json(['message' => 'La validation ou le refus d\'une visite revient à votre responsable.'], 403);
         }
