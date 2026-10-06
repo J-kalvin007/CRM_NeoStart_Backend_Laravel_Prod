@@ -100,7 +100,7 @@ class SupervisorDashboardController extends Controller
                     'title' => 'VALIDATIONS EN COURS',
                     'value' => (string) $pending,
                     'subtitleText' => 'À valider',
-                    'bottomBadge' => $pending > 0 ? '⏳ Action requise' : '✅ À jour',
+                    'bottomBadge' => $pending > 0 ? 'Action requise' : 'À jour',
                 ],
                 [
                     'title' => 'DÉLÉGUÉS ACTIFS',

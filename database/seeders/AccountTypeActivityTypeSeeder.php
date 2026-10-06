@@ -12,9 +12,8 @@ class AccountTypeActivityTypeSeeder extends Seeder
     {
         // 1. Ensure basic activity types exist
         $activityTypes = [
-            'one_to_one'  => ActivityType::firstOrCreate(['code' => 'one_to_one'], ['name' => 'One to One', 'description' => 'Visite médicale individuel']),
+            'one_to_one'  => ActivityType::firstOrCreate(['code' => 'one_to_one'], ['name' => 'One to One', 'description' => 'Visite médicale individuelle']),
             'staff'       => ActivityType::firstOrCreate(['code' => 'staff'], ['name' => 'STAFF', 'description' => 'Staff hospitalier réunissant plusieurs professionnels']),
-            'table_ronde' => ActivityType::firstOrCreate(['code' => 'table_ronde'], ['name' => 'Table Ronde', 'description' => 'Symposium ou table ronde']),
             'rp'          => ActivityType::firstOrCreate(['code' => 'rp'], ['name' => 'RP', 'description' => 'Événement et relations publiques']),
             'negociation' => ActivityType::firstOrCreate(['code' => 'negociation'], ['name' => 'Négociation de commande', 'description' => 'Négociation commerciale et commande']),
         ];
@@ -33,18 +32,18 @@ class AccountTypeActivityTypeSeeder extends Seeder
                     $activityTypes['rp']->id,
                 ]);
             } elseif (str_contains($code, 'cli') || str_contains($libelle, 'clinique')) {
-                // Clinique : Table ronde, One to One, RP, Staff
+                // Clinique : Négociation de commande, One to One, RP, Staff
                 $accountType->activityTypes()->syncWithoutDetaching([
-                    $activityTypes['table_ronde']->id,
+                    $activityTypes['negociation']->id,
                     $activityTypes['one_to_one']->id,
                     $activityTypes['rp']->id,
                     $activityTypes['staff']->id,
                 ]);
             } elseif (str_contains($code, 'hop') || str_contains($code, 'hosp') || str_contains($libelle, 'hôpital') || str_contains($libelle, 'hopital')) {
-                // Hôpital : Staff, Table ronde, One to One, RP
+                // Hôpital : Staff, Négociation de commande, One to One, RP
                 $accountType->activityTypes()->syncWithoutDetaching([
                     $activityTypes['staff']->id,
-                    $activityTypes['table_ronde']->id,
+                    $activityTypes['negociation']->id,
                     $activityTypes['one_to_one']->id,
                     $activityTypes['rp']->id,
                 ]);

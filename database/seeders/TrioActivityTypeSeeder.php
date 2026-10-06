@@ -29,9 +29,9 @@ class TrioActivityTypeSeeder extends Seeder
                 'is_active' => true,
             ],
             [
-                'name' => 'Table Ronde',
-                'code' => 'TABLE_RONDE',
-                'description' => 'Table ronde avec un groupe de médecins',
+                'name' => 'Négociation de commande',
+                'code' => 'NEGOCIATION',
+                'description' => 'Négociation commerciale et commande',
                 'is_active' => true,
             ],
         ];

@@ -33,6 +33,34 @@ class Account extends Model
         'produits_disponibles'  => 'array',
     ];
 
+    protected static function booted(): void
+    {
+        static::saving(function ($account) {
+            $isPharmacie = false;
+            if ($account->relationLoaded('accountType') && $account->accountType) {
+                $code = strtolower($account->accountType->code ?? $account->accountType->libelle ?? '');
+                if (str_contains($code, 'pha') || str_contains($code, 'off')) {
+                    $isPharmacie = true;
+                }
+            } elseif ($account->account_type_id) {
+                $type = AccountType::find($account->account_type_id);
+                if ($type) {
+                    $code = strtolower($type->code ?? $type->libelle ?? '');
+                    if (str_contains($code, 'pha') || str_contains($code, 'off')) {
+                        $isPharmacie = true;
+                    }
+                }
+            }
+
+            if ($isPharmacie && !empty($account->nom)) {
+                $trimmed = trim($account->nom);
+                if (!preg_match('/^PHARMACIE\b/i', $trimmed)) {
+                    $account->nom = 'PHARMACIE ' . $trimmed;
+                }
+            }
+        });
+    }
+
     public function potential()    { return $this->belongsTo(Potential::class); }
     public function country()      { return $this->belongsTo(Country::class); }
     public function owner()        { return $this->belongsTo(User::class, 'user_id'); }

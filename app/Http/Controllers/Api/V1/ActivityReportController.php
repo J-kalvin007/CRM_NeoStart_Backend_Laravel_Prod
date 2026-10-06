@@ -70,7 +70,7 @@ class ActivityReportController extends Controller
                 if ($unsubmittedPastCount > 0) {
                     NotificationController::sendNotification(
                         $userId,
-                        '⚠️ Rapports des jours précédents non soumis',
+                        'Rapports des jours précédents non soumis',
                         "Vous avez {$unsubmittedPastCount} compte-rendu(s) de visite en retard. Vous devez impérativement les soumettre avant de soumettre celui d'aujourd'hui.",
                         'warning',
                         'delegate',
