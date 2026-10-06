@@ -15,13 +15,7 @@ class ActivityTypeSeeder extends Seeder
                 'name' => 'One to One',
                 'code' => 'one_to_one',
                 'is_multi' => false,
-                'description' => 'Visite médicale individuel'
-            ],
-            [
-                'name' => 'STAFF',
-                'code' => 'staff',
-                'is_multi' => true,
-                'description' => 'Staff hospitalier réunissant plusieurs professionnels'
+                'description' => 'Visite médicale individuelle'
             ],
             [
                 'name' => 'Négociation de commande',
@@ -30,16 +24,16 @@ class ActivityTypeSeeder extends Seeder
                 'description' => 'Négociation commerciale et commande'
             ],
             [
-                'name' => 'Table Ronde',
-                'code' => 'TABLE_RONDE',
-                'is_multi' => true,
-                'description' => 'Symposium ou table ronde avec plusieurs prescripteurs'
-            ],
-            [
                 'name' => 'Relation Publique',
                 'code' => 'rp',
                 'is_multi' => false,
                 'description' => 'Événement et relations publiques'
+            ],
+            [
+                'name' => 'STAFF',
+                'code' => 'staff',
+                'is_multi' => true,
+                'description' => 'Staff hospitalier réunissant plusieurs professionnels'
             ],
         ];
 
