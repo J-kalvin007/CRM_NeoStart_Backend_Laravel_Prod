@@ -225,6 +225,8 @@ Route::prefix('v1')->group(function () {
         Route::post('duo/{id}/refuser', [ActivityController::class, 'refuseDuo']);
         Route::post('activities/{activity}/validate', [ActivityController::class, 'validateActivity']);
         Route::post('activities/bulk-validate', [ActivityController::class, 'validateActivitiesBulk']);
+        Route::delete('activities/bulk-delete', [ActivityController::class, 'bulkDestroy']);
+        Route::post('activities/bulk-delete', [ActivityController::class, 'bulkDestroy']);
         Route::post('activities/{activity}/reschedule', [ActivityController::class, 'reschedule']);
         Route::post('activities/{activity}/start', [ActivityController::class, 'startVisit']);
         Route::post('activities/{activity}/complete', [ActivityController::class, 'completeVisit']);

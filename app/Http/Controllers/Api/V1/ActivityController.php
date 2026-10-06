@@ -795,6 +795,30 @@ class ActivityController extends Controller
         ]);
     }
 
+    public function bulkDestroy(Request $request)
+    {
+        $request->validate([
+            'activity_ids' => 'required|array',
+            'activity_ids.*' => 'string|exists:activities,id',
+        ]);
+
+        $activities = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
+            ->whereIn('id', $request->activity_ids)
+            ->get();
+
+        $deletedCount = 0;
+        foreach ($activities as $activity) {
+            $activity->delete();
+            $deletedCount++;
+        }
+
+        return response()->json([
+            'message' => "{$deletedCount} visite(s) supprimée(s) avec succès.",
+            'deleted_count' => $deletedCount
+        ]);
+    }
+
+
     public function reschedule(Request $request, string $id)
     {
         $activity = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($id);
