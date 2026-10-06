@@ -35,6 +35,7 @@ class UpdateUserRequest extends FormRequest
             'country_id'  => ['nullable', 'uuid', 'exists:countries,id'],
             'otp_enabled' => ['nullable', 'boolean'],
             'manager_id'  => ['nullable', 'uuid', 'exists:users,id'],
+            'password'    => ['nullable', 'string', 'min:6'],
         ];
     }
 }

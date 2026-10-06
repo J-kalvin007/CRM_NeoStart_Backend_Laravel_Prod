@@ -14,6 +14,40 @@ class ObjectifResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        return parent::toArray($request);
+        return [
+            'id' => $this->id,
+            'user_id' => $this->user_id,
+            'user' => $this->whenLoaded('user', function () {
+                return [
+                    'id' => $this->user->id,
+                    'name' => $this->user->name,
+                    'email' => $this->user->email,
+                    'country_id' => $this->user->country_id,
+                    'country' => $this->user->country ? [
+                        'id' => $this->user->country->id,
+                        'name' => $this->user->country->name,
+                    ] : null,
+                ];
+            }),
+            'country_id' => $this->user?->country_id,
+            'country_name' => $this->user?->country?->name,
+            'indicator_id' => $this->indicator_id,
+            'indicator' => $this->whenLoaded('indicator'),
+            'objectif_type_id' => $this->objectif_type_id,
+            'type' => $this->whenLoaded('type'),
+            'product_id' => $this->product_id,
+            'product' => $this->whenLoaded('product'),
+            'assigned_by_user_id' => $this->assigned_by_user_id,
+            'date_debut' => $this->date_debut,
+            'date_fin' => $this->date_fin,
+            'periode' => $this->periode,
+            'valeur_cible' => $this->valeur_cible,
+            'valeur_realisee' => $this->valeur_realisee,
+            'taux_realisation' => $this->taux_realisation,
+            'description' => $this->description,
+            'statut' => $this->statut,
+            'created_at' => $this->created_at,
+            'updated_at' => $this->updated_at,
+        ];
     }
 }

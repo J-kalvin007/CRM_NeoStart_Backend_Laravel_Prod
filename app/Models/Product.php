@@ -36,6 +36,7 @@ class Product extends Model
                                       // B2B:    {"ref_fournisseur":"REF-XYZ","poids_kg":2.5}
     ];
 
+    public function country()     { return $this->belongsTo(Country::class); }
     public function productType() { return $this->belongsTo(ProductType::class); }
     public function laboratory()  { return $this->belongsTo(Laboratory::class); }
     public function therapeuticClass() { return $this->belongsTo(TherapeuticClass::class); }

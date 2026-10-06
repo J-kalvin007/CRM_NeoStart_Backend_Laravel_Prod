@@ -30,7 +30,7 @@ class ProductController extends Controller
     )]
     public function index(Request $request)
     {
-        $query = Product::with(['productType', 'laboratory', 'therapeuticClass', 'galenicForm']);
+        $query = Product::with(['productType', 'laboratory', 'therapeuticClass', 'galenicForm', 'country']);
         
         $user = auth()->user();
         $query->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class);

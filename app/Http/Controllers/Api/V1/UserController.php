@@ -41,7 +41,7 @@ class UserController extends Controller
             $query->whereIn('id', $request->user()->teamMemberIds());
         }
 
-        return UserResource::collection($query->orderBy('name')->get());
+        return UserResource::collection($query->with('country')->orderBy('name')->get());
     }
 
     #[OA\Post(
@@ -85,11 +85,17 @@ class UserController extends Controller
         // Par défaut, l'OTP est désactivé
         $data['otp_enabled'] = $request->boolean('otp_enabled', false);
 
-        // Générer un mot de passe temporaire lisible (pour l'envoyer par email)
-        $temporaryPassword = Str::upper(Str::random(4)) . rand(10, 99) . '!' . Str::random(4);
-
-        $data['password'] = Hash::make($temporaryPassword);
-        $data['force_password_change'] = true;
+        // Si un mot de passe est fourni, l'utiliser directement
+        // Sinon, générer un mot de passe temporaire lisible
+        if (!empty($data['password'])) {
+            $temporaryPassword = $data['password'];
+            $data['password'] = Hash::make($data['password']);
+            $data['force_password_change'] = false; // Pas forcer le changement si admin a défini le mot de passe
+        } else {
+            $temporaryPassword = Str::upper(Str::random(4)) . rand(10, 99) . '!' . Str::random(4);
+            $data['password'] = Hash::make($temporaryPassword);
+            $data['force_password_change'] = true;
+        }
 
         $user = User::create($data);
 
@@ -102,8 +108,16 @@ class UserController extends Controller
         }
         
 
-        // Envoyer l'email d'invitation avec le mot de passe temporaire en clair
+        // Envoyer l'email d'invitation avec le mot de passe en clair
         Mail::to($user->email)->send(new UserInvitationMail($user, $temporaryPassword));
+
+        // Envoyer une notification in-app
+        $user->notify(new \App\Notifications\SystemNotification(
+            'Bienvenue sur le CRM',
+            "Votre compte a été créé avec succès. Identifiants de connexion : Email: {$user->email} | Mot de passe: {$temporaryPassword}",
+            'info',
+            ['user_id' => $user->id]
+        ));
 
         return response()->json(new UserResource($user->load(['roles', 'permissions', 'country'])), 201);
     }
@@ -199,6 +213,16 @@ class UserController extends Controller
         $permissions = $data['permissions'] ?? null;
         unset($data['roles'], $data['permissions']);
 
+        // Vérifier si le mot de passe est modifié
+        $passwordChanged = false;
+        $newPassword = '';
+        if (!empty($data['password'])) {
+            $newPassword = $data['password'];
+            $data['password'] = Hash::make($data['password']);
+            $data['force_password_change'] = false;
+            $passwordChanged = true;
+        }
+
         // Mettre à jour les champs du modèle (inclut manager_id)
         $user->update($data);
 
@@ -210,6 +234,19 @@ class UserController extends Controller
             $user->syncPermissions($permissions);
         }
 
+        // Si le mot de passe a été modifié, envoyer email et notification
+        if ($passwordChanged) {
+            // Envoyer l'email avec le nouveau mot de passe
+            Mail::to($user->email)->send(new \App\Mail\PasswordChangedMail($user, $newPassword));
+
+            // Envoyer une notification in-app
+            $user->notify(new \App\Notifications\SystemNotification(
+                'Mot de passe modifié',
+                "Votre mot de passe a été modifié par l'administrateur. Veuillez utiliser votre nouveau mot de passe pour vous connecter.",
+                'warning',
+                ['user_id' => $user->id]
+            ));
+        }
 
         return new UserResource($user->load(['roles', 'permissions', 'country']));
     }

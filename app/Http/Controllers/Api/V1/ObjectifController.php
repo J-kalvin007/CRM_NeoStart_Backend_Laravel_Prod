@@ -24,7 +24,7 @@ class ObjectifController extends Controller
     public function index(Request $request)
     {
         $user = auth()->user();
-        $query = Objectif::with(['user', 'product', 'indicator', 'type', 'country'])
+        $query = Objectif::with(['user.country', 'product', 'indicator', 'type'])
             ->when(!$user?->isAdminOrSupervisor(), fn($q) => $q->where('user_id', $user->id))
             ->when($request->user_id, fn($q, $v) => $q->where('user_id', $v))
             ->when($request->indicator_id, fn($q, $v) => $q->where('indicator_id', $v))
@@ -80,7 +80,7 @@ class ObjectifController extends Controller
                 ['objectif_id' => (string) $objectif->id]
             );
         }
-        return new ObjectifResource($objectif->load(['user', 'product', 'indicator', 'type', 'country']));
+        return new ObjectifResource($objectif->load(['user.country', 'product', 'indicator', 'type']));
     }
 
     #[OA\Get(path: '/api/v1/objectifs/{id}', summary: 'Détails d\'un objectif', security: [['bearerAuth' => []]], tags: ['Objectifs'],
@@ -89,7 +89,7 @@ class ObjectifController extends Controller
     )]
     public function show(string $id)
     {
-        return new ObjectifResource(Objectif::with(['user', 'team', 'product', 'indicator', 'type', 'country'])->findOrFail($id));
+        return new ObjectifResource(Objectif::with(['user.country', 'team', 'product', 'indicator', 'type'])->findOrFail($id));
     }
 
     #[OA\Put(path: '/api/v1/objectifs/{id}', summary: 'Mettre à jour un objectif (valeur réalisée)', security: [['bearerAuth' => []]], tags: ['Objectifs'],
@@ -118,7 +118,7 @@ class ObjectifController extends Controller
 
         $objectif->update($data);
         $objectif->recalculerTaux();
-        return new ObjectifResource($objectif->load(['user', 'product', 'indicator', 'type', 'country']));
+        return new ObjectifResource($objectif->load(['user.country', 'product', 'indicator', 'type']));
     }
 
     #[OA\Delete(path: '/api/v1/objectifs/{id}', summary: 'Supprimer un objectif', security: [['bearerAuth' => []]], tags: ['Objectifs'],

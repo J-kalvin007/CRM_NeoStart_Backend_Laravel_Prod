@@ -14,6 +14,7 @@ trait HasActivityLogs
         return LogOptions::defaults()
             ->logAll() // Surveille tous les champs modifiés ($fillable)
             ->logOnlyDirty() // N'enregistre que les valeurs qui ont réellement changé
-            ->dontSubmitEmptyLogs(); // Si aucune modification, on ne crée pas de log vide
+            ->dontSubmitEmptyLogs() // Si aucune modification, on ne crée pas de log vide
+            ->logExcept(['taux_realisation']); // Ne pas logger le taux de réalisation (champ calculé)
     }
 }

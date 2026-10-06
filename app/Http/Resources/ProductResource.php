@@ -12,6 +12,8 @@ class ProductResource extends JsonResource
         return [
             'id'             => $this->id,
             'country_id'     => $this->country_id,
+            'country'        => $this->whenLoaded('country', fn() => ['id' => $this->country->id, 'name' => $this->country->name, 'code' => $this->country->code]),
+            'country_name'   => $this->country?->name,
             'nom'            => $this->nom,
             'code'           => $this->code,
             'marque'         => $this->marque,

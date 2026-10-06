@@ -24,6 +24,7 @@ class StoreUserRequest extends FormRequest
             'permissions.*' => ['string', 'exists:permissions,name'],
             'country_id' => ['nullable', 'uuid', 'exists:countries,id'],
             'otp_enabled' => ['nullable', 'boolean'],
+            'password' => ['nullable', 'string', 'min:6'],
         ];
     }
 }

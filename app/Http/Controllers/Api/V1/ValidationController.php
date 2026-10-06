@@ -295,7 +295,9 @@ class ValidationController extends Controller
             'statut' => 'actif',
         ]);
 
-        $recipient = $model->owner ?? ($model->user_id ? \App\Models\User::find($model->user_id) : null);
+        $recipientId = $model->user_id ?? $model->delegue_id ?? null;
+        $recipient = $model->owner ?? $model->user ?? $model->delegue ?? ($recipientId ? \App\Models\User::find($recipientId) : null);
+
         if ($recipient) {
             try {
                 app(\App\Services\NotificationService::class)->send(
@@ -495,7 +497,9 @@ class ValidationController extends Controller
             'statut' => 'rejete',
         ]);
 
-        $recipient = $model->owner ?? ($model->user_id ? \App\Models\User::find($model->user_id) : null);
+        $recipientId = $model->user_id ?? $model->delegue_id ?? null;
+        $recipient = $model->owner ?? $model->user ?? $model->delegue ?? ($recipientId ? \App\Models\User::find($recipientId) : null);
+
         if ($recipient) {
             try {
                 app(\App\Services\NotificationService::class)->send(
@@ -523,10 +527,10 @@ class ValidationController extends Controller
     private function getModel(string $type, string $id)
     {
         if ($type === 'contact') {
-            return Contact::findOrFail($id);
+            return Contact::withoutGlobalScopes()->findOrFail($id);
         }
         if ($type === 'account') {
-            return Account::findOrFail($id);
+            return Account::withoutGlobalScopes()->findOrFail($id);
         }
         abort(400, "Type invalide");
     }
