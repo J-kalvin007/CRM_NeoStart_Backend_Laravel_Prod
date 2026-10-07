@@ -25,6 +25,7 @@ class UpdateContactRequest extends FormRequest
         return [
             'account_id'      => 'nullable|uuid|exists:accounts,id',
             'contact_type_id' => 'nullable|uuid|exists:contact_types,id',
+            'speciality_id'   => 'nullable|uuid|exists:specialities,id',
             'nom'             => 'sometimes|required|string|max:100',
             'prenom'          => 'sometimes|required|string|max:100',
             'titre'           => 'nullable|string|max:50',
