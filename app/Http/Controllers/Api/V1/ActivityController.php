@@ -450,6 +450,20 @@ class ActivityController extends Controller
             ], 422);
         }
 
+        // Interdire deux visites simultanément en cours pour le même délégué
+        if ($targetStatus === 'en_cours' && $activity->statut !== 'en_cours') {
+            $hasActiveVisit = Activity::where('user_id', $activity->user_id)
+                ->where('id', '!=', $activity->id)
+                ->where('statut', 'en_cours')
+                ->exists();
+
+            if ($hasActiveVisit) {
+                return response()->json([
+                    'message' => "Démarrage impossible : Vous avez déjà une autre visite en cours. Veuillez d'abord la terminer."
+                ], 422);
+            }
+        }
+
         // Contrôle de sécurité 2: Passer au statut réalisé nécessite un Check-in GPS effectif.
         if ($targetStatus === 'realisee' && !$hasGpsStart) {
             return response()->json([
@@ -498,6 +512,28 @@ class ActivityController extends Controller
 
                 $trace = "\n[Report] Visite reportée le " . date('d/m/Y à H:i') . " (du " . $oldD . ($oldT ? " à " . $oldT : "") . " au " . $newD . ($newT ? " à " . $newT : "") . ")";
                 $validatedData['notes'] = ($validatedData['notes'] ?? $activity->notes) . $trace;
+            }
+        }
+
+        // Horodatage réel automatique de démarrage et de fin de visite
+        if ($targetStatus === 'en_cours') {
+            if (empty($validatedData['start_time']) && empty($activity->start_time)) {
+                $validatedData['start_time'] = now();
+            }
+        } elseif (in_array($targetStatus, ['realisee', 'terminee', 'cloturee'], true)) {
+            if (empty($validatedData['start_time']) && empty($activity->start_time)) {
+                $validatedData['start_time'] = now();
+            }
+            if (empty($validatedData['end_time'])) {
+                $validatedData['end_time'] = now();
+            }
+
+            $startTime = $validatedData['start_time'] ?? $activity->start_time;
+            $endTime = $validatedData['end_time'] ?? $activity->end_time;
+            if ($startTime && $endTime) {
+                $startCarbon = \Carbon\Carbon::parse($startTime);
+                $endCarbon = \Carbon\Carbon::parse($endTime);
+                $validatedData['duree_minutes'] = (int) max(1, $endCarbon->diffInMinutes($startCarbon));
             }
         }
 
@@ -1649,6 +1685,18 @@ class ActivityController extends Controller
             "Cette visite ne peut pas être démarrée dans son état actuel."
         );
 
+        // Interdire deux visites simultanément en cours pour le même délégué
+        $hasActiveVisit = Activity::where('user_id', $activity->user_id)
+            ->where('id', '!=', $activity->id)
+            ->where('statut', 'en_cours')
+            ->exists();
+
+        abort_if(
+            $hasActiveVisit,
+            422,
+            "Démarrage impossible : Vous avez déjà une autre visite en cours. Veuillez d'abord la terminer."
+        );
+
         $validated = $request->validate([
             'gps_lat' => 'required|numeric|between:-90,90',
             'gps_lng' => 'required|numeric|between:-180,180',
@@ -1661,7 +1709,7 @@ class ActivityController extends Controller
             'gps_debut_lat' => $validated['gps_lat'],
             'gps_debut_lng' => $validated['gps_lng'],
             'gps_debut_accuracy' => $validated['gps_accuracy'] ?? null,
-            'start_time' => now(),
+            'start_time' => $activity->start_time ?? now(),
         ]);
 
         return response()->json([
@@ -1700,11 +1748,10 @@ class ActivityController extends Controller
             'report_content' => 'nullable|string',
         ]);
 
-        // Calculer la durée si on a un start_time
-        $dureeMinutes = null;
-        if ($activity->start_time) {
-            $dureeMinutes = now()->diffInMinutes($activity->start_time);
-        }
+        // Calculer la durée réelle si on a un start_time
+        $endTime = now();
+        $startTime = $activity->start_time ?? $endTime;
+        $dureeMinutes = (int) max(1, $endTime->diffInMinutes($startTime));
 
         // Mettre à jour la visite avec la position GPS finale et le statut réalisee
         $activity->update([
@@ -1712,7 +1759,8 @@ class ActivityController extends Controller
             'gps_fin_lat' => $validated['gps_lat'],
             'gps_fin_lng' => $validated['gps_lng'],
             'gps_fin_accuracy' => $validated['gps_accuracy'] ?? null,
-            'end_time' => now(),
+            'start_time' => $startTime,
+            'end_time' => $endTime,
             'duree_minutes' => $dureeMinutes,
             'notes' => $validated['notes'] ?? $activity->notes,
             'report_content' => $validated['report_content'] ?? $activity->report_content,
