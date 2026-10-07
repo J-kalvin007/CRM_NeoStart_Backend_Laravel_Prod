@@ -19,7 +19,7 @@ class ConversationMessageSeeder extends Seeder
 
             DB::table('conversations')->insert([
                 'id' => $conversationId,
-                'title' => 'Équipe Abidjan Est - Coaching & Visites DUO',
+                'title' => 'Équipe Lomé Est - Coaching & Visites DUO',
                 'type' => 'direct',
                 'created_at' => now(),
                 'updated_at' => now(),

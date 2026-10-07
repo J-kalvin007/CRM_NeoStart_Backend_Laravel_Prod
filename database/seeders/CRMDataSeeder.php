@@ -52,16 +52,16 @@ class CRMDataSeeder extends Seeder
 
         $medecinType = ContactType::firstOrCreate(['code' => 'MED'], ['libelle' => 'Médecin']);
 
-        // 3. Comptes RÉELS (Établissements de Santé Abidjan)
+        // 3. Comptes RÉELS (Établissements de Santé Togo - Lomé)
         $realAccounts = [
-            ['nom' => 'Polyclinique Sainte Anne', 'type' => $cliniqueType, 'ville' => 'Abidjan (Cocody)'],
-            ['nom' => 'Clinique Internationale Sainte Marie', 'type' => $cliniqueType, 'ville' => 'Abidjan (Riviera)'],
-            ['nom' => 'CHU de Cocody', 'type' => $hopitalType, 'ville' => 'Abidjan (Cocody)'],
-            ['nom' => 'Hôpital Militaire d\'Abidjan', 'type' => $hopitalType, 'ville' => 'Abidjan (Port-Bouët)'],
-            ['nom' => 'Centre Médical de la Riviera', 'type' => $cliniqueType, 'ville' => 'Abidjan (Riviera)'],
-            ['nom' => 'Pharmacie Centrale de Marcory', 'type' => $pharmaType, 'ville' => 'Abidjan (Marcory)'],
-            ['nom' => 'Clinique Médicale du Plateau', 'type' => $cliniqueType, 'ville' => 'Abidjan (Plateau)'],
-            ['nom' => 'Hôpital Général de Treichville', 'type' => $hopitalType, 'ville' => 'Abidjan (Treichville)'],
+            ['nom' => 'CHU Sylvanus Olympio', 'type' => $hopitalType, 'ville' => 'Lomé (Tokoin)'],
+            ['nom' => 'CHU Campus', 'type' => $hopitalType, 'ville' => 'Lomé (Cité OUA)'],
+            ['nom' => 'Clinique Bio-Santé International', 'type' => $cliniqueType, 'ville' => 'Lomé (Nyékonakpoè)'],
+            ['nom' => 'Hôpital de District de Bé', 'type' => $hopitalType, 'ville' => 'Lomé (Bé)'],
+            ['nom' => 'Centre Médical Saint Joseph', 'type' => $cliniqueType, 'ville' => 'Lomé (Hédzranawoé)'],
+            ['nom' => 'Pharmacie de l\'Indépendance', 'type' => $pharmaType, 'ville' => 'Lomé (Grand Marché)'],
+            ['nom' => 'Clinique Médicale de la Paix', 'type' => $cliniqueType, 'ville' => 'Lomé (Totsi)'],
+            ['nom' => 'CHR Kara', 'type' => $hopitalType, 'ville' => 'Kara'],
         ];
 
         $createdAccounts = [];
@@ -77,20 +77,20 @@ class CRMDataSeeder extends Seeder
             $createdAccounts[] = $acc;
         }
 
-        // 4. Contacts RÉELS (Praticiens Médicaux)
+        // 4. Contacts RÉELS (Praticiens Médicaux Togo)
         $realDoctors = [
-            ['prenom' => 'Marc', 'nom' => 'Adjanohoun', 'titre' => 'Dr.', 'specialite' => 'Cardiologie', 'email' => 'marc.adjanohoun@sante.ci'],
-            ['prenom' => 'Sarah', 'nom' => 'Kouassi', 'titre' => 'Dr.', 'specialite' => 'Pédiatrie', 'email' => 'sarah.kouassi@sante.ci'],
-            ['prenom' => 'Jean-Baptiste', 'nom' => 'Koffi', 'titre' => 'Dr.', 'specialite' => 'Médecine Générale', 'email' => 'jb.koffi@sante.ci'],
-            ['prenom' => 'Marie-Claire', 'nom' => 'Diallo', 'titre' => 'Dr.', 'specialite' => 'Gynécologie', 'email' => 'mc.diallo@sante.ci'],
-            ['prenom' => 'Ibrahim', 'nom' => 'Touré', 'titre' => 'Dr.', 'specialite' => 'Neurologie', 'email' => 'ibrahim.toure@sante.ci'],
-            ['prenom' => 'Eric', 'nom' => 'Mensah', 'titre' => 'Dr.', 'specialite' => 'Dermatologie', 'email' => 'eric.mensah@sante.ci'],
-            ['prenom' => 'Patricia', 'nom' => 'N\'Guessan', 'titre' => 'Dr.', 'specialite' => 'Ophtalmologie', 'email' => 'patricia.nguessan@sante.ci'],
-            ['prenom' => 'Alain', 'nom' => 'Yao', 'titre' => 'Dr.', 'specialite' => 'Rhumatologie', 'email' => 'alain.yao@sante.ci'],
-            ['prenom' => 'Estelle', 'nom' => 'Aka', 'titre' => 'Dr.', 'specialite' => 'Cardiologie', 'email' => 'estelle.aka@sante.ci'],
-            ['prenom' => 'Philippe', 'nom' => 'Bamba', 'titre' => 'Dr.', 'specialite' => 'Gastro-entérologie', 'email' => 'philippe.bamba@sante.ci'],
-            ['prenom' => 'Sandrine', 'nom' => 'Konan', 'titre' => 'Dr.', 'specialite' => 'Endocrinologie', 'email' => 'sandrine.konan@sante.ci'],
-            ['prenom' => 'Yves', 'nom' => 'Brou', 'titre' => 'Dr.', 'specialite' => 'Pneumologie', 'email' => 'yves.brou@sante.ci'],
+            ['prenom' => 'Marc', 'nom' => 'Adjanohoun', 'titre' => 'Dr.', 'specialite' => 'Cardiologie', 'email' => 'marc.adjanohoun@sante.tg'],
+            ['prenom' => 'Sarah', 'nom' => 'Kouassi', 'titre' => 'Dr.', 'specialite' => 'Pédiatrie', 'email' => 'sarah.kouassi@sante.tg'],
+            ['prenom' => 'Jean-Baptiste', 'nom' => 'Koffi', 'titre' => 'Dr.', 'specialite' => 'Médecine Générale', 'email' => 'jb.koffi@sante.tg'],
+            ['prenom' => 'Marie-Claire', 'nom' => 'Lawson', 'titre' => 'Dr.', 'specialite' => 'Gynécologie', 'email' => 'mc.lawson@sante.tg'],
+            ['prenom' => 'Ibrahim', 'nom' => 'Touré', 'titre' => 'Dr.', 'specialite' => 'Neurologie', 'email' => 'ibrahim.toure@sante.tg'],
+            ['prenom' => 'Eric', 'nom' => 'Mensah', 'titre' => 'Dr.', 'specialite' => 'Dermatologie', 'email' => 'eric.mensah@sante.tg'],
+            ['prenom' => 'Patricia', 'nom' => 'N\'Guessan', 'titre' => 'Dr.', 'specialite' => 'Ophtalmologie', 'email' => 'patricia.nguessan@sante.tg'],
+            ['prenom' => 'Alain', 'nom' => 'Yao', 'titre' => 'Dr.', 'specialite' => 'Rhumatologie', 'email' => 'alain.yao@sante.tg'],
+            ['prenom' => 'Estelle', 'nom' => 'Aka', 'titre' => 'Dr.', 'specialite' => 'Cardiologie', 'email' => 'estelle.aka@sante.tg'],
+            ['prenom' => 'Philippe', 'nom' => 'Bamba', 'titre' => 'Dr.', 'specialite' => 'Gastro-entérologie', 'email' => 'philippe.bamba@sante.tg'],
+            ['prenom' => 'Sandrine', 'nom' => 'Konan', 'titre' => 'Dr.', 'specialite' => 'Endocrinologie', 'email' => 'sandrine.konan@sante.tg'],
+            ['prenom' => 'Yves', 'nom' => 'Brou', 'titre' => 'Dr.', 'specialite' => 'Pneumologie', 'email' => 'yves.brou@sante.tg'],
         ];
 
         foreach ($realDoctors as $index => $doc) {
@@ -113,7 +113,7 @@ class CRMDataSeeder extends Seeder
 
         // 5. Prescripteurs et Établissements EN ATTENTE de validation pour tester l'onglet Manager
         Contact::firstOrCreate([
-            'email' => 'christian.tanoh@sante.ci'
+            'email' => 'christian.tanoh@sante.tg'
         ], [
             'account_id' => $createdAccounts[0]->id ?? null,
             'user_id' => $delegue->id,
@@ -128,7 +128,7 @@ class CRMDataSeeder extends Seeder
         ]);
 
         Contact::firstOrCreate([
-            'email' => 'aicha.diop@sante.ci'
+            'email' => 'aicha.diop@sante.tg'
         ], [
             'account_id' => $createdAccounts[1]->id ?? null,
             'user_id' => $delegue->id,
@@ -148,13 +148,13 @@ class CRMDataSeeder extends Seeder
 
             'user_id' => $delegue->id,
             'account_type_id' => $cliniqueType->id,
-            'ville' => 'Abidjan (Marcory)',
+            'ville' => 'Lomé (Nyékonakpoè)',
             'statut' => 'en_attente',
         ]);
 
         // 6. Plan de Tournée SOUMIS pour validation manager
         \App\Models\TourPlan::firstOrCreate([
-            'nom' => 'Planning Semaine - Secteur Abidjan Cocody'
+            'nom' => 'Planning Semaine - Secteur Lomé Nyékonakpoè'
         ], [
             'user_id' => $delegue->id,
             'date_debut' => now()->startOfWeek()->toDateString(),

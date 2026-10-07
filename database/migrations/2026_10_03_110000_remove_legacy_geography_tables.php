@@ -19,12 +19,14 @@ return new class extends Migration
         Schema::table('objectifs', function (Blueprint $table) {
             if (Schema::hasColumn('objectifs', 'team_id')) {
                 try {
+                    $table->dropForeign(['team_id']);
+                } catch (\Throwable $e) {}
+                try {
                     $table->dropIndex('objectifs_team_id_date_debut_date_fin_index');
                 } catch (\Throwable $e) {}
                 try {
-                    $table->dropForeign(['team_id']);
+                    $table->dropColumn('team_id');
                 } catch (\Throwable $e) {}
-                $table->dropColumn('team_id');
             }
         });
 

@@ -25,11 +25,20 @@ class StoreObjectifRequest extends FormRequest
      */
     protected function prepareForValidation(): void
     {
-        $code = $this->input('type_objectif') ?? (is_string($this->input('type')) ? $this->input('type') : null);
-        if (!$this->filled('objectif_type_id') && $code) {
-            $id = \Illuminate\Support\Facades\DB::table('objectif_types')->where('code', $code)->value('id');
-            if ($id) {
-                $this->merge(['objectif_type_id' => $id]);
+        $typeInput = $this->input('objectif_type_id') ?? $this->input('type_objectif') ?? $this->input('type');
+        if ($typeInput) {
+            if (\Illuminate\Support\Str::isUuid((string)$typeInput)) {
+                if (\Illuminate\Support\Facades\DB::table('objectif_types')->where('id', $typeInput)->exists()) {
+                    $this->merge(['objectif_type_id' => $typeInput]);
+                }
+            } else {
+                $id = \Illuminate\Support\Facades\DB::table('objectif_types')->where('code', $typeInput)->value('id');
+                if (!$id) {
+                    $id = \Illuminate\Support\Facades\DB::table('objectif_types')->where('name', 'like', "%{$typeInput}%")->value('id');
+                }
+                if ($id) {
+                    $this->merge(['objectif_type_id' => $id]);
+                }
             }
         }
     }
@@ -44,8 +53,8 @@ class StoreObjectifRequest extends FormRequest
             'assigned_by_user_id' => 'nullable|exists:users,id',
             'date_debut' => 'required|date',
             'date_fin' => 'required|date|after_or_equal:date_debut',
-            'periode' => 'nullable|string',
-            'valeur_cible' => 'required|numeric',
+            'periode' => 'required|string',
+            'valeur_cible' => 'required|numeric|gt:0',
             'valeur_realisee' => 'nullable|numeric',
             'taux_realisation' => 'nullable|numeric',
             'product_id' => 'nullable|uuid|exists:products,id',

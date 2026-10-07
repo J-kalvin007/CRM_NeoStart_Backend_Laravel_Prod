@@ -82,8 +82,10 @@ class DatabaseSeeder extends Seeder
         
         // These base seeders can just run or we can conditionally add them too
         $seeders = array_merge($seeders, [
+            AccountTypeSeeder::class,
             GalenicFormSeeder::class,
             ActivityTypeSeeder::class,
+            AccountTypeActivityTypeSeeder::class,
             ActivityResultSeeder::class,
             EventFormatSeeder::class,
             SettingSeeder::class,

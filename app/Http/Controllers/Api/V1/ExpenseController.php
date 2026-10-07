@@ -190,16 +190,21 @@ class ExpenseController extends Controller
 
         // Notification manager
         $user = Auth::user();
-        // La note est adressée au supérieur direct du délégué
         $manager = $user?->manager;
         if ($manager && $user) {
+            $isOverThreshold = (float) $expense->amount >= 100000;
+            $title = $isOverThreshold ? '⚠️ ALERTE : Note de frais hors plafond soumise' : 'Nouvelle note de frais soumise';
+            $msg = $isOverThreshold
+                ? "ATTENTION : Le délégué {$user->name} a soumis une note de frais de {$expense->amount} {$expense->currency} (seuil > 100 000 FCFA)."
+                : "Le délégué {$user->name} a soumis une note de frais de {$expense->amount} {$expense->currency}.";
+
             NotificationController::sendNotification(
                 $manager,
-                'Nouvelle note de frais soumise',
-                "Le délégué {$user->name} a soumis une note de frais de {$expense->amount} {$expense->currency}.",
+                $title,
+                $msg,
                 'expense',
                 'superviseur',
-                ['expense_id' => $expense->id]
+                ['expense_id' => $expense->id, 'over_threshold' => $isOverThreshold]
             );
         }
 

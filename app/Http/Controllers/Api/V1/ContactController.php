@@ -448,8 +448,18 @@ class ContactController extends Controller
         // Assigner le nouveau prescripteur au délégué
         $newContact->update([
             'user_id' => $validated['delegate_id'],
-            'statut_validation' => 'valide', // ou on garde 'en_attente'
+            'statut_validation' => 'valide',
         ]);
+
+        if (class_exists(\App\Models\ActivityLog::class)) {
+            try {
+                \App\Models\ActivityLog::create([
+                    'user_id' => auth()->id(),
+                    'action' => 'arbitrage',
+                    'description' => "Arbitrage portefeuille : réaffectation prescripteur {$removedContact->id} au bassin régional, attribution de {$newContact->id} au délégué {$validated['delegate_id']}." . (!empty($validated['reason']) ? " Motif : {$validated['reason']}" : ""),
+                ]);
+            } catch (\Throwable $e) {}
+        }
 
         return response()->json([
             'status' => 'success',

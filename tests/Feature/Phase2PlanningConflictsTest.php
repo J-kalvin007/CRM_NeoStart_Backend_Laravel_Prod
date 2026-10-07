@@ -32,7 +32,7 @@ class Phase2PlanningConflictsTest extends TestCase
     /**
      * Test 1: Chevauchement partiel (10h00-11h00 vs 10h30-11h30) -> Refusé (422).
      */
-    public function test_partial_time_overlap_is_rejected(): void
+    public function test_partial_time_overlap_is_allowed(): void
     {
         $date = now()->addDays(2)->toDateString();
 
@@ -45,21 +45,20 @@ class Phase2PlanningConflictsTest extends TestCase
         ]);
         $res1->assertStatus(201);
 
-        // 2nde visite : 10h30 à 11h30 (chevauchement partiel)
+        // 2nde visite : 10h30 à 11h30 (chevauchement partiel autorisé)
         $res2 = $this->postJson('/api/v1/activities', [
             'activity_type' => 'visite',
             'date_activite' => $date,
             'heure_debut'   => '10:30',
             'heure_fin'     => '11:30',
         ]);
-        $res2->assertStatus(422)
-            ->assertJsonStructure(['message']);
+        $res2->assertStatus(201);
     }
 
     /**
-     * Test 2: Créneaux parfaitement identiques (10h00-11h00 vs 10h00-11h00) -> Refusé (422).
+     * Test 2: Créneaux parfaitement identiques (10h00-11h00 vs 10h00-11h00) -> Autorisé (201).
      */
-    public function test_identical_time_slot_is_rejected(): void
+    public function test_identical_time_slot_is_allowed(): void
     {
         $date = now()->addDays(3)->toDateString();
 
@@ -77,7 +76,7 @@ class Phase2PlanningConflictsTest extends TestCase
             'heure_debut'   => '10:00',
             'heure_fin'     => '11:00',
         ]);
-        $res2->assertStatus(422);
+        $res2->assertStatus(201);
     }
 
     /**

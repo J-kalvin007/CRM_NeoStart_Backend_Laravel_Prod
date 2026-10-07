@@ -19,7 +19,7 @@ return new class extends Migration
             
             // Remplacer subsidiary_id par organizational_unit_id
             if (!Schema::hasColumn('products', 'organizational_unit_id')) {
-                $table->foreignUuid('organizational_unit_id')->nullable()->after('id')->constrained('organizational_units')->nullOnDelete();
+                $table->uuid('organizational_unit_id')->nullable()->after('id');
             }
             
             if (Schema::hasColumn('products', 'subsidiary_id')) {

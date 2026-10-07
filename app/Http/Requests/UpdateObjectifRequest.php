@@ -20,10 +20,31 @@ class UpdateObjectifRequest extends FormRequest
      *
      * @return array<string, ValidationRule|array<mixed>|string>
      */
+    protected function prepareForValidation(): void
+    {
+        $typeInput = $this->input('objectif_type_id') ?? $this->input('type_objectif') ?? $this->input('type');
+        if ($typeInput) {
+            if (\Illuminate\Support\Str::isUuid((string)$typeInput)) {
+                if (\Illuminate\Support\Facades\DB::table('objectif_types')->where('id', $typeInput)->exists()) {
+                    $this->merge(['objectif_type_id' => $typeInput]);
+                }
+            } else {
+                $id = \Illuminate\Support\Facades\DB::table('objectif_types')->where('code', $typeInput)->value('id');
+                if (!$id) {
+                    $id = \Illuminate\Support\Facades\DB::table('objectif_types')->where('name', 'like', "%{$typeInput}%")->value('id');
+                }
+                if ($id) {
+                    $this->merge(['objectif_type_id' => $id]);
+                }
+            }
+        }
+    }
+
     public function rules(): array
     {
         return [
             'user_id' => 'sometimes|nullable|exists:users,id',
+            'country_id' => 'sometimes|nullable|uuid|exists:countries,id',
             'objectif_type_id' => 'sometimes|uuid|exists:objectif_types,id',
             'indicator_id' => 'sometimes|nullable|uuid|exists:indicators,id',
             'date_debut' => 'sometimes|date',

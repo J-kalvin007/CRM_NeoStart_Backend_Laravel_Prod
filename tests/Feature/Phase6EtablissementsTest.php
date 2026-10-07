@@ -33,7 +33,7 @@ class Phase6EtablissementsTest extends TestCase
         $this->delegate = User::factory()->create(['manager_id' => $this->supervisor->id]);
         $this->delegate->assignRole('delegue_medical');
 
-        $this->unit = OrganizationalUnit::create(['name' => 'Secteur Abidjan', 'type' => 'secteur', 'is_active' => true]);
+        $this->unit = OrganizationalUnit::create(['name' => 'Secteur Lomé', 'type' => 'secteur', 'is_active' => true]);
         \App\Models\UserScope::create([
             'user_id' => $this->delegate->id,
             'organizational_unit_id' => $this->unit->id,

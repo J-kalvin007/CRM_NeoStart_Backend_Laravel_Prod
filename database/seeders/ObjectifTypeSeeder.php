@@ -14,10 +14,11 @@ class ObjectifTypeSeeder extends Seeder
     public function run(): void
     {
         $types = [
-            ['code' => 'nombre_visites', 'name' => 'Nombre de visites terrain', 'unit' => 'visites'],
-            ['code' => 'couverture_categorie_a', 'name' => 'Taux de couverture des cibles A', 'unit' => '%'],
-            ['code' => 'produit_prioritaire', 'name' => 'Présentations produit prioritaire', 'unit' => 'présentations'],
-            ['code' => 'ca_ventes', 'name' => "Chiffre d'affaires ventes", 'unit' => 'FCFA'],
+            ['code' => 'nombre_visites', 'name' => 'Visites Médicales', 'unit' => 'visites'],
+            ['code' => 'ca_ventes', 'name' => "Chiffre d'Affaires", 'unit' => 'FCFA'],
+            ['code' => 'couverture_contacts', 'name' => 'Couverture Prescripteurs', 'unit' => '%'],
+            ['code' => 'nb_echantillons', 'name' => 'Placement Échantillons', 'unit' => 'unités'],
+            ['code' => 'nb_commandes', 'name' => 'Prises de Commandes', 'unit' => 'commandes'],
             ['code' => 'autre', 'name' => 'Autre objectif spécifique', 'unit' => 'unités'],
         ];
 

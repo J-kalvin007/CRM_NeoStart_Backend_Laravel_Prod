@@ -11,7 +11,7 @@ return new class extends Migration
         Schema::table('accounts', function (Blueprint $table) {
             $table->dropForeign(['subsidiary_id']);
             $table->dropColumn('subsidiary_id');
-            $table->foreignUuid('organizational_unit_id')->nullable()->constrained('organizational_units')->nullOnDelete();
+            $table->uuid('organizational_unit_id')->nullable();
         });
     }
 
