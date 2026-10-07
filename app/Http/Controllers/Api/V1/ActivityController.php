@@ -403,7 +403,16 @@ class ActivityController extends Controller
         }
         $canDecide = $user->can('scope:global') || $user->hasAnyRole(['superadmin', 'super-admin', 'admin']) || ($activity->user_id && $user->manages((string) $activity->user_id));
         $decisionStatuts = ['validee', 'valide', 'refusee', 'rejetee', 'planifiee', 'planifiée'];
-        if (!$canDecide && $targetStatus !== null && $targetStatus !== $activity->statut && in_array($targetStatus, $decisionStatuts, true)) {
+        
+        // Si le délégué change la date de la visite, autoriser le changement de statut automatique
+        $dateChanged = isset($validatedData['date_activite']) && $validatedData['date_activite'] !== $activity->date_activite;
+        if ($dateChanged && !$canDecide && $targetStatus === null) {
+            // Le délégué reporte la visite : mettre automatiquement le statut à planifiee
+            $validatedData['statut'] = 'planifiee';
+            $targetStatus = 'planifiee';
+        }
+        
+        if (!$canDecide && $targetStatus !== null && $targetStatus !== $activity->statut && in_array($targetStatus, $decisionStatuts, true) && !$dateChanged) {
             return response()->json(['message' => 'La validation ou le refus d\'une visite revient à votre responsable.'], 403);
         }
         if (!$canDecide && in_array($validatedData['report_status'] ?? null, ['validated', 'rejected'], true)) {
@@ -487,7 +496,7 @@ class ActivityController extends Controller
                 $newD = date('d/m/Y', strtotime($newDate));
                 $newT = $newTime ? substr($newTime, 0, 5) : '';
 
-                $trace = "\nVisite reportée le " . date('d/m/Y à H:i') . " (du " . $oldD . ($oldT ? " à " . $oldT : "") . " au " . $newD . ($newT ? " à " . $newT : "") . ")";
+                $trace = "\n[Report] Visite reportée le " . date('d/m/Y à H:i') . " (du " . $oldD . ($oldT ? " à " . $oldT : "") . " au " . $newD . ($newT ? " à " . $newT : "") . ")";
                 $validatedData['notes'] = ($validatedData['notes'] ?? $activity->notes) . $trace;
             }
         }
