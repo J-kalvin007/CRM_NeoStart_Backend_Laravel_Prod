@@ -12,6 +12,8 @@ use Illuminate\Support\Str;
 use App\Models\User;
 use App\Mail\UserInvitationMail;
 use App\Mail\LoginOtpMail;
+use App\Mail\ResetPasswordMail;
+use App\Mail\PasswordChangedMail;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -469,11 +471,72 @@ class AuthController extends Controller
         if ($user) {
             $resetToken = Str::random(60);
             Cache::put('password_reset_' . $user->email, $resetToken, now()->addHours(1));
-            // Pour le dev / staging, on renvoie une confirmation claire
+            try {
+                Mail::to($user->email)->send(new ResetPasswordMail($user, $resetToken));
+            } catch (\Exception $e) {
+                \Log::warning("Failed to send reset email to {$user->email}: " . $e->getMessage());
+            }
         }
 
         return response()->json([
             'message' => 'Un lien de réinitialisation a été envoyé à votre adresse email si elle correspond à un compte actif.'
+        ]);
+    }
+
+    #[OA\Post(
+        path: '/api/v1/password/reset',
+        summary: 'Réinitialiser le mot de passe via jeton',
+        tags: ['Authentication'],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['email', 'token', 'password', 'password_confirmation'],
+                properties: [
+                    new OA\Property(property: 'email', type: 'string', format: 'email'),
+                    new OA\Property(property: 'token', type: 'string'),
+                    new OA\Property(property: 'password', type: 'string', format: 'password'),
+                    new OA\Property(property: 'password_confirmation', type: 'string', format: 'password'),
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Mot de passe réinitialisé avec succès'),
+            new OA\Response(response: 422, description: 'Données invalides ou jeton expiré')
+        ]
+    )]
+    public function resetPassword(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|email',
+            'token' => 'required|string',
+            'password' => 'required|string|min:8|confirmed',
+        ]);
+
+        $cachedToken = Cache::get('password_reset_' . $request->email);
+        if (!$cachedToken || $cachedToken !== $request->token) {
+            return response()->json(['message' => 'Jeton de réinitialisation invalide ou expiré.'], 422);
+        }
+
+        $user = User::where('email', $request->email)->first();
+        if (!$user) {
+            return response()->json(['message' => 'Utilisateur introuvable.'], 404);
+        }
+
+        $user->update([
+            'password' => Hash::make($request->password),
+            'force_password_change' => false,
+        ]);
+
+        Cache::forget('password_reset_' . $request->email);
+
+        try {
+            Mail::to($user->email)->send(new PasswordChangedMail($user));
+        } catch (\Exception $e) {
+            \Log::warning("Failed to send password changed email to {$user->email}: " . $e->getMessage());
+        }
+
+        return response()->json([
+            'message' => 'Votre mot de passe a été réinitialisé avec succès. Vous pouvez maintenant vous connecter.'
         ]);
     }
 }

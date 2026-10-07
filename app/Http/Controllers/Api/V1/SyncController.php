@@ -146,6 +146,45 @@ class SyncController extends Controller
                     continue;
                 }
 
+                // ── Validation stricte des horodatages (Conflits hors-ligne) ──
+                if (in_array($method, ['PUT', 'PATCH']) || str_contains($endpoint, 'report')) {
+                    $clientTimestamp = $payload['client_updated_at'] ?? $payload['updated_at'] ?? null;
+                    if ($clientTimestamp) {
+                        $modelMap = [
+                            'activities' => Activity::class,
+                            'contacts'   => Contact::class,
+                            'accounts'   => Account::class,
+                            'expenses'   => Expense::class,
+                        ];
+
+                        foreach ($modelMap as $prefix => $mClass) {
+                            if (str_contains($endpoint, $prefix)) {
+                                preg_match('/' . $prefix . '\/([a-zA-Z0-9\-]+)/', $endpoint, $matches);
+                                $resourceId = $matches[1] ?? null;
+                                if ($resourceId) {
+                                    $record = $mClass::find($resourceId);
+                                    if ($record && $record->updated_at) {
+                                        $serverTime = Carbon::parse($record->updated_at);
+                                        $clientTime = Carbon::parse($clientTimestamp);
+                                        if ($serverTime->gt($clientTime) && empty($payload['force_override'])) {
+                                            $failed[] = [
+                                                'index' => $index,
+                                                'endpoint' => $endpoint,
+                                                'conflict' => true,
+                                                'error' => 'Conflit de synchronisation : La ressource sur le serveur a été modifiée ultérieurement.',
+                                                'server_updated_at' => $serverTime->toDateTimeString(),
+                                                'client_updated_at' => $clientTime->toDateTimeString(),
+                                            ];
+                                            continue 2;
+                                        }
+                                    }
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+
                 try {
                     // Création d'une requête interne pour simuler l'appel API
                     $internalRequest = Request::create("/api/v1/{$endpoint}", $method, $payload);

@@ -60,6 +60,7 @@ Route::prefix('v1')->group(function () {
     Route::post('/resend-otp', [AuthController::class, 'resendOtp']);
     Route::post('/auth/change-password', [AuthController::class, 'forceChangePassword']);
     Route::post('/password/email', [AuthController::class, 'sendResetLinkEmail']);
+    Route::post('/password/reset', [AuthController::class, 'resetPassword']);
 
     // ── Endpoints protégés ────────────────────────────────────
 
