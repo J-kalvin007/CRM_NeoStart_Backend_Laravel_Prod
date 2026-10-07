@@ -44,6 +44,8 @@ use App\Http\Controllers\Api\V1\RequestController;
 
 use App\Http\Controllers\Api\V1\LaboratoryController;
 use App\Http\Controllers\Api\V1\TherapeuticClassController;
+use App\Http\Controllers\Api\V1\FaqController;
+use App\Http\Controllers\Api\V1\SupportTicketController;
 Route::get('/login', fn() => response()->json(['message' => 'Non authentifié'], 401))->name('login');
 
 Route::prefix('v1')->group(function () {
@@ -147,6 +149,16 @@ Route::prefix('v1')->group(function () {
 
         Route::get('/me', [AuthController::class, 'me']);
         Route::post('/logout', [AuthController::class, 'logout']);
+
+        // ── FAQ & Support ──────────────────────────────────────────
+        Route::get('/faqs', [FaqController::class, 'index']);
+        Route::get('/faq-categories', [FaqController::class, 'categories']);
+
+        Route::get('/support/tickets', [SupportTicketController::class, 'index']);
+        Route::post('/support/tickets', [SupportTicketController::class, 'store']);
+        Route::post('/support/reports', [SupportTicketController::class, 'report']);
+        Route::get('/support/tickets/{id}', [SupportTicketController::class, 'show']);
+        Route::post('/support/tickets/{id}/messages', [SupportTicketController::class, 'reply']);
 
         // ── Notifications ──────────────────────────────────────────
         Route::get('/notifications', [NotificationController::class, 'index']);
