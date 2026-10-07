@@ -9,10 +9,34 @@ class UpdateActivityRequest extends FormRequest
 {
     protected function prepareForValidation(): void
     {
-        $this->merge([
+        $rawType = $this->activity_type;
+        $typeId = $this->activity_type_id;
+
+        $merge = [
             'gps_debut_lat' => $this->input('gps_debut_lat', $this->input('gps_start_lat')),
             'gps_debut_lng' => $this->input('gps_debut_lng', $this->input('gps_start_lng')),
-        ]);
+        ];
+
+        if ($typeId || $rawType) {
+            $activityTypeRecord = null;
+            if ($typeId && \Illuminate\Support\Str::isUuid((string)$typeId)) {
+                $activityTypeRecord = \App\Models\ActivityType::find($typeId);
+            }
+            if (!$activityTypeRecord && $rawType) {
+                $activityTypeRecord = \App\Models\ActivityType::where('id', (string)$rawType)
+                    ->orWhere('code', strtolower((string)$rawType))
+                    ->orWhere('name', (string)$rawType)
+                    ->first();
+            }
+            if ($activityTypeRecord) {
+                $merge['activity_type_id'] = $activityTypeRecord->id;
+                $merge['activity_type'] = $activityTypeRecord->name ?? $activityTypeRecord->code;
+            } elseif ($rawType) {
+                $merge['activity_type'] = $rawType;
+            }
+        }
+
+        $this->merge($merge);
     }
 
     /**

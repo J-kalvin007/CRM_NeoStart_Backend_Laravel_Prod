@@ -10,29 +10,29 @@ class StoreActivityRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        $rawType = strtolower($this->activity_type ?? 'visite');
-        // Conserver le type original pour l'affichage
-        $type = $rawType;
+        $rawType = $this->activity_type;
+        $typeId = $this->activity_type_id;
 
-        // Mapping interne si nécessaire
-        if (str_contains($rawType, 'visite')) {
-            $type = 'visite';
-        } elseif (str_contains($rawType, 'appel')) {
-            $type = 'appel';
-        } elseif (str_contains($rawType, 'email')) {
-            $type = 'email';
-        } elseif (str_contains($rawType, 'reunion') || str_contains($rawType, 'formation')) {
-            $type = 'reunion';
-        } elseif (str_contains($rawType, 'conference') || str_contains($rawType, 'staff') || str_contains($rawType, 'présentation')) {
-            $type = 'conference';
-        } else {
-            $type = 'visite';
+        $activityTypeRecord = null;
+        if ($typeId && \Illuminate\Support\Str::isUuid((string)$typeId)) {
+            $activityTypeRecord = \App\Models\ActivityType::find($typeId);
+        }
+        if (!$activityTypeRecord && $rawType) {
+            $activityTypeRecord = \App\Models\ActivityType::where('id', (string)$rawType)
+                ->orWhere('code', strtolower((string)$rawType))
+                ->orWhere('name', (string)$rawType)
+                ->first();
         }
 
-        $user = auth()->user();
-        $merge = [
-            'activity_type' => $type,
-        ];
+        $merge = [];
+        if ($activityTypeRecord) {
+            $merge['activity_type_id'] = $activityTypeRecord->id;
+            $merge['activity_type'] = $activityTypeRecord->name ?? $activityTypeRecord->code;
+        } elseif ($rawType) {
+            $merge['activity_type'] = $rawType;
+        } else {
+            $merge['activity_type'] = 'visite';
+        }
 
         if ($this->has('statut')) {
             $st = strtolower(trim((string)$this->statut));
