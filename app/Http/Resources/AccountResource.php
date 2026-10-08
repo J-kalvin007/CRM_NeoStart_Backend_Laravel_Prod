@@ -67,11 +67,12 @@ class AccountResource extends JsonResource
             'user_id'         => $this->user_id,
             'delegue_id'      => $this->delegue_id,
             'type'            => $this->whenLoaded('accountType', fn() => [
-                'id'      => $this->accountType->id,
-                'code'    => $this->accountType->code,
-                'libelle' => $this->accountType->libelle,
-                'couleur' => $this->accountType->couleur,
-                'icone'   => $this->accountType->icone,
+                'id'              => $this->accountType->id,
+                'code'            => $this->accountType->code,
+                'libelle'         => $this->accountType->libelle,
+                'couleur'         => $this->accountType->couleur,
+                'icone'           => $this->accountType->icone,
+                'is_account_only' => (bool) ($this->accountType->is_account_only ?? false),
             ]),
             'potential'       => $this->whenLoaded('potential', fn() => [
                 'id'   => $this->potential->id,
