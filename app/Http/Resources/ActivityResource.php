@@ -63,9 +63,9 @@ class ActivityResource extends JsonResource
                 'email' => $this->delegue->email,
                 'manager_id' => $this->delegue->manager_id,
             ]),
-            'contact'        => new ContactResource($this->whenLoaded('contact')),
-            'contacts'       => ContactResource::collection($this->whenLoaded('contacts')),
-            'account'        => new AccountResource($this->whenLoaded('account')),
+            'contact'        => $this->whenLoaded('contact', fn() => $this->contact ? new ContactResource($this->contact) : null),
+            'contacts'       => $this->whenLoaded('contacts', fn() => ContactResource::collection($this->contacts)),
+            'account'        => $this->whenLoaded('account', fn() => $this->account ? new AccountResource($this->account) : null),
             'tour_plan'      => $this->whenLoaded('tourPlan', fn() => [
                 'id'     => $this->tourPlan->id,
                 'nom'    => $this->tourPlan->nom,

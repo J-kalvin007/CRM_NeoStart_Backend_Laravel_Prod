@@ -9,6 +9,9 @@ class ContactResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        if (is_null($this->resource) || $this->resource instanceof \Illuminate\Http\Resources\MissingValue) {
+            return [];
+        }
         // Résolution de la spécialité (plusieurs sources possibles)
         $specialite = $this->speciality?->name          // relation chargée  → colonne "name"
             ?? data_get($this->meta, 'specialite')      // stockée dans meta
@@ -47,8 +50,8 @@ class ContactResource extends JsonResource
             'gps_lng'      => $this->gps_lng,
 
             // ── Ciblage ───────────────────────────────────────────────────
-            'potentiel'    => $potentielLabel,
-            'influence'    => $influenceLabel,
+            'potentiel'       => $potentielLabel,
+            'influence_label' => $influenceLabel,
             'score'        => $this->score,
             'nb_patients_cible_mois'       => $this->nb_patients_cible_mois,
             'nb_visites_recommandees_mois' => $this->nb_visites_recommandees_mois,

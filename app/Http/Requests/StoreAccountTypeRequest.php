@@ -29,6 +29,7 @@ class StoreAccountTypeRequest extends FormRequest
             'couleur'     => 'nullable|string|regex:/^#[0-9A-Fa-f]{6}$/',
             'icone'       => 'nullable|string|max:100',
             'is_active'   => 'boolean',
+            'is_account_only' => 'nullable|boolean',
             'ordre'       => 'integer|min:0',
             'activity_type_ids'   => 'nullable|array',
             'activity_type_ids.*' => 'string|exists:activity_types,id',

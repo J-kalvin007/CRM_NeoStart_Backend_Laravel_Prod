@@ -12,10 +12,11 @@ class AccountType extends Model
     use HasFactory, HasUuids;
     use HasActivityLogs;
 
-    protected $fillable = ['code', 'libelle', 'description', 'couleur', 'icone', 'is_active', 'statut', 'ordre', 'validation_rules'];
+    protected $fillable = ['code', 'libelle', 'description', 'couleur', 'icone', 'is_active', 'statut', 'ordre', 'validation_rules', 'is_account_only'];
 
     protected $casts = [
         'is_active' => 'boolean', 
+        'is_account_only' => 'boolean',
         'ordre' => 'integer',
         'validation_rules' => 'array',
     ];

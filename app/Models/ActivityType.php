@@ -10,11 +10,12 @@ class ActivityType extends Model
 {
     use HasUuids, HasActivityLogs;
 
-    protected $fillable = ['name', 'code', 'description', 'is_active', 'is_multi'];
+    protected $fillable = ['name', 'code', 'description', 'is_active', 'is_multi', 'is_account_only'];
 
     protected $casts = [
         'is_active' => 'boolean',
         'is_multi' => 'boolean',
+        'is_account_only' => 'boolean',
     ];
 
     public function accountTypes()

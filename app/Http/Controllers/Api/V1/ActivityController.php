@@ -71,10 +71,10 @@ class ActivityController extends Controller
 
         // RÈGLE STRICTE SUR LES BROUILLONS :
         // Une visite en 'brouillon' ne doit JAMAIS être visible par quiconque d'autre que son propre créateur/délégué.
-        // Tant que la visite n'est pas soumise, personne d'autre (y compris Super Admin / Manager) n'a le droit de la voir.
+        // Dès qu'elle est planifiée, en attente, en cours, réalisée, manquée, etc., elle est visible par les responsables/Super Admin.
         $query->where(function ($q) use ($user) {
             $q->where('activities.user_id', $user->id)
-              ->orWhere('activities.statut', '!=', 'brouillon');
+              ->orWhereNotIn(\Illuminate\Support\Facades\DB::raw('LOWER(activities.statut)'), ['brouillon', 'draft']);
         });
 
         // Restreindre la visibilité supplémentaire si pas d'accès global
@@ -347,8 +347,11 @@ class ActivityController extends Controller
             ])->findOrFail($id);
 
         $user = auth()->user();
-        if ($user && $activity->statut === 'brouillon' && (string) $activity->user_id !== (string) $user->id) {
-            abort(403, "Une visite en brouillon n'a pas encore été soumise et ne peut être consultée que par son auteur.");
+        if ($user && (string) $activity->user_id !== (string) $user->id) {
+            $st = strtolower((string) ($activity->statut ?? ''));
+            if (in_array($st, ['brouillon', 'draft'], true)) {
+                abort(403, "Une visite en brouillon n'a pas encore été soumise et ne peut être consultée que par son auteur.");
+            }
         }
 
         return new ActivityResource($activity);
@@ -412,7 +415,12 @@ class ActivityController extends Controller
             $targetStatus = 'planifiee';
         }
         
-        if (!$canDecide && $targetStatus !== null && $targetStatus !== $activity->statut && in_array($targetStatus, $decisionStatuts, true) && !$dateChanged) {
+        // Permettre à l'auteur (délégué) de soumettre son propre brouillon (brouillon -> planifiee ou en_attente)
+        $isDraftSubmission = in_array(strtolower((string)$activity->statut), ['brouillon', 'draft'], true) 
+            && (string)$activity->user_id === (string)$user->id 
+            && in_array($targetStatus, ['planifiee', 'planifiée', 'en_attente'], true);
+
+        if (!$canDecide && !$isDraftSubmission && $targetStatus !== null && $targetStatus !== $activity->statut && in_array($targetStatus, $decisionStatuts, true) && !$dateChanged) {
             return response()->json(['message' => 'La validation ou le refus d\'une visite revient à votre responsable.'], 403);
         }
         if (!$canDecide && in_array($validatedData['report_status'] ?? null, ['validated', 'rejected'], true)) {

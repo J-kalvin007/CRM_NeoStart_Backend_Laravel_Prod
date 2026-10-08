@@ -9,6 +9,9 @@ class AccountResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        if (is_null($this->resource) || $this->resource instanceof \Illuminate\Http\Resources\MissingValue) {
+            return [];
+        }
         // Résoudre le type d'établissement depuis la relation accountType ou propriété type/meta
         $accountTypeLabel = null;
         if ($this->accountType) {
