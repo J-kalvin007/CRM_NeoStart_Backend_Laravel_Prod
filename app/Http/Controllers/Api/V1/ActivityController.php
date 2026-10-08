@@ -511,15 +511,23 @@ class ActivityController extends Controller
         if (isset($validatedData['date_activite']) || isset($validatedData['heure_debut'])) {
             $newDate = $validatedData['date_activite'] ?? $activity->date_activite;
             $newTime = $validatedData['heure_debut'] ?? $activity->heure_debut;
-            
-            if ($newDate !== $activity->date_activite || $newTime !== $activity->heure_debut) {
+
+            $oldDateNorm = date('Y-m-d', strtotime($activity->date_activite));
+            $newDateNorm = date('Y-m-d', strtotime($newDate));
+            $oldTimeNorm = $activity->heure_debut ? substr($activity->heure_debut, 0, 5) : '';
+            $newTimeNorm = $newTime ? substr($newTime, 0, 5) : '';
+
+            if ($oldDateNorm !== $newDateNorm || $oldTimeNorm !== $newTimeNorm) {
                 $oldD = date('d/m/Y', strtotime($activity->date_activite));
-                $oldT = $activity->heure_debut ? substr($activity->heure_debut, 0, 5) : '';
+                $oldT = $oldTimeNorm;
                 $newD = date('d/m/Y', strtotime($newDate));
-                $newT = $newTime ? substr($newTime, 0, 5) : '';
+                $newT = $newTimeNorm;
 
                 $trace = "\n[Report] Visite reportée le " . date('d/m/Y à H:i') . " (du " . $oldD . ($oldT ? " à " . $oldT : "") . " au " . $newD . ($newT ? " à " . $newT : "") . ")";
-                $validatedData['notes'] = ($validatedData['notes'] ?? $activity->notes) . $trace;
+                $currentNotes = $validatedData['notes'] ?? $activity->notes ?? '';
+                if (!str_contains($currentNotes, $trace)) {
+                    $validatedData['notes'] = trim($currentNotes . $trace);
+                }
             }
         }
 
@@ -527,6 +535,12 @@ class ActivityController extends Controller
         if ($targetStatus === 'en_cours') {
             if (empty($validatedData['start_time']) && empty($activity->start_time)) {
                 $validatedData['start_time'] = now();
+            }
+            if (isset($validatedData['gps_debut_lat'])) {
+                $validatedData['gps_start_lat'] = $validatedData['gps_debut_lat'];
+            }
+            if (isset($validatedData['gps_debut_lng'])) {
+                $validatedData['gps_start_lng'] = $validatedData['gps_debut_lng'];
             }
         } elseif (in_array($targetStatus, ['realisee', 'terminee', 'cloturee'], true)) {
             if (empty($validatedData['start_time']) && empty($activity->start_time)) {
