@@ -12,6 +12,7 @@ class ActivityResource extends JsonResource
         return [
             'id'             => $this->id,
             'local_uuid'     => $this->local_uuid,
+            'activity_type_id' => $this->activity_type_id,
             'activity_type'  => $this->activity_type,
             'date_activite'  => $this->date_activite,
             'heure_debut'    => $this->heure_debut,
