@@ -80,38 +80,15 @@ class SampleMovementController extends Controller
             ->where('user_id', $user->id)
             ->get();
 
-        if ($movements->isEmpty()) {
-            // Récupérer les produits assignés aux unités organisationnelles du délégué
-            $query = \App\Models\Product::where('statut', 'actif');
 
-            if ($user->country_id) {
-                $query->where('country_id', $user->country_id);
-            }
-
-            $products = $query->get();
-
-            foreach ($products as $idx => $p) {
-                SampleMovement::create([
-                    'user_id' => $user->id,
-                    'product_id' => $p->id,
-                    'movement_type' => 'reception',
-                    'quantity' => 40 + ($idx * 5),
-                    'lot_number' => 'LOT-2026-' . strtoupper(substr(md5($p->code ?? $p->id), 0, 5)),
-                    'expiry_date' => now()->addYears(2)->toDateString(),
-                    'date_mouvement' => date('Y-m-d'),
-                ]);
-            }
-            $movements = SampleMovement::with('product')
-                ->where('user_id', $user->id)
-                ->get();
-        }
 
         // Récupérer les IDs des produits du pays du délégué
         $assignedProductIds = [];
         if ($user->country_id) {
-            $assignedProductIds = \Illuminate\Support\Facades\DB::table('products')
-                ->where('country_id', $user->country_id)
-                ->where('statut', 'actif')
+            $assignedProductIds = \App\Models\Product::where('statut', 'actif')
+                ->whereHas('countries', function ($q) use ($user) {
+                    $q->where('countries.id', $user->country_id);
+                })
                 ->pluck('id')
                 ->toArray();
         }

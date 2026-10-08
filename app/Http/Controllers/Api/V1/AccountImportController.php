@@ -133,6 +133,7 @@ class AccountImportController extends Controller
             'mode'                   => 'in:create,update,upsert',
             'assign_to_user'         => 'nullable|uuid|exists:users,id',
             'country_id'             => 'nullable|uuid|exists:countries,id',
+            'type_id'                => 'nullable|uuid|exists:account_types,id',
             'dry_run'                => 'boolean',
         ]);
 
@@ -140,6 +141,7 @@ class AccountImportController extends Controller
         $dryRun       = $request->boolean('dry_run', false);
         $assignUserId = $request->input('assign_to_user') ?? auth()->id();
         $countryId    = $request->input('country_id');
+        $forcedTypeId = $request->input('type_id');
 
         try {
             $spreadsheet = IOFactory::load($request->file('file')->getRealPath());
@@ -181,7 +183,7 @@ class AccountImportController extends Controller
                 try {
                     $parsed = $this->parseRow(
                         $row, $colIdx, $accountTypes, $potentials, $users,
-                        $assignUserId, $countryId, $dryRun
+                        $assignUserId, $countryId, $forcedTypeId, $dryRun
                     );
 
                     if (empty($parsed['nom'])) {
@@ -292,7 +294,7 @@ class AccountImportController extends Controller
     private function parseRow(
         array $row, array $colIdx,
         array &$accountTypes, array $potentials, array $users,
-        ?string $defaultUserId, ?string $countryId,
+        ?string $defaultUserId, ?string $countryId, ?string $forcedTypeId,
         bool $dryRun
     ): array {
         $get  = fn(string $f) => $this->getCell($row, $colIdx, $f);
@@ -325,7 +327,17 @@ class AccountImportController extends Controller
         if (is_numeric($potCom)) $data['potentiel_commande_mois'] = (int)$potCom;
 
         // ── Type d'établissement → account_type_id ────────────────────────
-        if (isset($colIdx['_type'])) {
+        if ($forcedTypeId) {
+            $data['account_type_id'] = $forcedTypeId;
+            // Pour l'aperçu si dry run
+            if ($dryRun) {
+                // Recherche rapide du nom dans le cache (inversé)
+                $typeName = array_search($forcedTypeId, $accountTypes);
+                if ($typeName !== false) {
+                    $data['meta']['type_label'] = mb_convert_case($typeName, MB_CASE_TITLE, "UTF-8");
+                }
+            }
+        } elseif (isset($colIdx['_type'])) {
             $typeRaw = $this->getCell($row, $colIdx, '_type');
             if ($typeRaw !== '') {
                 $typeNorm = $this->normalizeStr($typeRaw);

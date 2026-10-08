@@ -94,7 +94,7 @@ class UserController extends Controller
         } else {
             $temporaryPassword = Str::upper(Str::random(4)) . rand(10, 99) . '!' . Str::random(4);
             $data['password'] = Hash::make($temporaryPassword);
-            $data['force_password_change'] = true;
+            $data['force_password_change'] = false;
         }
 
         $user = User::create($data);

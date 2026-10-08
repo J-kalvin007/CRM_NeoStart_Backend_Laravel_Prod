@@ -42,4 +42,9 @@ class Country extends Model
     {
         return $this->hasMany(Product::class);
     }
+
+    public function accountTypes()
+    {
+        return $this->belongsToMany(AccountType::class, 'account_type_country');
+    }
 }

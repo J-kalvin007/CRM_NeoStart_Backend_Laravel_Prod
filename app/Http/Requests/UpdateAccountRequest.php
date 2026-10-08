@@ -40,6 +40,10 @@ class UpdateAccountRequest extends FormRequest
             'statut'          => 'in:en_attente,valide,actif,inactif,suspendu,rejete',
             'meta'            => 'nullable|array',
             'local_uuid'      => 'nullable|uuid',
+            'contact_ids'     => 'nullable|array',
+            'contact_ids.*'   => 'uuid|exists:contacts,id',
+            'delegue_ids'     => 'nullable|array',
+            'delegue_ids.*'   => 'uuid|exists:users,id',
         ];
     }
 }

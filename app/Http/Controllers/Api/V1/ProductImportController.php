@@ -274,30 +274,52 @@ class ProductImportController extends Controller
     {
         $existing = null;
 
-        // Chercher par code exact dans l'OU, ou par nom
+        // Chercher par code exact, ou par nom
         if (!empty($data['code'])) {
             $existing = Product::withoutGlobalScopes()
-                ->where('country_id', $countryId)
                 ->where('code', $data['code'])
                 ->first();
         }
         
         if (!$existing && !empty($data['nom'])) {
             $existing = Product::withoutGlobalScopes()
-                ->where('country_id', $countryId)
                 ->where('nom', $data['nom'])
                 ->first();
         }
+        
+        $productData = [
+            'nom' => $data['nom'] ?? null,
+            'code' => $data['code'] ?? null,
+            'description' => $data['description'] ?? null,
+            'dci' => $data['dci'] ?? null,
+            'conditionnement' => $data['conditionnement'] ?? null,
+            'indications' => $data['indications'] ?? null,
+            'statut' => $data['statut'] ?? 'actif',
+        ];
+        
+        $productData = array_filter($productData, fn($val) => $val !== null);
+        
+        $pivotData = [
+            'pght' => $data['pght'] ?? null,
+            'prix_cession' => $data['prix_cession'] ?? null,
+            'ppv' => $data['ppv'] ?? null,
+            'devise' => $data['devise'] ?? null,
+        ];
 
         if ($existing) {
             if ($mode === 'create') return 'skipped';
-            $existing->update($data);
+            $existing->update($productData);
+            $existing->countries()->syncWithoutDetaching([
+                $countryId => $pivotData
+            ]);
             return 'updated';
         }
 
         if ($mode === 'update') return 'skipped';
 
-        Product::create($data);
+        $newProduct = Product::create($productData);
+        $newProduct->countries()->sync([$countryId => $pivotData]);
+        
         return 'created';
     }
 }

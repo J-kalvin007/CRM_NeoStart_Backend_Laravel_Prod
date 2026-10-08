@@ -53,7 +53,7 @@ class AuthController extends Controller
         $temporaryPassword = $validated['password'];
         
         $validated['password'] = Hash::make($temporaryPassword);
-        $validated['force_password_change'] = true;
+        $validated['force_password_change'] = false;
         
         $user = User::create($validated);
 

@@ -30,12 +30,19 @@ class ProductController extends Controller
     )]
     public function index(Request $request)
     {
-        $query = Product::with(['productType', 'laboratory', 'therapeuticClass', 'galenicForm', 'country']);
+        $query = Product::with(['productType', 'laboratory', 'therapeuticClass', 'galenicForm', 'countries']);
         
         $user = auth()->user();
         $query->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class);
 
+        $countryId = $request->input('country_id') ?? $request->header('X-Country-Id');
+
         $query = $query->when($request->product_type_id, fn($q, $v) => $q->where('product_type_id', $v))
+            ->when($countryId, function ($q) use ($countryId) {
+                $q->whereHas('countries', function ($subq) use ($countryId) {
+                    $subq->where('countries.id', $countryId);
+                });
+            })
             ->when($request->statut, fn($q, $v) => $q->where('statut', $v))
             ->when($request->boolean('stock_alerte'), fn($q) => $q->scopeStockAlerte())
             ->when($request->search, fn($q, $v) => $q->where(function ($q) use ($v) {
@@ -89,9 +96,29 @@ class ProductController extends Controller
     public function store(StoreProductRequest $request)
     {
         $validated = $request->validated();
+        
+        // Remove 'countries' from $validated to prevent mass assignment issues
+        $countriesData = $validated['countries'] ?? [];
+        unset($validated['countries']);
+
         $product = Product::create($validated);
 
-        return new ProductResource($product->load(['productType', 'laboratory', 'therapeuticClass', 'galenicForm']));
+        if (!empty($countriesData)) {
+            $syncData = [];
+            foreach ($countriesData as $c) {
+                $syncData[$c['country_id']] = [
+                    'pght' => $c['pght'] ?? null,
+                    'prix_cession' => $c['prix_cession'] ?? null,
+                    'ppv' => $c['ppv'] ?? null,
+                    'devise' => $c['devise'] ?? null,
+                    'stock_actuel' => $c['stock_actuel'] ?? 0,
+                    'stock_alerte' => $c['stock_alerte'] ?? 0,
+                ];
+            }
+            $product->countries()->sync($syncData);
+        }
+
+        return new ProductResource($product->load(['productType', 'laboratory', 'therapeuticClass', 'galenicForm', 'countries']));
     }
 
     #[OA\Get(
@@ -109,7 +136,7 @@ class ProductController extends Controller
     )]
     public function show(string $id)
     {
-        return new ProductResource(Product::with(['productType', 'subsidiary', 'laboratory', 'therapeuticClass', 'galenicForm'])->findOrFail($id));
+        return new ProductResource(Product::with(['productType', 'subsidiary', 'laboratory', 'therapeuticClass', 'galenicForm', 'countries'])->findOrFail($id));
     }
 
     #[OA\Put(
@@ -149,9 +176,60 @@ class ProductController extends Controller
         $product = Product::findOrFail($id);
         
         $validated = $request->validated();
+        
+        $countriesData = $validated['countries'] ?? [];
+        unset($validated['countries']);
+
+        // Extract stock fields before calling update() - they are NOT in Product $fillable
+        // (they live on the pivot table, not the products table)
+        $stockActuel = $validated['stock_actuel'] ?? null;
+        $stockAlerte = $validated['stock_alerte'] ?? null;
+        unset($validated['stock_actuel'], $validated['stock_alerte']);
+
+        // Update only fillable Product fields
         $product->update($validated);
         
-        return new ProductResource($product->load(['productType', 'laboratory', 'therapeuticClass', 'galenicForm']));
+        // Handle direct stock updates from central-stock page
+        if ($stockActuel !== null || $stockAlerte !== null) {
+            // Determine the country to update: user's country, or fallback to the product's first country
+            $userCountryId = $request->user()->country_id;
+            
+            if (!$userCountryId) {
+                // Super admin may not have a country_id, use the product's first country
+                $firstCountry = $product->countries()->first();
+                $userCountryId = $firstCountry?->id;
+            }
+            
+            if ($userCountryId) {
+                $pivotData = [];
+                if ($stockActuel !== null) $pivotData['stock_actuel'] = $stockActuel;
+                if ($stockAlerte !== null) $pivotData['stock_alerte'] = $stockAlerte;
+                
+                // Check if the pivot exists, if not attach the country first
+                if ($product->countries()->where('countries.id', $userCountryId)->exists()) {
+                    $product->countries()->updateExistingPivot($userCountryId, $pivotData);
+                } else {
+                    $product->countries()->attach($userCountryId, $pivotData);
+                }
+            }
+        }
+
+        if ($request->has('countries')) { // Only sync if countries key is present in request
+            $syncData = [];
+            foreach ($countriesData as $c) {
+                $syncData[$c['country_id']] = [
+                    'pght' => $c['pght'] ?? null,
+                    'prix_cession' => $c['prix_cession'] ?? null,
+                    'ppv' => $c['ppv'] ?? null,
+                    'devise' => $c['devise'] ?? null,
+                    'stock_actuel' => $c['stock_actuel'] ?? 0,
+                    'stock_alerte' => $c['stock_alerte'] ?? 0,
+                ];
+            }
+            $product->countries()->sync($syncData);
+        }
+        
+        return new ProductResource($product->load(['productType', 'laboratory', 'therapeuticClass', 'galenicForm', 'countries']));
     }
 
     #[OA\Delete(

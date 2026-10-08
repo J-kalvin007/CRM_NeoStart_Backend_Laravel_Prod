@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
 use App\Http\Resources\AccountTypeResource;
 use App\Http\Resources\ContactTypeResource;
 use App\Http\Resources\ProductTypeResource;
@@ -23,10 +24,7 @@ use OpenApi\Attributes as OA;
  */
 class ConfigurationController extends Controller
 {
-    // ═══════════════════════════════════════════════════════════
-    // ACCOUNT TYPES
-    // ═══════════════════════════════════════════════════════════
-
+ 
     #[OA\Get(
         path: '/api/v1/config/account-types',
         summary: 'Lister les types de comptes configurables',
@@ -37,20 +35,43 @@ class ConfigurationController extends Controller
             new OA\Response(response: 200, description: 'Liste des types de comptes'),
         ]
     )]
-    public function accountTypeIndex()
+    public function accountTypeIndex(Request $request)
     {
         $user = auth()->user();
-        $query = AccountType::with('activityTypes');
+        $query = AccountType::with(['activityTypes', 'countries']);
+        $countryId = $request->input('country_id') ?? $request->header('X-Country-Id');
+        
+        // Pour un délégué qui n'a pas accès au filtre par pays, on force son propre pays.
+        if (!$countryId && $user && !$user->isAdminOrSupervisor()) {
+            $countryId = $user->country_id;
+        }
+        
+        if ($countryId) {
+            $query->where(function ($q) use ($countryId) {
+                $q->whereHas('countries', function ($subQ) use ($countryId) {
+                    $subQ->where('countries.id', $countryId);
+                })->orWhereDoesntHave('countries');
+            });
+        }
+
         if ($user && $user->isAdminOrSupervisor()) {
             return AccountTypeResource::collection($query->get());
         }
         return AccountTypeResource::collection($query->active()->get());
     }
 
-    public function configurations()
+    public function configurations(Request $request)
     {
         $user = auth()->user();
-        $query = AccountType::with('activityTypes');
+        $query = AccountType::with(['activityTypes', 'countries']);
+        $countryId = $request->input('country_id') ?? $request->header('X-Country-Id');
+
+        if ($countryId) {
+            $query->whereHas('countries', function ($q) use ($countryId) {
+                $q->where('countries.id', $countryId);
+            });
+        }
+
         $types = ($user && $user->isAdminOrSupervisor())
             ? $query->get()
             : $query->active()->get();
@@ -99,7 +120,11 @@ class ConfigurationController extends Controller
             $type->activityTypes()->sync($request->input('activity_type_ids'));
         }
 
-        return new AccountTypeResource($type->load('activityTypes'));
+        if ($request->has('country_ids') && is_array($request->input('country_ids'))) {
+            $type->countries()->sync($request->input('country_ids'));
+        }
+
+        return new AccountTypeResource($type->load(['activityTypes', 'countries']));
     }
 
     #[OA\Put(
@@ -119,7 +144,11 @@ class ConfigurationController extends Controller
             $type->activityTypes()->sync($request->input('activity_type_ids'));
         }
 
-        return new AccountTypeResource($type->load('activityTypes'));
+        if ($request->has('country_ids') && is_array($request->input('country_ids'))) {
+            $type->countries()->sync($request->input('country_ids'));
+        }
+
+        return new AccountTypeResource($type->load(['activityTypes', 'countries']));
     }
 
     #[OA\Delete(

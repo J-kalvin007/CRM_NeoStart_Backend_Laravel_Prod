@@ -331,7 +331,7 @@ class AccountController extends Controller
     )]
     public function show(string $id)
     {
-        $account = Account::with(['country', 'categories', 'contacts.delegue', 'contacts.speciality', 'activities', 'user', 'delegue'])->findOrFail($id);
+        $account = Account::with(['country', 'categories', 'contacts.delegue', 'contacts.speciality', 'activities', 'user', 'delegue', 'accountType'])->findOrFail($id);
         return new AccountResource($account);
     }
 
@@ -414,8 +414,31 @@ class AccountController extends Controller
             }
         }
 
+        // Gestion du delegue principal via delegue_ids
+        if (isset($validated['delegue_ids']) && is_array($validated['delegue_ids'])) {
+            $validated['delegue_id'] = !empty($validated['delegue_ids'][0]) ? $validated['delegue_ids'][0] : $account->delegue_id;
+            unset($validated['delegue_ids']);
+        }
+
+        // Exclure contact_ids du update direct (ce n'est pas une colonne)
+        $contactIds = $validated['contact_ids'] ?? null;
+        unset($validated['contact_ids']);
+
         $account->update($validated);
-        return new AccountResource($account->load(['country', 'categories', 'user', 'delegue', 'accountType']));
+
+        // Rattacher les prescripteurs (contacts) a cet etablissement
+        if (is_array($contactIds)) {
+            // D'abord detacher les anciens contacts de cet account
+            \App\Models\Contact::where('account_id', $account->id)
+                ->whereNotIn('id', $contactIds)
+                ->update(['account_id' => null]);
+            // Puis rattacher les nouveaux
+            if (!empty($contactIds)) {
+                \App\Models\Contact::whereIn('id', $contactIds)->update(['account_id' => $account->id]);
+            }
+        }
+
+        return new AccountResource($account->load(['country', 'categories', 'user', 'delegue', 'accountType', 'contacts']));
     }
 
     #[OA\Delete(
