@@ -45,6 +45,11 @@ class TourPlan extends Model
         return $this->belongsTo(User::class, 'user_id');
     }
 
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
+
     public function validePar()
     {
         return $this->belongsTo(User::class, 'valide_par');
