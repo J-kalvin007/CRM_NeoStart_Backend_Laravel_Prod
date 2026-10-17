@@ -112,7 +112,46 @@ class ContactResource extends JsonResource
                 'name' => $this->influence->name,    // ← "name"
             ]),
 
-            'account' => $this->whenLoaded('account', fn() => new AccountResource($this->account)),
+            'account' => (function($contact) {
+                if ($contact->relationLoaded('account') && $contact->account) {
+                    return new AccountResource($contact->account);
+                }
+                if ($contact->relationLoaded('accounts') && $contact->accounts->isNotEmpty()) {
+                    return new AccountResource($contact->accounts->first());
+                }
+                if ($contact->account) {
+                    return new AccountResource($contact->account);
+                }
+                return null;
+            })($this),
+
+            'accounts' => (function($contact) {
+                if ($contact->relationLoaded('accounts') && $contact->accounts->isNotEmpty()) {
+                    return AccountResource::collection($contact->accounts);
+                }
+                if ($contact->relationLoaded('account') && $contact->account) {
+                    return AccountResource::collection(collect([$contact->account]));
+                }
+                if ($contact->account) {
+                    return AccountResource::collection(collect([$contact->account]));
+                }
+                return [];
+            })($this),
+
+            // Établissement (nom textuel pour affichage direct dans la colonne Etablissement du web)
+            'etablissement' => (function($contact) {
+                if ($contact->relationLoaded('account') && $contact->account) {
+                    return $contact->account->nom;
+                }
+                if ($contact->relationLoaded('accounts') && $contact->accounts->isNotEmpty()) {
+                    return $contact->accounts->first()->nom;
+                }
+                if ($contact->account) {
+                    return $contact->account->nom;
+                }
+                return data_get($contact->meta, 'etablissement')
+                    ?? data_get($contact->meta, 'attached_account_names.0');
+            })($this),
 
             // Délégué lié au prescripteur
             'delegue' => $this->whenLoaded('delegue', fn() => [
@@ -123,15 +162,34 @@ class ContactResource extends JsonResource
 
             // Champ pratique pour l'affichage liste
             'account_name' => (function($contact) {
-                if ($contact->account) {
-                    $acc = $contact->account;
+                $acc = $contact->account ?? ($contact->relationLoaded('accounts') && $contact->accounts->isNotEmpty() ? $contact->accounts->first() : null);
+                if ($acc) {
                     $typeStr = $acc->accountType?->libelle ?? $acc->accountType?->name ?? $acc->accountType?->code ?? $acc->type ?? data_get($acc->meta, 'type');
                     if (!empty($typeStr) && is_string($typeStr) && $acc->nom && !str_starts_with(mb_strtolower($acc->nom), mb_strtolower(trim($typeStr)))) {
                         return trim($typeStr) . ' ' . $acc->nom;
                     }
                     return $acc->nom;
                 }
-                return data_get($contact->meta, 'etablissement');
+                return data_get($contact->meta, 'etablissement')
+                    ?? data_get($contact->meta, 'attached_account_names.0');
+            })($this),
+
+            'attached_account_names' => (function($contact) {
+                if ($contact->relationLoaded('accounts') && $contact->accounts->isNotEmpty()) {
+                    return $contact->accounts->pluck('nom')->toArray();
+                }
+                if ($contact->relationLoaded('account') && $contact->account) {
+                    return [$contact->account->nom];
+                }
+                if ($contact->account) {
+                    return [$contact->account->nom];
+                }
+                $metaNames = data_get($contact->meta, 'attached_account_names');
+                if (is_array($metaNames) && !empty($metaNames)) {
+                    return $metaNames;
+                }
+                $metaEst = data_get($contact->meta, 'etablissement');
+                return $metaEst ? [$metaEst] : [];
             })($this),
 
             // ── Dates ─────────────────────────────────────────────────────

@@ -5,14 +5,14 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use App\Models\Product;
 use App\Models\ProductType;
-
+use App\Models\Country;
 
 class ProductSeeder extends Seeder
 {
     public function run(): void
     {
-
         $medType = ProductType::firstOrCreate(['code' => 'MED'], ['libelle' => 'Médicament']);
+        $country = Country::first();
 
         $products = [
             [
@@ -96,12 +96,35 @@ class ProductSeeder extends Seeder
         ];
 
         foreach ($products as $p) {
-            Product::firstOrCreate(
+            $pivotData = [
+                'pght' => $p['pght'] ?? null,
+                'prix_cession' => $p['prix_cession'] ?? ($p['pght'] ? round($p['pght'] * 1.2, 2) : null),
+                'ppv' => $p['ppv'] ?? null,
+                'devise' => $p['devise'] ?? 'XOF',
+                'stock_actuel' => $p['stock_actuel'] ?? 0,
+                'stock_alerte' => $p['stock_alerte'] ?? 0,
+            ];
+
+            $productData = [
+                'code' => $p['code'],
+                'nom' => $p['nom'],
+                'gamme' => $p['gamme'] ?? null,
+                'description' => $p['description'] ?? null,
+                'statut' => $p['statut'] ?? 'actif',
+                'meta' => $p['meta'] ?? null,
+                'product_type_id' => $medType?->id,
+            ];
+
+            $product = Product::firstOrCreate(
                 ['code' => $p['code']],
-                array_merge($p, [
-                    'product_type_id' => $medType?->id
-                ])
+                $productData
             );
+
+            if ($country) {
+                $product->countries()->syncWithoutDetaching([
+                    $country->id => $pivotData
+                ]);
+            }
         }
     }
 }

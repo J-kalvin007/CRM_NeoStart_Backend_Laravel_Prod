@@ -51,6 +51,36 @@ class Product extends Model
     public function scopeEnStock($query)      { return $query->where('stock_actuel', '>', 0); }
     public function scopeStockAlerte($query)  { return $query->whereColumn('stock_actuel', '<=', 'stock_alerte'); }
 
+    public function getPghtAttribute()
+    {
+        return $this->attributes['pght'] ?? $this->countries->first()?->pivot?->pght ?? null;
+    }
+
+    public function getPrixCessionAttribute()
+    {
+        return $this->attributes['prix_cession'] ?? $this->countries->first()?->pivot?->prix_cession ?? null;
+    }
+
+    public function getPpvAttribute()
+    {
+        return $this->attributes['ppv'] ?? $this->countries->first()?->pivot?->ppv ?? null;
+    }
+
+    public function getDeviseAttribute()
+    {
+        return $this->attributes['devise'] ?? $this->countries->first()?->pivot?->devise ?? 'XOF';
+    }
+
+    public function getStockActuelAttribute()
+    {
+        return $this->attributes['stock_actuel'] ?? $this->countries->first()?->pivot?->stock_actuel ?? 0;
+    }
+
+    public function getStockAlerteAttribute()
+    {
+        return $this->attributes['stock_alerte'] ?? $this->countries->first()?->pivot?->stock_alerte ?? 0;
+    }
+
     public function getMeta(string $key, mixed $default = null): mixed
     {
         return data_get($this->meta, $key, $default);

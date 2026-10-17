@@ -40,7 +40,8 @@ class ContactController extends Controller
             ->with([
                 // L'account doit être chargé sans le DynamicPerimeterScope car un établissement
                 // peut appartenir à un autre utilisateur (ex: admin) que le délégué qui consulte.
-                'account' => fn($q) => $q->withoutGlobalScopes(),
+                'account'  => fn($q) => $q->withoutGlobalScopes(),
+                'accounts' => fn($q) => $q->withoutGlobalScopes(),
                 'categories', 'speciality', 'contactType', 'potential', 'influence', 'segmentation', 'delegue',
             ])
             ->when($request->specialite ?? $request->speciality, function($q, $v) {
@@ -96,7 +97,11 @@ class ContactController extends Controller
             }
 
             if (!$user->isAdminOrSupervisor()) {
-                $query->whereIn('statut', ['actif', 'valide']);
+                $query->where(function ($sq) use ($user) {
+                    $sq->whereIn('statut', ['actif', 'valide'])
+                       ->orWhereIn('statut_validation', ['actif', 'valide'])
+                       ->orWhere('contacts.user_id', $user->id);
+                });
             }
         }
 
@@ -220,6 +225,9 @@ class ContactController extends Controller
             unset($validated['potentiel']);
         }
 
+        // Résolution robuste des comptes et du compte principal
+        $accountData = $this->resolveAccountData($request, $validated);
+
         // Validation dynamique
         if (!empty($validated['contact_type_id'])) {
             $type = ContactType::find($validated['contact_type_id']);
@@ -234,6 +242,17 @@ class ContactController extends Controller
         }
         $duplicateService->abortIfDuplicateContact($countryId, $validated);
 
+        // Retirer les attributs virtuels non-colonnes de la table contacts avant create
+        unset(
+            $validated['accounts'],
+            $validated['account_ids'],
+            $validated['attached_account_ids'],
+            $validated['primary_account_id'],
+            $validated['etablissement'],
+            $validated['account_name'],
+            $validated['attached_account_names']
+        );
+
         $user = auth()->user();
         $isDelegue = $user && !$user->isAdminOrSupervisor();
         $statutValidation = $isDelegue ? 'en_attente' : 'valide';
@@ -246,21 +265,8 @@ class ContactController extends Controller
             ]
         ));
 
-        $accountsInput = $request->input('accounts') ?? $request->input('account_ids') ?? null;
-        if (!empty($accountsInput)) {
-            $accountIds = (array) $accountsInput;
-            $primaryAccountId = $request->input('primary_account_id');
-            $syncData = [];
-            foreach ($accountIds as $index => $accId) {
-                $isPrimary = $primaryAccountId ? ($accId === $primaryAccountId) : ($index === 0);
-                $syncData[$accId] = ['id' => \Illuminate\Support\Str::uuid()->toString(), 'is_primary' => $isPrimary];
-            }
-            $contact->accounts()->sync($syncData);
-        } elseif ($contact->account_id) {
-            $contact->accounts()->sync([
-                $contact->account_id => ['id' => \Illuminate\Support\Str::uuid()->toString(), 'is_primary' => true]
-            ]);
-        }
+        // Synchroniser la table pivot et le compte principal
+        $this->syncContactAccounts($contact, $accountData);
 
         if ($isDelegue) {
             $supervisors = \App\Models\User::role('superviseur')->get();
@@ -280,7 +286,7 @@ class ContactController extends Controller
             }
         }
 
-        return new ContactResource($contact->load(['account', 'categories']));
+        return new ContactResource($contact->load(['account', 'accounts', 'categories']));
     }
 
     #[OA\Get(
@@ -300,6 +306,7 @@ class ContactController extends Controller
     {
         $contact = Contact::with([
                 'account'    => fn($q) => $q->withoutGlobalScopes(),
+                'accounts'   => fn($q) => $q->withoutGlobalScopes(),
                 'categories',
                 'delegue',
                 'speciality',
@@ -367,6 +374,9 @@ class ContactController extends Controller
             unset($validated['potentiel']);
         }
 
+        // Résolution robuste des comptes et du compte principal
+        $accountData = $this->resolveAccountData($request, $validated);
+
         // Détection de doublons
         $accountId = $validated['account_id'] ?? $contact->account_id;
         $countryId = null;
@@ -377,8 +387,21 @@ class ContactController extends Controller
         $dataForDuplicateCheck = array_merge($contact->toArray(), $validated);
         $duplicateService->abortIfDuplicateContact($countryId, $dataForDuplicateCheck, $contact->id);
 
+        // Retirer les attributs virtuels non-colonnes de la table contacts avant update
+        unset(
+            $validated['accounts'],
+            $validated['account_ids'],
+            $validated['attached_account_ids'],
+            $validated['primary_account_id'],
+            $validated['etablissement'],
+            $validated['account_name'],
+            $validated['attached_account_names']
+        );
+
         $contact->update($validated);
-        return new ContactResource($contact->load(['account', 'categories']));
+        $this->syncContactAccounts($contact, $accountData);
+
+        return new ContactResource($contact->load(['account', 'accounts', 'categories']));
     }
 
     #[OA\Delete(
@@ -590,5 +613,116 @@ class ContactController extends Controller
             'message' => 'Prescripteur rejeté avec enregistrement du motif.',
             'data'    => new ContactResource($contact->load(['account', 'categories']))
         ]);
+    }
+
+    /**
+     * Résout l'ID du compte principal et les comptes liés depuis divers formats d'entrée
+     * (account_id, accounts, account_ids, attached_account_ids, etablissement, account_name, attached_account_names, meta)
+     */
+    private function resolveAccountData(Request $request, array &$validated): array
+    {
+        $resolvedAccountIds = [];
+        $primaryAccountId = $validated['primary_account_id'] ?? $request->input('primary_account_id');
+
+        // 1. Collecter tous les IDs d'établissements potentiels
+        $potentialIds = array_merge(
+            !empty($validated['account_id']) ? [$validated['account_id']] : (!empty($request->account_id) ? [$request->account_id] : []),
+            is_array($request->input('accounts')) ? $request->input('accounts') : [],
+            is_array($request->input('account_ids')) ? $request->input('account_ids') : [],
+            is_array($request->input('attached_account_ids')) ? $request->input('attached_account_ids') : []
+        );
+
+        foreach ($potentialIds as $item) {
+            if (is_string($item) && \Illuminate\Support\Str::isUuid($item)) {
+                $resolvedAccountIds[] = $item;
+            }
+        }
+
+        // 2. Collecter tous les noms d'établissements potentiels
+        $potentialNames = array_merge(
+            !empty($validated['etablissement']) ? [$validated['etablissement']] : (!empty($request->etablissement) ? [$request->etablissement] : []),
+            !empty($validated['account_name']) ? [$validated['account_name']] : (!empty($request->account_name) ? [$request->account_name] : []),
+            is_array($request->input('attached_account_names')) ? $request->input('attached_account_names') : [],
+            !empty($validated['meta']['etablissement']) ? [$validated['meta']['etablissement']] : [],
+            is_array($validated['meta']['attached_account_names'] ?? null) ? $validated['meta']['attached_account_names'] : []
+        );
+
+        // Si account_id passé n'est pas un UUID mais un nom (ex: "CHU TEST 3")
+        if (!empty($validated['account_id']) && !\Illuminate\Support\Str::isUuid($validated['account_id'])) {
+            $potentialNames[] = $validated['account_id'];
+            unset($validated['account_id']);
+        }
+
+        foreach ($potentialNames as $name) {
+            if (is_string($name) && trim($name) !== '' && trim($name) !== 'Non rattaché') {
+                $cleanName = trim($name);
+                // Rechercher le compte par nom exact ou approchant
+                $matchedAccount = Account::withoutGlobalScopes()
+                    ->where('nom', $cleanName)
+                    ->orWhere('nom', 'like', "%$cleanName%")
+                    ->first();
+                if ($matchedAccount) {
+                    $resolvedAccountIds[] = $matchedAccount->id;
+                    $primaryAccountId ??= $matchedAccount->id;
+                }
+            }
+        }
+
+        $resolvedAccountIds = array_values(array_unique(array_filter($resolvedAccountIds, fn($id) => \Illuminate\Support\Str::isUuid($id))));
+
+        // Définir le compte principal
+        if ($primaryAccountId && in_array($primaryAccountId, $resolvedAccountIds)) {
+            $validated['account_id'] = $primaryAccountId;
+        } elseif (!empty($resolvedAccountIds)) {
+            $validated['account_id'] = $resolvedAccountIds[0];
+            $primaryAccountId = $resolvedAccountIds[0];
+        }
+
+        // Mettre à jour meta avec etablissement et attached_account_names pour rétrocompatibilité et robustesse
+        if (!empty($validated['account_id'])) {
+            $primaryAccount = Account::withoutGlobalScopes()->find($validated['account_id']);
+            if ($primaryAccount) {
+                $meta = $validated['meta'] ?? [];
+                $meta['etablissement'] = $primaryAccount->nom;
+                $allNames = Account::withoutGlobalScopes()->whereIn('id', $resolvedAccountIds)->pluck('nom')->toArray();
+                $meta['attached_account_names'] = !empty($allNames) ? $allNames : [$primaryAccount->nom];
+                $validated['meta'] = $meta;
+            }
+        }
+
+        return [
+            'account_ids' => $resolvedAccountIds,
+            'primary_account_id' => $primaryAccountId,
+        ];
+    }
+
+    private function syncContactAccounts(Contact $contact, array $accountData): void
+    {
+        $accountIds = $accountData['account_ids'] ?? [];
+        $primaryAccountId = $accountData['primary_account_id'] ?? $contact->account_id;
+
+        if (!empty($accountIds)) {
+            $syncData = [];
+            foreach ($accountIds as $accId) {
+                $isPrimary = $primaryAccountId ? ($accId === $primaryAccountId) : ($accId === $accountIds[0]);
+                $syncData[$accId] = [
+                    'id' => \Illuminate\Support\Str::uuid()->toString(),
+                    'is_primary' => $isPrimary,
+                ];
+            }
+            $contact->accounts()->sync($syncData);
+
+            if (!$contact->account_id || $contact->account_id !== $primaryAccountId) {
+                $contact->account_id = $primaryAccountId ?? $accountIds[0];
+                $contact->saveQuietly();
+            }
+        } elseif ($contact->account_id) {
+            $contact->accounts()->sync([
+                $contact->account_id => [
+                    'id' => \Illuminate\Support\Str::uuid()->toString(),
+                    'is_primary' => true,
+                ]
+            ]);
+        }
     }
 }

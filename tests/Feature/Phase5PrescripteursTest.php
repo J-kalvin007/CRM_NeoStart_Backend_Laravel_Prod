@@ -170,4 +170,45 @@ class Phase5PrescripteursTest extends TestCase
 
         $response->assertStatus(201);
     }
+
+    /**
+     * Test 7: Création d'un prescripteur avec nom d'établissement ou account_ids -> résolution et affichage corrects
+     */
+    public function test_prescripteur_creation_with_establishment_name_resolves_and_displays_establishment(): void
+    {
+        Sanctum::actingAs($this->delegate);
+
+        // 1. Création avec le nom de l'établissement
+        $response = $this->postJson('/api/v1/contacts', [
+            'nom'           => 'TestDoc',
+            'prenom'        => 'Michel',
+            'titre'         => 'Dr.',
+            'etablissement' => 'Clinique A',
+        ]);
+
+        $response->assertStatus(201);
+        $this->assertEquals($this->account1->id, $response->json('data.account_id'));
+        $this->assertEquals('Clinique A', $response->json('data.etablissement'));
+        $this->assertEquals('Clinique A', $response->json('data.account.nom'));
+
+        // 2. Vérification lors de la récupération de la liste (par le superviseur)
+        Sanctum::actingAs($this->supervisor);
+        $listResponse = $this->getJson('/api/v1/contacts?search=TestDoc');
+        $listResponse->assertStatus(200);
+        $this->assertEquals('Clinique A', $listResponse->json('data.0.etablissement'));
+        $this->assertEquals('Clinique A', $listResponse->json('data.0.account.nom'));
+
+        // 3. Création avec account_ids (tableau d'IDs)
+        $response2 = $this->postJson('/api/v1/contacts', [
+            'nom'         => 'TestDoc2',
+            'prenom'      => 'Sophie',
+            'titre'       => 'Dr.',
+            'account_ids' => [$this->account2->id],
+        ]);
+
+        $response2->assertStatus(201);
+        $this->assertEquals($this->account2->id, $response2->json('data.account_id'));
+        $this->assertEquals('Hôpital B', $response2->json('data.etablissement'));
+        $this->assertEquals('Hôpital B', $response2->json('data.account.nom'));
+    }
 }

@@ -23,7 +23,18 @@ class UpdateContactRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'account_id'      => 'nullable|uuid|exists:accounts,id',
+            'account_id'      => 'nullable|string',
+            'accounts'        => 'nullable|array',
+            'accounts.*'      => 'nullable|string',
+            'account_ids'     => 'nullable|array',
+            'account_ids.*'   => 'nullable|string',
+            'attached_account_ids' => 'nullable|array',
+            'attached_account_ids.*' => 'nullable|string',
+            'primary_account_id' => 'nullable|string',
+            'etablissement'   => 'nullable|string|max:255',
+            'account_name'    => 'nullable|string|max:255',
+            'attached_account_names' => 'nullable|array',
+            'attached_account_names.*' => 'nullable|string',
             'contact_type_id' => 'nullable|uuid|exists:contact_types,id',
             'speciality_id'   => 'nullable|uuid|exists:specialities,id',
             'nom'             => 'sometimes|required|string|max:100',

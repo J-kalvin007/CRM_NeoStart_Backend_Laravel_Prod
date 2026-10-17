@@ -9,6 +9,12 @@ class ProductResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $countryPivot = null;
+        if ($this->relationLoaded('countries') && $this->countries->isNotEmpty()) {
+            $countryId = $request->input('country_id') ?? $request->header('X-Country-Id') ?? auth()->user()?->country_id;
+            $countryPivot = ($countryId ? $this->countries->firstWhere('id', $countryId) : null) ?? $this->countries->first();
+        }
+
         return [
             'id'             => $this->id,
             'countries'      => $this->whenLoaded('countries', fn() => $this->countries->map(function ($c) {
@@ -26,6 +32,13 @@ class ProductResource extends JsonResource
                     'stock_critique' => $c->pivot->stock_actuel <= $c->pivot->stock_alerte,
                 ];
             })),
+            'pght'           => $countryPivot?->pivot->pght ?? null,
+            'prix_cession'   => $countryPivot?->pivot->prix_cession ?? null,
+            'ppv'            => $countryPivot?->pivot->ppv ?? null,
+            'devise'         => $countryPivot?->pivot->devise ?? 'XOF',
+            'stock_actuel'   => $countryPivot?->pivot->stock_actuel ?? 0,
+            'stock_alerte'   => $countryPivot?->pivot->stock_alerte ?? 0,
+            'stock_critique' => ($countryPivot?->pivot->stock_actuel ?? 0) <= ($countryPivot?->pivot->stock_alerte ?? 0),
             'nom'            => $this->nom,
             'code'           => $this->code,
             'marque'         => $this->marque,

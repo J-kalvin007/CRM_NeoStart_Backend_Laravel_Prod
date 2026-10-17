@@ -62,14 +62,19 @@ class FullTestDataSeeder extends Seeder
         $cardioCat = Category::firstOrCreate(['nom' => 'Cardiologie'], ['slug' => 'cardiologie', 'is_active' => true]);
         $product = Product::firstOrCreate(['code' => 'CARDIO-100'], [
             'product_type_id' => $drugType->id,
-
             'nom' => 'CardioMax',
-            'pght' => 12.50,
-            'ppv' => 15.00,
-            'devise' => 'EUR',
-            'stock_actuel' => 1000,
             'statut' => 'actif'
         ]);
+        if ($country) {
+            $product->countries()->syncWithoutDetaching([
+                $country->id => [
+                    'pght' => 12.50,
+                    'ppv' => 15.00,
+                    'devise' => 'EUR',
+                    'stock_actuel' => 1000,
+                ]
+            ]);
+        }
 
         // 5. Tour Plan & Activités (Visites)
         $tourPlan = TourPlan::firstOrCreate(['nom' => 'Tournée Septembre 2026'], [
