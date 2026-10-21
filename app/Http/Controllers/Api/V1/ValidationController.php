@@ -126,6 +126,23 @@ class ValidationController extends Controller
                 ['rejection_reason' => null, 'validated_by_id' => auth()->id(), 'validation_date' => now()]
             ));
 
+            // Si l'activité appartient à un plan de tournée, synchroniser son statut
+            if ($activity->tour_plan_id) {
+                $parentPlan = \App\Models\TourPlan::find($activity->tour_plan_id);
+                if ($parentPlan && $parentPlan->statut === 'soumis') {
+                    $hasPending = \App\Models\Activity::where('tour_plan_id', $parentPlan->id)
+                        ->whereIn('statut', ['brouillon', 'en_attente', 'soumis'])
+                        ->exists();
+                    if (!$hasPending) {
+                        $parentPlan->update([
+                            'statut' => 'valide',
+                            'valide_par' => auth()->id(),
+                            'valide_le' => now(),
+                        ]);
+                    }
+                }
+            }
+
             $recipient = $activity->user ?? $activity->delegue;
             if ($recipient) {
                 NotificationController::sendNotification(

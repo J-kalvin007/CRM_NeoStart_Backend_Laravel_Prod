@@ -205,6 +205,9 @@ Route::prefix('v1')->group(function () {
         Route::post('contacts/{contact}/valider', [ContactController::class, 'validateContact']);
         Route::post('contacts/{contact}/rejeter', [ContactController::class, 'rejectContact']);
         Route::post('contacts/{contact}/validate', [ContactController::class, 'validateContact']);
+        Route::get('contacts/{contact}/reports', [ContactController::class, 'visitReports']);
+        Route::get('contacts/{contact}/visit-reports', [ContactController::class, 'visitReports']);
+        Route::get('contacts/{contact}/monthly-history', [ContactController::class, 'monthlyHistory']);
         Route::apiResource('contacts', ContactController::class);
 
         // ── Import Établissements ──────────────────────────────────────────
@@ -222,6 +225,7 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('therapeutic-classes', TherapeuticClassController::class);
         Route::apiResource('products', ProductController::class);
         Route::get('products/{product}/objections', [ObjectionController::class, 'indexByProduct']);
+        Route::post('users/{user}/products', [ProductController::class, 'syncUserProducts']);
 
         // ── Opérationnel Terrain (Visites, Tâches, Agenda) ──────
         Route::post('tour-plans/optimize', [\App\Http\Controllers\Api\V1\TourPlanController::class, 'optimize']);
@@ -286,6 +290,8 @@ Route::prefix('v1')->group(function () {
         Route::get('/analytics/edetailing-summary', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'edetailingSummary']);
         Route::get('/export/performance', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'exportPerformance']);
         Route::get('/export/expenses', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'exportExpenses']);
+        Route::get('/export/activities', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'exportActivities']);
+        Route::get('/export/activities/pdf', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'exportActivitiesPdf']);
         Route::get('/marketing/objections-stats', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'objectionsStats']);
         Route::get('/supervisor/alerts', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'alerts']);
         Route::get('/supervisor/dashboard', [\App\Http\Controllers\Api\V1\SupervisorDashboardController::class, 'dashboard']);
@@ -295,8 +301,12 @@ Route::prefix('v1')->group(function () {
         Route::get('/trainings', [\App\Http\Controllers\Api\V1\TrainingController::class, 'index']);
         Route::get('/kols', [\App\Http\Controllers\Api\V1\KolController::class, 'index']);
 
-        // -- Coaching & Visites en Duo --
+        // -- Coaching & Visites en Duo & Trio --
         Route::get('/coaching/delegates/{id}', [CoachingController::class, 'getSessions']);
+        Route::get('/coaching/my-evaluations', [CoachingController::class, 'myEvaluations']);
+        Route::get('/coaching/duo-dashboard', [CoachingController::class, 'duoDashboard']);
+        Route::get('/coaching/trio-dashboard', [CoachingController::class, 'trioDashboard']);
+        Route::post('/coaching/evaluate', [CoachingController::class, 'storeEvaluation']);
         Route::post('/coaching-sessions', [CoachingController::class, 'storeSession']);
         Route::get('/coaching-sessions', [CoachingController::class, 'index']);
         Route::put('/coaching-sessions/{id}/complete', [CoachingController::class, 'completeSession']);
@@ -304,6 +314,10 @@ Route::prefix('v1')->group(function () {
         Route::get('/coaching-sessions/{id}', [CoachingController::class, 'show']);
         Route::put('/coaching-sessions/{id}', [CoachingController::class, 'update']);
         Route::delete('/coaching-sessions/{id}', [CoachingController::class, 'destroy']);
+        Route::get('/export/duos', [CoachingController::class, 'exportDuoExcel']);
+        Route::get('/export/duos/pdf', [CoachingController::class, 'exportDuoPdf']);
+        Route::get('/export/trios', [CoachingController::class, 'exportTrioExcel']);
+        Route::get('/export/trios/pdf', [CoachingController::class, 'exportTrioPdf']);
 
         // ── Notes de Frais (Expenses) ──────────────────────────
         Route::apiResource('expenses', ExpenseController::class);

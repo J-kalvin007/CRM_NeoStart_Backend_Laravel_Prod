@@ -10,6 +10,8 @@ use App\Models\Contact;
 use App\Models\ContactType;
 use App\Models\Account;
 use App\Models\Potential;
+use App\Models\Activity;
+use App\Http\Resources\ActivityResource;
 use App\Services\DynamicValidationService;
 use App\Services\DuplicateDetectionService;
 use Illuminate\Http\Request;
@@ -67,6 +69,14 @@ class ContactController extends Controller
             })
             ->when($request->has('is_kol'), fn($q) => $q->where('is_kol', $request->boolean('is_kol')))
             ->when($request->account_id, fn($q, $v) => $q->where('account_id', $v))
+            ->when($request->delegate_id ?? $request->user_id, fn($q, $v) => $q->where('contacts.user_id', $v))
+            ->when($request->country ?? $request->pays, function($q, $pays) {
+                $q->where(function($sub) use ($pays) {
+                    $sub->where('pays', $pays)
+                        ->orWhere('country', $pays)
+                        ->orWhereHas('account', fn($aq) => $aq->where('pays', $pays)->orWhere('country', $pays));
+                });
+            })
             ->when($request->search, fn($q, $v) => $q->where(function ($q) use ($v) {
                 $q->where('nom', 'like', "%$v%")
                   ->orWhere('prenom', 'like', "%$v%")
@@ -310,9 +320,137 @@ class ContactController extends Controller
                 'categories',
                 'delegue',
                 'speciality',
-                'activities' => fn($q) => $q->latest()->limit(10),
+                'activities' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
+                    ->whereNotIn(\Illuminate\Support\Facades\DB::raw('LOWER(statut)'), ['brouillon', 'draft'])
+                    ->with([
+                        'delegue' => fn($dq) => $dq->withoutGlobalScopes(),
+                        'products' => fn($pq) => $pq->withoutGlobalScopes(),
+                        'sampleMovements' => fn($sq) => $sq->where('movement_type', 'distribution')->with('product'),
+                        'objections.product',
+                    ])
+                    ->latest('date_activite')
+                    ->limit(20),
             ])->findOrFail($id);
         return new ContactResource($contact);
+    }
+
+    #[OA\Get(
+        path: '/api/v1/contacts/{id}/reports',
+        summary: 'Historique des comptes-rendus de visite pour un prescripteur',
+        security: [['bearerAuth' => []]],
+        tags: ['Contacts'],
+        parameters: [
+            new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid')),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Liste des comptes-rendus de visite du prescripteur'),
+        ]
+    )]
+    public function visitReports(Request $request, string $id)
+    {
+        $contact = Contact::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($id);
+
+        $activities = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
+            ->where(function ($q) use ($contact) {
+                $q->where('contact_id', $contact->id)
+                  ->orWhereHas('contacts', fn($sub) => $sub->where('contacts.id', $contact->id));
+            })
+            ->whereNotIn(\Illuminate\Support\Facades\DB::raw('LOWER(statut)'), ['brouillon', 'draft'])
+            ->where(function ($q) {
+                $q->whereIn('statut', ['realisee', 'effectuee', 'terminee'])
+                  ->orWhereNotNull('report_content')
+                  ->orWhereIn('report_status', ['submitted', 'validated', 'soumis', 'valide', 'rejected', 'rejete']);
+            })
+            ->with([
+                'delegue' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class),
+                'contact' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account', 'speciality', 'potential', 'influence']),
+                'contacts' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class),
+                'account' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class),
+                'products' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class),
+                'sampleMovements' => fn($q) => $q->where('movement_type', 'distribution')->with('product'),
+                'objections.product',
+                'activityType',
+                'type',
+            ])
+            ->orderByDesc('date_activite')
+            ->orderByDesc('created_at')
+            ->get();
+
+        return ActivityResource::collection($activities);
+    }
+
+    #[OA\Get(
+        path: '/api/v1/contacts/{id}/monthly-history',
+        summary: 'Historique et vérification de visite dans le même mois civil pour un prescripteur',
+        security: [['bearerAuth' => []]],
+        tags: ['Contacts'],
+        parameters: [
+            new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid')),
+            new OA\Parameter(name: 'date', in: 'query', required: false, schema: new OA\Schema(type: 'string', format: 'date')),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Détails des visites du même mois et historique du prescripteur'),
+        ]
+    )]
+    public function monthlyHistory(Request $request, string $id)
+    {
+        $contact = Contact::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($id);
+        $dateStr = $request->query('date', now()->toDateString());
+        $targetDate = \Illuminate\Support\Carbon::parse($dateStr);
+        $startOfMonth = $targetDate->copy()->startOfMonth()->toDateString();
+        $endOfMonth = $targetDate->copy()->endOfMonth()->toDateString();
+
+        $allPastVisits = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
+            ->where(function ($q) use ($contact) {
+                $q->where('contact_id', $contact->id)
+                  ->orWhereHas('contacts', fn($sub) => $sub->where('contacts.id', $contact->id));
+            })
+            ->whereNotIn(\Illuminate\Support\Facades\DB::raw('LOWER(statut)'), ['annulee', 'cancelled'])
+            ->with(['delegue', 'products', 'sampleMovements.product'])
+            ->orderByDesc('date_activite')
+            ->orderByDesc('heure_debut')
+            ->get();
+
+        $sameMonthVisits = $allPastVisits->filter(function($a) use ($startOfMonth, $endOfMonth) {
+            $d = \Illuminate\Support\Carbon::parse($a->date_activite)->toDateString();
+            return $d >= $startOfMonth && $d <= $endOfMonth;
+        });
+
+        $totalCompletedCount = $allPastVisits->whereIn('statut', ['realisee', 'effectuee', 'terminee'])->count();
+
+        $lastVisit = $sameMonthVisits->first() ?? $allPastVisits->first();
+
+        $lastVisitData = null;
+        if ($lastVisit) {
+            $reportText = $lastVisit->report_content 
+                ?? $lastVisit->notes 
+                ?? data_get($lastVisit->meta, 'report_summary')
+                ?? data_get($lastVisit->meta, 'feedback')
+                ?? $lastVisit->description;
+
+            $lastVisitData = [
+                'id' => (string) $lastVisit->id,
+                'date_activite' => $lastVisit->date_activite,
+                'heure_debut' => $lastVisit->heure_debut,
+                'heure_fin' => $lastVisit->heure_fin,
+                'statut' => $lastVisit->statut,
+                'delegue_name' => $lastVisit->delegue?->name ?? 'Délégué',
+                'report_summary' => is_string($reportText) ? $reportText : (is_array($reportText) ? json_encode($reportText, JSON_UNESCAPED_UNICODE) : ''),
+                'products' => $lastVisit->products->map(fn($p) => ['id' => $p->id, 'nom' => $p->nom ?? $p->name])->values(),
+                'samples_count' => $lastVisit->sampleMovements->count(),
+            ];
+        }
+
+        return response()->json([
+            'contact_id' => (string) $contact->id,
+            'contact_name' => trim("{$contact->titre} {$contact->prenom} {$contact->nom}"),
+            'target_month' => $targetDate->format('Y-m'),
+            'target_month_label' => $targetDate->translatedFormat('F Y'),
+            'has_visit_same_month' => $sameMonthVisits->isNotEmpty(),
+            'same_month_visits_count' => $sameMonthVisits->count(),
+            'total_completed_visits_count' => $totalCompletedCount,
+            'last_visit' => $lastVisitData,
+        ]);
     }
 
     #[OA\Put(

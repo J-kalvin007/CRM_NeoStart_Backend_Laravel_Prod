@@ -59,12 +59,23 @@ class ActivityController extends Controller
                 'objections.product',
             ])
             ->when($request->user_id, fn($q, $v) => $q->where('activities.user_id', $v))
+            ->when($request->delegate_id, fn($q, $v) => $q->where('activities.user_id', $v))
+            ->when($request->country ?? $request->pays, function($q, $pays) {
+                $q->where(function($sub) use ($pays) {
+                    $sub->whereHas('contact', fn($c) => $c->where('pays', $pays)->orWhere('country', $pays))
+                        ->orWhereHas('account', fn($a) => $a->where('pays', $pays)->orWhere('country', $pays))
+                        ->orWhereHas('user', fn($u) => $u->where('country', $pays)->orWhere('pays', $pays));
+                });
+            })
             ->when($request->activity_type, fn($q, $v) => $q->where('activity_type', $v))
             ->when($request->statut, fn($q, $v) => $q->where('statut', $v))
             ->when($request->report_status, fn($q, $v) => $q->where('report_status', $v))
             ->when($request->date_debut, fn($q, $v) => $q->whereDate('date_activite', '>=', $v))
             ->when($request->date_fin, fn($q, $v) => $q->whereDate('date_activite', '<=', $v))
-            ->when($request->contact_id, fn($q, $v) => $q->where('contact_id', $v))
+            ->when($request->contact_id, fn($q, $v) => $q->where(function($sub) use ($v) {
+                $sub->where('activities.contact_id', $v)
+                    ->orWhereHas('contacts', fn($c) => $c->where('contacts.id', $v));
+            }))
             ->when($request->account_id, fn($q, $v) => $q->where('account_id', $v))
             ->when($request->tour_plan_id, fn($q, $v) => $q->where('tour_plan_id', $v))
             ->orderByDesc('date_activite');
@@ -79,11 +90,21 @@ class ActivityController extends Controller
 
         // Restreindre la visibilité supplémentaire si pas d'accès global
         if (!$isGlobal) {
-            $query->where(function ($q) use ($user, $isManager, $isCommercialDirector) {
+            $query->where(function ($q) use ($user, $isManager, $isCommercialDirector, $request) {
                 // Voit toujours ses propres visites ou là où il est accompagnant
                 $q->where('activities.user_id', $user->id)
                   ->orWhere('activities.accompanying_user_id', $user->id)
                   ->orWhere('activities.duo_user_id', $user->id);
+
+                // Si consultation par prescripteur/contact, le délégué a accès aux comptes-rendus réalisés par l'équipe avec ce médecin
+                if ($request->filled('contact_id')) {
+                    $q->orWhere(function ($subQ) use ($request) {
+                        $subQ->where(function ($cQ) use ($request) {
+                            $cQ->where('activities.contact_id', $request->contact_id)
+                               ->orWhereHas('contacts', fn($c) => $c->where('contacts.id', $request->contact_id));
+                        })->whereNotIn(\Illuminate\Support\Facades\DB::raw('LOWER(activities.statut)'), ['brouillon', 'draft']);
+                    });
+                }
 
                 if ($isCommercialDirector) {
                     // Le Sales Manager voit les plannings de tous les délégués (sauf brouillons)
@@ -415,12 +436,20 @@ class ActivityController extends Controller
             $targetStatus = 'planifiee';
         }
         
-        // Permettre à l'auteur (délégué) de soumettre son propre brouillon (brouillon -> planifiee ou en_attente)
+        // Interdiction formelle de soumettre une visite individuellement (Règle 1) :
+        // Le délégué doit impérativement soumettre l'intégralité de sa semaine via le module TourPlan.
         $isDraftSubmission = in_array(strtolower((string)$activity->statut), ['brouillon', 'draft'], true) 
             && (string)$activity->user_id === (string)$user->id 
-            && in_array($targetStatus, ['planifiee', 'planifiée', 'en_attente'], true);
+            && in_array($targetStatus, ['planifiee', 'planifiée', 'en_attente', 'en_attente_validation'], true);
 
-        if (!$canDecide && !$isDraftSubmission && $targetStatus !== null && $targetStatus !== $activity->statut && in_array($targetStatus, $decisionStatuts, true) && !$dateChanged) {
+        if (!$canDecide && $isDraftSubmission) {
+            return response()->json([
+                'error' => 'INDIVIDUAL_SUBMISSION_FORBIDDEN',
+                'message' => 'Les visites ne peuvent pas être soumises individuellement. Veuillez soumettre votre planning hebdomadaire complet (du Lundi au Vendredi) depuis le module Planning.'
+            ], 422);
+        }
+
+        if (!$canDecide && $targetStatus !== null && $targetStatus !== $activity->statut && in_array($targetStatus, $decisionStatuts, true) && !$dateChanged) {
             return response()->json(['message' => 'La validation ou le refus d\'une visite revient à votre responsable.'], 403);
         }
         if (!$canDecide && in_array($validatedData['report_status'] ?? null, ['validated', 'rejected'], true)) {
@@ -441,11 +470,29 @@ class ActivityController extends Controller
         $samples = $validatedData['samples'] ?? [];
         unset($validatedData['samples']);
 
-        // Contrôle de sécurité 1: Démarrer la visite (en_cours) nécessite que la visite ne soit pas annulée ou refusée
-        if ($targetStatus === 'en_cours' && !in_array(strtolower($activity->statut), ['planifiee', 'planifiée', 'validee', 'validée', 'validated', 'en_attente_validation', 'en_cours', 'realisee'])) {
-            return response()->json([
-                'message' => 'Démarrage impossible : Cette visite a été annulée ou refusée.'
-            ], 403);
+        if (array_key_exists('pharmacy_inventory', $validatedData)) {
+            $meta = $activity->meta ?? [];
+            $meta['pharmacy_inventory'] = $validatedData['pharmacy_inventory'];
+            $validatedData['meta'] = $meta;
+            unset($validatedData['pharmacy_inventory']);
+        }
+
+        // Contrôle de sécurité Règle 7: Seule une visite préalablement VALIDÉE par le responsable peut être effectuée
+        $isAttemptingExecution = in_array($targetStatus, ['en_cours', 'realisee'], true)
+            || (!empty($validatedData['start_time']) && empty($activity->start_time))
+            || (!empty($validatedData['gps_debut_lat']) && empty($activity->gps_debut_lat));
+
+        if ($isAttemptingExecution) {
+            $currentStatusLower = strtolower((string)$activity->statut);
+            $isApproved = ($activity->statut === 'validee' || !empty($activity->validated_by_id))
+                && !in_array($currentStatusLower, ['brouillon', 'draft', 'en_attente', 'en_attente_validation', 'refusee', 'rejetee', 'annulee'], true);
+            if (!$isApproved) {
+                return response()->json([
+                    'error' => 'VISIT_NOT_VALIDATED',
+                    'error_code' => 'VISIT_NOT_VALIDATED',
+                    'message' => 'Démarrage impossible : Cette visite n\'a pas encore été validée par votre responsable. Seules les visites validées peuvent être effectuées.'
+                ], 422);
+            }
         }
 
         // Prevent starting a visit that can never pass the GPS check-out validation.
@@ -622,6 +669,21 @@ class ActivityController extends Controller
                 $activity->lock();
             }
         });
+
+        // Notification au délégué si la modification est effectuée par son responsable
+        if ($canDecide && (string)$activity->user_id !== (string)$user->id) {
+            $delegateUser = \App\Models\User::withoutGlobalScopes()->find($activity->user_id);
+            if ($delegateUser) {
+                \App\Http\Controllers\Api\V1\NotificationController::sendNotification(
+                    $delegateUser,
+                    'Planning modifié par votre responsable',
+                    "Votre responsable {$user->name} a mis à jour votre visite du " . ($activity->date_activite ? date('d/m/Y', strtotime($activity->date_activite)) : ''),
+                    'planning',
+                    'delegue',
+                    ['activity_id' => (string) $activity->id]
+                );
+            }
+        }
 
         return new ActivityResource($activity->load([
             'delegue', 
@@ -821,6 +883,23 @@ class ActivityController extends Controller
             ]);
 
             $validatedCount++;
+
+            // Auto-synchronisation du plan de tournée parent si toutes ses visites sont validées
+            if ($activity->tour_plan_id) {
+                $parentPlan = \App\Models\TourPlan::find($activity->tour_plan_id);
+                if ($parentPlan && $parentPlan->statut === 'soumis') {
+                    $hasPending = \App\Models\Activity::where('tour_plan_id', $parentPlan->id)
+                        ->whereIn('statut', ['brouillon', 'en_attente', 'soumis'])
+                        ->exists();
+                    if (!$hasPending) {
+                        $parentPlan->update([
+                            'statut' => 'valide',
+                            'valide_par' => auth()->id(),
+                            'valide_le' => now(),
+                        ]);
+                    }
+                }
+            }
 
             // Group by user for notification
             if ($activity->user) {
@@ -1707,6 +1786,19 @@ class ActivityController extends Controller
             "Cette visite ne peut pas être démarrée dans son état actuel."
         );
 
+        // Contrôle de sécurité: Seule une visite préalablement validée par le responsable peut être effectuée
+        $currentStatusLower = strtolower((string)$activity->statut);
+        $isApproved = ($activity->statut === 'validee' || !empty($activity->validated_by_id))
+            && !in_array($currentStatusLower, ['brouillon', 'draft', 'en_attente', 'en_attente_validation', 'refusee', 'rejetee', 'annulee'], true);
+
+        if (!$isApproved) {
+            return response()->json([
+                'error' => 'VISIT_NOT_VALIDATED',
+                'error_code' => 'VISIT_NOT_VALIDATED',
+                'message' => "Démarrage impossible : Cette visite n'a pas encore été validée par votre responsable. Seules les visites validées peuvent être effectuées."
+            ], 422);
+        }
+
         // Interdire deux visites simultanément en cours pour le même délégué
         $hasActiveVisit = Activity::where('user_id', $activity->user_id)
             ->where('id', '!=', $activity->id)
@@ -1720,16 +1812,30 @@ class ActivityController extends Controller
         );
 
         $validated = $request->validate([
-            'gps_lat' => 'required|numeric|between:-90,90',
-            'gps_lng' => 'required|numeric|between:-180,180',
+            'gps_lat' => 'nullable|numeric|between:-90,90',
+            'gps_lng' => 'nullable|numeric|between:-180,180',
+            'latitude' => 'nullable|numeric|between:-90,90',
+            'longitude' => 'nullable|numeric|between:-180,180',
             'gps_accuracy' => 'nullable|numeric|min:0',
         ]);
+
+        $lat = $validated['gps_lat'] ?? $validated['latitude'] ?? null;
+        $lng = $validated['gps_lng'] ?? $validated['longitude'] ?? null;
+        if ($lat === null || $lng === null) {
+            return response()->json([
+                'message' => 'Les coordonnées GPS de début sont obligatoires.',
+                'errors' => [
+                    'gps_lat' => ['The gps lat field is required.'],
+                    'gps_lng' => ['The gps lng field is required.']
+                ]
+            ], 422);
+        }
 
         // Mettre à jour la visite avec la position GPS et le statut en_cours
         $activity->update([
             'statut' => 'en_cours',
-            'gps_debut_lat' => $validated['gps_lat'],
-            'gps_debut_lng' => $validated['gps_lng'],
+            'gps_debut_lat' => $lat,
+            'gps_debut_lng' => $lng,
             'gps_debut_accuracy' => $validated['gps_accuracy'] ?? null,
             'start_time' => $activity->start_time ?? now(),
         ]);

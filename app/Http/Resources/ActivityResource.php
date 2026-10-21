@@ -91,9 +91,10 @@ class ActivityResource extends JsonResource
                     'remarques'         => $p->pivot->remarques ?? null,
                 ])
             ),
-            // Compte-rendu : résultat global et prochaine action saisis par le délégué
-            'resultat'       => $this->meta['resultat'] ?? null,
-            'actions'        => $this->meta['prochaine_action'] ?? null,
+            // Compte-rendu : résultat global, prochaine action et relevé pharmacie
+            'resultat'           => $this->meta['resultat'] ?? null,
+            'actions'            => $this->meta['prochaine_action'] ?? null,
+            'pharmacy_inventory' => $this->meta['pharmacy_inventory'] ?? null,
             'objections'     => $this->whenLoaded('objections', fn() =>
                 $this->objections->map(fn($o) => [
                     'objection_id'         => $o->id,

@@ -40,8 +40,11 @@ class ActivityReportController extends Controller
     public function update(Request $request, Activity $activity)
     {
         $validated = $request->validate([
-            'report_content' => 'nullable|string',
-            'report_status'  => 'required|in:draft,submitted'
+            'report_content'     => 'nullable|string',
+            'report_status'      => 'required|in:draft,submitted',
+            'pharmacy_inventory' => 'nullable|array',
+            'products'           => 'nullable|array',
+            'samples'            => 'nullable|array',
         ]);
 
         abort_unless((string) $activity->user_id === (string) auth()->id(), 403, 'Seul le délégué de cette visite peut rédiger son compte-rendu.');
@@ -115,8 +118,11 @@ class ActivityReportController extends Controller
             $data['gps_fin_lng'] = $request->input('gps_fin_lng');
         }
 
-        // Résultat global et prochaine action : conservés dans meta pour la consultation du compte-rendu
+        // Résultat global, prochaine action et relevé stock pharmacie : conservés dans meta
         $meta = $activity->meta ?? [];
+        if ($request->has('pharmacy_inventory')) {
+            $meta['pharmacy_inventory'] = $request->input('pharmacy_inventory');
+        }
         foreach (['resultat' => 'resultat', 'actions' => 'prochaine_action'] as $input => $key) {
             if ($request->has($input)) {
                 $value = trim((string) $request->input($input));
@@ -130,6 +136,62 @@ class ActivityReportController extends Controller
         $data['meta'] = $meta;
 
         $activity->update($data);
+
+        // Synchronisation des produits présentés (notamment lors du rejeu de la file hors-ligne)
+        if ($request->has('products') && is_array($request->input('products'))) {
+            $syncData = [];
+            foreach ($request->input('products') as $p) {
+                if (!empty($p['product_id'])) {
+                    $syncData[$p['product_id']] = [
+                        'id' => \Illuminate\Support\Str::uuid()->toString(),
+                        'quantity' => $p['quantity'] ?? 0,
+                        'customer_interest' => $p['customer_interest'] ?? null,
+                        'remarques' => $p['remarques'] ?? null,
+                    ];
+                }
+            }
+            if (!empty($syncData)) {
+                $activity->products()->sync($syncData);
+            }
+        }
+
+        // Synchronisation des objections formulées par le prescripteur lors de la visite
+        if ($request->has('objections') && is_array($request->input('objections'))) {
+            $syncObjections = [];
+            foreach ($request->input('objections') as $obj) {
+                if (!is_array($obj)) continue;
+                $objection = null;
+                $objId = $obj['objection_id'] ?? null;
+                if (!empty($objId) && \Illuminate\Support\Str::isUuid($objId)) {
+                    $objection = \App\Models\Objection::find($objId);
+                }
+                if (!$objection && !empty($obj['title'])) {
+                    $productId = (!empty($obj['product_id']) && \Illuminate\Support\Str::isUuid($obj['product_id']))
+                        ? $obj['product_id']
+                        : ($activity->products()->first()?->id ?? \App\Models\Product::first()?->id);
+
+                    if ($productId) {
+                        $objection = \App\Models\Objection::firstOrCreate([
+                            'product_id' => $productId,
+                            'title' => $obj['title'],
+                        ], [
+                            'recommended_argument' => $obj['recommended_argument'] ?? 'Argumentaire formulé en visite par le délégué.',
+                        ]);
+                    }
+                }
+                if ($objection) {
+                    $syncObjections[$objection->id] = [
+                        'physician_reaction' => in_array($obj['physician_reaction'] ?? '', ['convaincu', 'partiellement_convaincu', 'refus'])
+                            ? $obj['physician_reaction']
+                            : 'convaincu',
+                        'notes' => $obj['notes'] ?? null,
+                    ];
+                }
+            }
+            if (!empty($syncObjections)) {
+                $activity->objections()->syncWithoutDetaching($syncObjections);
+            }
+        }
 
         if ($activity->statut === 'realisee') {
             $activity->lock();

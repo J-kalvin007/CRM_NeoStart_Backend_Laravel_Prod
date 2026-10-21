@@ -48,6 +48,9 @@ class ContactResource extends JsonResource
                               ?? data_get($this->meta, 'adresse'),
             'gps_lat'      => $this->gps_lat,
             'gps_lng'      => $this->gps_lng,
+            'pays'         => $this->pays ?? $this->country ?? $this->account?->pays ?? data_get($this->meta, 'pays'),
+            'visits_count' => (int) ($this->activities_count ?? ($this->relationLoaded('activities') ? $this->activities->whereIn('statut', ['realisee', 'completee', 'effectuee'])->count() : \App\Models\Activity::withoutGlobalScopes()->where(function($q) { $q->where('contact_id', $this->id)->orWhereHas('contacts', fn($sub) => $sub->where('contacts.id', $this->id)); })->whereIn('statut', ['realisee', 'completee', 'effectuee'])->count())),
+            'last_visit_date' => $this->last_visit_date ?? ($this->relationLoaded('activities') ? $this->activities->whereIn('statut', ['realisee', 'completee', 'effectuee'])->sortByDesc('date_activite')->first()?->date_activite : null),
 
             // ── Ciblage ───────────────────────────────────────────────────
             'potentiel'       => $potentielLabel,

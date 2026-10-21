@@ -34,7 +34,20 @@ class TourPlanController extends Controller
             $query->whereIn('user_id', array_merge([$user->id], $user->teamMemberIds()));
         }
 
-        return TourPlanResource::collection($query->paginate(30));
+        $plans = $query->paginate(30);
+
+        // Auto-synchronisation des plannings dont toutes les activités ont été validées
+        foreach ($plans as $plan) {
+            if ($plan->statut === 'soumis' && $plan->activities->isNotEmpty()) {
+                $hasPending = $plan->activities->contains(fn($a) => in_array($a->statut, ['brouillon', 'en_attente', 'soumis'], true));
+                $allApproved = $plan->activities->every(fn($a) => in_array($a->statut, ['validee', 'realisee'], true));
+                if (!$hasPending && $allApproved) {
+                    $plan->update(['statut' => 'valide']);
+                }
+            }
+        }
+
+        return TourPlanResource::collection($plans);
     }
 
     #[OA\Post(path: '/api/v1/tour-plans', summary: 'Créer un plan de tournée', security: [['bearerAuth' => []]], tags: ['TourPlans'],
@@ -46,13 +59,73 @@ class TourPlanController extends Controller
         $validated = $request->validated();
         unset($validated['activity_ids']);
 
+        $statut = $request->input('statut', 'soumis');
+        $isSubmitting = in_array($statut, ['soumis', 'en_attente'], true);
+
+        // RÈGLE STRICTE : Les planifications doivent se faire sur toute la semaine.
+        // On exige une planification sur toute la semaine (du lundi au vendredi)
+        // avant que le système n'autorise le délégué à envoyer sa planification pour validation.
+        if ($isSubmitting) {
+            $dateDebutInput = \Illuminate\Support\Carbon::parse($request->input('date_debut', now()));
+            $monday = $dateDebutInput->copy()->startOfWeek(); // Lundi
+            $friday = $monday->copy()->addDays(4);            // Vendredi
+            $sunday = $monday->copy()->addDays(6);            // Dimanche
+
+            $workingDays = [
+                1 => ['label' => 'Lundi', 'date' => $monday->toDateString()],
+                2 => ['label' => 'Mardi', 'date' => $monday->copy()->addDays(1)->toDateString()],
+                3 => ['label' => 'Mercredi', 'date' => $monday->copy()->addDays(2)->toDateString()],
+                4 => ['label' => 'Jeudi', 'date' => $monday->copy()->addDays(3)->toDateString()],
+                5 => ['label' => 'Vendredi', 'date' => $monday->copy()->addDays(4)->toDateString()],
+            ];
+
+            $activityIds = $request->input('activity_ids', []);
+            $weekActivities = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
+                ->where('user_id', $user->id)
+                ->whereBetween('date_activite', [$monday->toDateString(), $friday->toDateString()])
+                ->where(function ($q) {
+                    $q->whereIn('statut', ['brouillon', 'planifiee', 'en_attente', 'validee'])
+                      ->orWhereIn('activity_type', ['conge', 'absence', 'indisponibilite', 'leave', 'Congé Annuel', 'Congé Maladie']);
+                })
+                ->when(!empty($activityIds) && is_array($activityIds), function ($q) use ($activityIds) {
+                    $q->where(function ($sub) use ($activityIds) {
+                        $sub->whereIn('id', $activityIds)
+                            ->orWhereIn('activity_type', ['conge', 'absence', 'indisponibilite', 'leave', 'Congé Annuel', 'Congé Maladie']);
+                    });
+                })
+                ->get();
+
+            $coveredDates = $weekActivities->map(fn($a) => \Illuminate\Support\Carbon::parse($a->date_activite)->toDateString())->unique()->toArray();
+
+            $missingDays = [];
+            foreach ($workingDays as $dayNum => $dayInfo) {
+                if (!in_array($dayInfo['date'], $coveredDates, true)) {
+                    $missingDays[] = "{$dayInfo['label']} (" . \Illuminate\Support\Carbon::parse($dayInfo['date'])->format('d/m') . ")";
+                }
+            }
+
+            if (!empty($missingDays)) {
+                return response()->json([
+                    'error' => 'WEEKLY_PLANNING_INCOMPLETE',
+                    'message' => "Planning hebdomadaire incomplet : vous devez planifier des visites sur toute la semaine (du lundi au vendredi) avant de pouvoir soumettre votre planning pour validation. Jour(s) manquant(s) : " . implode(', ', $missingDays) . ".",
+                    'missing_days' => $missingDays,
+                ], 422);
+            }
+
+            // Normalisation des dates pour couvrir la semaine complète
+            $validated['date_debut'] = $monday->toDateString();
+            $validated['date_fin'] = $sunday->toDateString();
+            if (empty($validated['nom']) || str_starts_with($validated['nom'], 'Planning') || str_starts_with($validated['nom'], 'Semaine')) {
+                $validated['nom'] = "Semaine du " . $monday->format('d/m/Y') . " au " . $sunday->format('d/m/Y');
+            }
+        }
+
         $plan = TourPlan::create(array_merge($validated, [
             'user_id'       => $user->id,
-            'statut'        => $request->input('statut', 'soumis'),
+            'statut'        => $statut,
         ]));
 
-        // Visites soumises : celles choisies par le délégué (ou, sans sélection, toutes celles de la période),
-        // uniquement les siennes et encore à soumettre (brouillon, ou en attente sans planning)
+        // Visites soumises : celles choisies par le délégué (ou toutes celles de la semaine)
         $activityIds = $request->input('activity_ids', []);
         $toSubmit = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
             ->where('user_id', $user->id)

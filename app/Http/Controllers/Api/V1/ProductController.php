@@ -37,12 +37,54 @@ class ProductController extends Controller
 
         $countryId = $request->input('country_id') ?? $request->header('X-Country-Id');
 
-        $query = $query->when($request->product_type_id, fn($q, $v) => $q->where('product_type_id', $v))
-            ->when($countryId, function ($q) use ($countryId) {
-                $q->whereHas('countries', function ($subq) use ($countryId) {
+        // Restriction délégué : voit uniquement les produits qui lui sont affectés
+        // Si aucun produit ne lui est affecté, il voit tous les produits de son pays
+        if ($user && !$user->isAdminOrDirection()) {
+            $assignedViaPivot = $user->products()->pluck('products.id')->toArray();
+            $assignedViaStock = \App\Models\SampleStock::where('user_id', $user->id)
+                ->pluck('product_id')
+                ->filter()
+                ->unique()
+                ->toArray();
+            $assignedViaMovements = \App\Models\SampleMovement::where('user_id', $user->id)
+                ->pluck('product_id')
+                ->filter()
+                ->unique()
+                ->toArray();
+            $assignedViaUnit = [];
+            if ($user->organizational_unit_id) {
+                $assignedViaUnit = \Illuminate\Support\Facades\DB::table('organizational_unit_product')
+                    ->where('organizational_unit_id', $user->organizational_unit_id)
+                    ->pluck('product_id')
+                    ->toArray();
+            }
+
+            $allAssignedIds = array_values(array_unique(array_merge($assignedViaPivot, $assignedViaStock, $assignedViaMovements, $assignedViaUnit)));
+
+            if (!empty($allAssignedIds)) {
+                $query->whereIn('products.id', $allAssignedIds);
+            } else {
+                // Aucun produit spécifiquement affecté au délégué : repli sur les produits de son pays
+                $userCountryId = $user->country_id ?? $countryId;
+                if ($userCountryId) {
+                    $hasCountryRows = \Illuminate\Support\Facades\DB::table('country_product')->where('country_id', $userCountryId)->exists();
+                    if ($hasCountryRows) {
+                        $query->whereHas('countries', function ($subq) use ($userCountryId) {
+                            $subq->where('countries.id', $userCountryId);
+                        });
+                    }
+                }
+            }
+        } elseif ($countryId) {
+            $hasCountryRows = \Illuminate\Support\Facades\DB::table('country_product')->where('country_id', $countryId)->exists();
+            if ($hasCountryRows) {
+                $query->whereHas('countries', function ($subq) use ($countryId) {
                     $subq->where('countries.id', $countryId);
                 });
-            })
+            }
+        }
+
+        $query = $query->when($request->product_type_id, fn($q, $v) => $q->where('product_type_id', $v))
             ->when($request->statut, fn($q, $v) => $q->where('statut', $v))
             ->when($request->boolean('stock_alerte'), fn($q) => $q->scopeStockAlerte())
             ->when($request->search, fn($q, $v) => $q->where(function ($q) use ($v) {
@@ -249,5 +291,18 @@ class ProductController extends Controller
     {
         Product::findOrFail($id)->delete();
         return response()->json(null, 204);
+    }
+
+    public function syncUserProducts(Request $request, \App\Models\User $user)
+    {
+        $request->validate([
+            'product_ids' => 'required|array',
+            'product_ids.*' => 'exists:products,id',
+        ]);
+        $user->products()->sync($request->input('product_ids'));
+        return response()->json([
+            'message' => 'Produits affectés avec succès au délégué.',
+            'product_ids' => $user->products()->pluck('products.id'),
+        ]);
     }
 }

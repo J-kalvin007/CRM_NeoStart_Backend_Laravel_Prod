@@ -18,10 +18,24 @@ class StoreActivityRequest extends FormRequest
             $activityTypeRecord = \App\Models\ActivityType::find($typeId);
         }
         if (!$activityTypeRecord && $rawType) {
-            $activityTypeRecord = \App\Models\ActivityType::where('id', (string)$rawType)
-                ->orWhere('code', strtolower((string)$rawType))
-                ->orWhere('name', (string)$rawType)
-                ->first();
+            $rawLower = strtolower(trim((string)$rawType));
+            if (in_array($rawLower, ['visite individuelle', 'visite_individuelle', 'one to one', 'one_to_one', 'one-to-one'])) {
+                $activityTypeRecord = \App\Models\ActivityType::where('code', 'ONE-TO-ONE')->orWhere('code', 'one-to-one')->first();
+            } elseif (in_array($rawLower, ['staff hospitalier', 'staff_hospitalier', 'staff'])) {
+                $activityTypeRecord = \App\Models\ActivityType::where('code', 'staff')->first();
+            } elseif (in_array($rawLower, ['négociation de commande', 'negociation de commande', 'negociation'])) {
+                $activityTypeRecord = \App\Models\ActivityType::where('code', 'negociation')->first();
+            } elseif (in_array($rawLower, ['relation publique', 'relation_publique', 'rp'])) {
+                $activityTypeRecord = \App\Models\ActivityType::where('code', 'rp')->first();
+            } elseif (in_array($rawLower, ['table ronde', 'table_ronde'])) {
+                $activityTypeRecord = \App\Models\ActivityType::where('code', 'TABLE_RONDE')->orWhere('code', 'table_ronde')->first();
+            }
+            if (!$activityTypeRecord) {
+                $activityTypeRecord = \App\Models\ActivityType::where('id', (string)$rawType)
+                    ->orWhere('code', strtolower((string)$rawType))
+                    ->orWhere('name', (string)$rawType)
+                    ->first();
+            }
         }
 
         $merge = [];

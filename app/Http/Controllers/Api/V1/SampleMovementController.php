@@ -74,7 +74,10 @@ class SampleMovementController extends Controller
     )]
     public function myStock(Request $request)
     {
-        $user = $request->user();
+        $user = $request->user() ?? auth()->user();
+        if (!$user) {
+            return response()->json([], 200);
+        }
 
         $movements = SampleMovement::with('product')
             ->where('user_id', $user->id)
@@ -133,9 +136,11 @@ class SampleMovementController extends Controller
 
             return [
                 'product_id'           => $productId,
+                'product_name'         => $product->nom ?? 'Produit inconnu',
                 'product'              => [
                     'id'           => $productId,
                     'name'         => $product->nom ?? 'Produit inconnu',
+                    'nom'          => $product->nom ?? 'Produit inconnu',
                     'code'         => $product->code ?? null,
                     'stock_alerte' => $alertThreshold,
                 ],

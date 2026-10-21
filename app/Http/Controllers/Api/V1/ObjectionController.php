@@ -54,19 +54,44 @@ class ObjectionController extends Controller
     public function storeForActivity(Request $request, Activity $activity)
     {
         $validated = $request->validate([
-            'objection_id' => 'required|uuid|exists:objections,id',
+            'objection_id' => 'nullable|string',
+            'title' => 'nullable|string',
+            'recommended_argument' => 'nullable|string',
+            'product_id' => 'nullable|string',
             'physician_reaction' => 'required|string|in:convaincu,partiellement_convaincu,refus',
             'notes' => 'nullable|string'
         ]);
 
-        // Nouvelle soumission du compte-rendu : met à jour l'objection au lieu de la dupliquer
-        $activity->objections()->syncWithoutDetaching([
-            $validated['objection_id'] => [
-                'physician_reaction' => $validated['physician_reaction'],
-                'notes' => $validated['notes'] ?? null,
-            ],
-        ]);
+        $objection = null;
+        if (!empty($validated['objection_id']) && \Illuminate\Support\Str::isUuid($validated['objection_id'])) {
+            $objection = \App\Models\Objection::find($validated['objection_id']);
+        }
 
-        return response()->json(['message' => 'Objection enregistrée pour la visite avec succès.'], 200);
+        if (!$objection && !empty($validated['title'])) {
+            $productId = (!empty($validated['product_id']) && \Illuminate\Support\Str::isUuid($validated['product_id']))
+                ? $validated['product_id']
+                : ($activity->products()->first()?->id ?? Product::first()?->id);
+
+            if ($productId) {
+                $objection = \App\Models\Objection::firstOrCreate([
+                    'product_id' => $productId,
+                    'title' => $validated['title'],
+                ], [
+                    'recommended_argument' => $validated['recommended_argument'] ?? 'Argumentaire formulé en visite par le délégué.',
+                ]);
+            }
+        }
+
+        if ($objection) {
+            $activity->objections()->syncWithoutDetaching([
+                $objection->id => [
+                    'physician_reaction' => $validated['physician_reaction'],
+                    'notes' => $validated['notes'] ?? null,
+                ],
+            ]);
+            return response()->json(['message' => 'Objection enregistrée pour la visite avec succès.', 'objection_id' => $objection->id], 200);
+        }
+
+        return response()->json(['message' => 'Objection non trouvée ou informations incomplètes.'], 422);
     }
 }

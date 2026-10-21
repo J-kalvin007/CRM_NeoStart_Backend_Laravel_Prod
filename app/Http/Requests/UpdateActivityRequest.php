@@ -23,10 +23,24 @@ class UpdateActivityRequest extends FormRequest
                 $activityTypeRecord = \App\Models\ActivityType::find($typeId);
             }
             if (!$activityTypeRecord && $rawType) {
-                $activityTypeRecord = \App\Models\ActivityType::where('id', (string)$rawType)
-                    ->orWhere('code', strtolower((string)$rawType))
-                    ->orWhere('name', (string)$rawType)
-                    ->first();
+                $rawLower = strtolower(trim((string)$rawType));
+                if (in_array($rawLower, ['visite individuelle', 'visite_individuelle', 'one to one', 'one_to_one', 'one-to-one'])) {
+                    $activityTypeRecord = \App\Models\ActivityType::where('code', 'ONE-TO-ONE')->orWhere('code', 'one-to-one')->first();
+                } elseif (in_array($rawLower, ['staff hospitalier', 'staff_hospitalier', 'staff'])) {
+                    $activityTypeRecord = \App\Models\ActivityType::where('code', 'staff')->first();
+                } elseif (in_array($rawLower, ['négociation de commande', 'negociation de commande', 'negociation'])) {
+                    $activityTypeRecord = \App\Models\ActivityType::where('code', 'negociation')->first();
+                } elseif (in_array($rawLower, ['relation publique', 'relation_publique', 'rp'])) {
+                    $activityTypeRecord = \App\Models\ActivityType::where('code', 'rp')->first();
+                } elseif (in_array($rawLower, ['table ronde', 'table_ronde'])) {
+                    $activityTypeRecord = \App\Models\ActivityType::where('code', 'TABLE_RONDE')->orWhere('code', 'table_ronde')->first();
+                }
+                if (!$activityTypeRecord) {
+                    $activityTypeRecord = \App\Models\ActivityType::where('id', (string)$rawType)
+                        ->orWhere('code', strtolower((string)$rawType))
+                        ->orWhere('name', (string)$rawType)
+                        ->first();
+                }
             }
             if ($activityTypeRecord) {
                 $merge['activity_type_id'] = $activityTypeRecord->id;
@@ -81,7 +95,15 @@ class UpdateActivityRequest extends FormRequest
             'samples.*.lot_number' => 'required|string|max:100',
             'samples.*.quantity' => 'required|integer|min:1',
             'signature'      => 'nullable|string',
-            'motif'          => 'nullable|string',
+            'pharmacy_inventory' => 'nullable|array',
+            'pharmacy_inventory.*.product_name' => 'nullable|string',
+            'pharmacy_inventory.*.quantity_found' => 'nullable|integer|min:0',
+            'motif'            => 'nullable|string',
+            'contact_id'       => 'nullable|uuid|exists:contacts,id',
+            'account_id'       => 'nullable|uuid|exists:accounts,id',
+            'activity_type'    => 'nullable|string',
+            'activity_type_id' => 'nullable|uuid',
+            'user_id'          => 'nullable|uuid|exists:users,id',
         ];
     }
 }

@@ -114,6 +114,16 @@ class User extends Authenticatable
         return $this->hasMany(Account::class, 'user_id');
     }
 
+    public function products()
+    {
+        return $this->belongsToMany(Product::class, 'product_user');
+    }
+
+    public function sampleStocks()
+    {
+        return $this->hasMany(SampleStock::class, 'user_id');
+    }
+
     /**
      * IDs des collaborateurs encadrés (récursif via manager_id) :
      * un superviseur obtient ses délégués, un directeur ses superviseurs et leurs délégués.

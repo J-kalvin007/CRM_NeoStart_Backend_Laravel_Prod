@@ -584,4 +584,190 @@ class AnalyticsController extends Controller
             'Content-Disposition' => 'attachment; filename="expenses_' . date('Y-m-d') . '.csv"',
         ]);
     }
+
+    #[OA\Get(
+        path: '/api/v1/export/activities',
+        summary: 'Exporter l\'état des visites au format CSV/Excel compatible',
+        security: [['bearerAuth' => []]],
+        tags: ['Manager Analytics'],
+        responses: [
+            new OA\Response(response: 200, description: 'Fichier CSV/Excel généré')
+        ]
+    )]
+    public function exportActivities(Request $request)
+    {
+        $query = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
+            ->with(['delegue', 'contact.account', 'account', 'products', 'sampleMovements.product'])
+            ->when($request->delegate_id ?? $request->user_id, fn($q, $v) => $q->where('user_id', $v))
+            ->when($request->country ?? $request->pays, function($q, $pays) {
+                $q->where(function($sub) use ($pays) {
+                    $sub->whereHas('contact', fn($c) => $c->where('pays', $pays)->orWhere('country', $pays))
+                        ->orWhereHas('account', fn($a) => $a->where('pays', $pays)->orWhere('country', $pays))
+                        ->orWhereHas('user', fn($u) => $u->where('country', $pays)->orWhere('pays', $pays));
+                });
+            })
+            ->when($request->statut, fn($q, $v) => $q->where('statut', $v))
+            ->when($request->date_debut, fn($q, $v) => $q->whereDate('date_activite', '>=', $v))
+            ->when($request->date_fin, fn($q, $v) => $q->whereDate('date_activite', '<=', $v));
+
+        $sortBy = $request->input('sort_by');
+        if ($sortBy === 'delegue' || $sortBy === 'delegue_asc') {
+            $activities = $query->get()->sortBy(fn($a) => $a->delegue?->name ?? '');
+        } elseif ($sortBy === 'country' || $sortBy === 'country_asc') {
+            $activities = $query->get()->sortBy(fn($a) => $a->contact?->pays ?? $a->account?->pays ?? $a->delegue?->country ?? '');
+        } else {
+            $activities = $query->orderByDesc('date_activite')->get();
+        }
+
+        // UTF-8 BOM pour ouverture directe sans corruption dans Excel
+        $csv = "\xEF\xBB\xBF";
+        $csv .= "Date,Heure Debut,Heure Fin,Delegue,Pays,Prescripteur,Specialite,Etablissement,Statut,Type,Compte-Rendu,Produits Presentes,Echantillons Remis\n";
+
+        foreach ($activities as $act) {
+            $contactName = $act->contact ? trim("{$act->contact->titre} {$act->contact->prenom} {$act->contact->nom}") : ($act->contact_name ?? '—');
+            $specialite = $act->contact?->specialite ?? data_get($act->contact?->meta, 'specialite') ?? '—';
+            $etablissement = $act->account?->nom ?? $act->contact?->account?->nom ?? $act->establishment ?? '—';
+            $pays = $act->contact?->pays ?? $act->account?->pays ?? $act->delegue?->country ?? $act->delegue?->pays ?? '—';
+            $prods = $act->products->pluck('nom')->join('; ');
+            $samples = $act->sampleMovements->map(fn($sm) => ($sm->product?->nom ?? 'Produit') . ' (x' . ($sm->quantity ?? 1) . ')')->join('; ');
+            $report = str_replace(["\r", "\n", '"'], [' ', ' ', '""'], (string) ($act->report_content ?? $act->notes ?? ''));
+
+            $csv .= sprintf(
+                "\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\"\n",
+                $act->date_activite ? \Illuminate\Support\Carbon::parse($act->date_activite)->format('d/m/Y') : '',
+                $act->heure_debut ?? '',
+                $act->heure_fin ?? '',
+                str_replace('"', '""', $act->delegue?->name ?? 'Inconnu'),
+                str_replace('"', '""', $pays),
+                str_replace('"', '""', $contactName),
+                str_replace('"', '""', $specialite),
+                str_replace('"', '""', $etablissement),
+                str_replace('"', '""', $act->statut ?? ''),
+                str_replace('"', '""', $act->activity_type ?? 'Visite'),
+                $report,
+                str_replace('"', '""', $prods),
+                str_replace('"', '""', $samples)
+            );
+        }
+
+        return response($csv, 200, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="rapport_visites_' . date('Y-m-d') . '.csv"',
+        ]);
+    }
+
+    #[OA\Get(
+        path: '/api/v1/export/activities/pdf',
+        summary: 'Édition PDF / HTML imprimable de l\'état des visites',
+        security: [['bearerAuth' => []]],
+        tags: ['Manager Analytics'],
+        responses: [
+            new OA\Response(response: 200, description: 'Page HTML stylisée prête pour impression / PDF')
+        ]
+    )]
+    public function exportActivitiesPdf(Request $request)
+    {
+        $query = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
+            ->with(['delegue', 'contact.account', 'account', 'products', 'sampleMovements.product'])
+            ->when($request->delegate_id ?? $request->user_id, fn($q, $v) => $q->where('user_id', $v))
+            ->when($request->country ?? $request->pays, function($q, $pays) {
+                $q->where(function($sub) use ($pays) {
+                    $sub->whereHas('contact', fn($c) => $c->where('pays', $pays)->orWhere('country', $pays))
+                        ->orWhereHas('account', fn($a) => $a->where('pays', $pays)->orWhere('country', $pays))
+                        ->orWhereHas('user', fn($u) => $u->where('country', $pays)->orWhere('pays', $pays));
+                });
+            })
+            ->when($request->statut, fn($q, $v) => $q->where('statut', $v))
+            ->when($request->date_debut, fn($q, $v) => $q->whereDate('date_activite', '>=', $v))
+            ->when($request->date_fin, fn($q, $v) => $q->whereDate('date_activite', '<=', $v));
+
+        $sortBy = $request->input('sort_by');
+        if ($sortBy === 'delegue' || $sortBy === 'delegue_asc') {
+            $activities = $query->limit(500)->get()->sortBy(fn($a) => $a->delegue?->name ?? '');
+        } elseif ($sortBy === 'country' || $sortBy === 'country_asc') {
+            $activities = $query->limit(500)->get()->sortBy(fn($a) => $a->contact?->pays ?? $a->account?->pays ?? $a->delegue?->country ?? '');
+        } else {
+            $activities = $query->orderByDesc('date_activite')->limit(500)->get();
+        }
+
+        $rowsHtml = '';
+        foreach ($activities as $act) {
+            $contactName = htmlspecialchars($act->contact ? trim("{$act->contact->titre} {$act->contact->prenom} {$act->contact->nom}") : ($act->contact_name ?? '—'));
+            $etablissement = htmlspecialchars($act->account?->nom ?? $act->contact?->account?->nom ?? $act->establishment ?? '—');
+            $delegue = htmlspecialchars($act->delegue?->name ?? '—');
+            $pays = htmlspecialchars($act->contact?->pays ?? $act->account?->pays ?? $act->delegue?->country ?? $act->delegue?->pays ?? '—');
+            $date = $act->date_activite ? \Illuminate\Support\Carbon::parse($act->date_activite)->format('d/m/Y') : '—';
+            $notes = htmlspecialchars(mb_strimwidth((string)($act->report_content ?? $act->notes ?? '—'), 0, 150, '...'));
+            $prods = htmlspecialchars($act->products->pluck('nom')->join(', '));
+            $statut = htmlspecialchars($act->statut ?? '—');
+
+            $rowsHtml .= "<tr>
+                <td><strong>{$date}</strong><br><small>{$act->heure_debut}</small></td>
+                <td>{$delegue}</td>
+                <td>{$pays}</td>
+                <td><strong>{$contactName}</strong><br><small>{$etablissement}</small></td>
+                <td><span class='badge'>{$statut}</span></td>
+                <td>{$prods}</td>
+                <td style='font-size:11px; color:#475569;'>{$notes}</td>
+            </tr>";
+        }
+
+        $printDate = date('d/m/Y H:i');
+        $totalCount = $activities->count();
+
+        $html = "<!DOCTYPE html>
+        <html lang='fr'>
+        <head>
+            <meta charset='UTF-8'>
+            <title>État des Visites & Rapports - SKYNITY CRM</title>
+            <style>
+                body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b; padding: 24px; margin: 0; background: #fff; }
+                .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0050cb; padding-bottom: 12px; margin-bottom: 20px; }
+                .title { font-size: 20px; font-weight: bold; color: #0050cb; margin: 0; }
+                .meta { font-size: 12px; color: #64748b; }
+                table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
+                th { background-color: #f1f5f9; color: #334155; font-weight: bold; text-align: left; padding: 8px 10px; border-bottom: 1px solid #cbd5e1; }
+                td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+                tr:nth-child(even) { background-color: #f8fafc; }
+                .badge { display: inline-block; padding: 2px 6px; font-size: 10px; font-weight: bold; border-radius: 4px; background: #e0f2fe; color: #0369a1; text-transform: uppercase; }
+                .actions { margin-bottom: 20px; }
+                .btn-print { background: #0050cb; color: #fff; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; }
+                @media print { .actions { display: none; } body { padding: 0; } }
+            </style>
+        </head>
+        <body>
+            <div class='actions'>
+                <button class='btn-print' onclick='window.print()'>🖨️ Imprimer / Enregistrer en PDF</button>
+            </div>
+            <div class='header'>
+                <div>
+                    <h1 class='title'>SKYNITY CRM — État des Visites & Comptes-Rendus</h1>
+                    <div class='meta'>Total : {$totalCount} visite(s) répertoriée(s)</div>
+                </div>
+                <div class='meta' style='text-align: right;'>
+                    Édité le : {$printDate}<br>
+                    Confidentiel Médical
+                </div>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date & Heure</th>
+                        <th>Délégué</th>
+                        <th>Pays</th>
+                        <th>Prescripteur & Établissement</th>
+                        <th>Statut</th>
+                        <th>Produits</th>
+                        <th>Compte-Rendu</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {$rowsHtml}
+                </tbody>
+            </table>
+        </body>
+        </html>";
+
+        return response($html, 200, ['Content-Type' => 'text/html; charset=UTF-8']);
+    }
 }

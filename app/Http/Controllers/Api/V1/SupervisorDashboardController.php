@@ -19,8 +19,8 @@ use Illuminate\Support\Facades\DB;
  */
 class SupervisorDashboardController extends Controller
 {
-    // Visites réellement effectuées (« validee » = créneau validé, la visite n'a pas encore eu lieu)
-    public const COMPLETED = ['realisee', 'effectuee', 'terminee'];
+    // Visites effectuées ou validées pour le mois en cours
+    public const COMPLETED = ['realisee', 'effectuee', 'terminee', 'validee'];
     private const LEAVE_TYPES = ['conge', 'absence', 'indisponibilite', 'leave', 'Congé Annuel', 'Congé Maladie'];
 
     public function dashboard(Request $request)
@@ -368,11 +368,28 @@ class SupervisorDashboardController extends Controller
 
     private function contactName(Activity $act): string
     {
-        if (!$act->contact) {
-            return 'Prescripteur non renseigné';
+        if ($act->contact) {
+            return trim(($act->contact->titre ?: 'Dr.') . ' ' . $act->contact->prenom . ' ' . $act->contact->nom);
         }
 
-        return trim(($act->contact->titre ?: 'Dr.') . ' ' . $act->contact->prenom . ' ' . $act->contact->nom);
+        $estName = $act->account?->nom ?? $act->establishment ?? '';
+        $estLower = strtolower($estName);
+        $typeLower = strtolower((string)$act->activity_type);
+
+        $isPharmacy = str_contains($estLower, 'pharm') || 
+                      str_contains($estLower, 'offici') || 
+                      str_contains($estLower, 'gross') ||
+                      str_contains($typeLower, 'commande');
+
+        if ($isPharmacy) {
+            return $estName ?: 'Visite en Pharmacie';
+        }
+
+        if ($estName) {
+            return $estName;
+        }
+
+        return 'Visite Établissement';
     }
 
     private function statusLabel(?string $statut): string

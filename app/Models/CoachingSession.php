@@ -15,6 +15,9 @@ class CoachingSession extends Model
         'supervisor_id',
         'delegate_id',
         'activity_id',
+        'session_type',
+        'evaluator_id',
+        'evaluated_id',
         'strengths',
         'weaknesses',
         'action_plan',
@@ -26,6 +29,12 @@ class CoachingSession extends Model
         'objectifs_prevus_json',
         'resultats_constates_json',
         'taux_atteinte_pct',
+        'note_globale',
+        'note_sur_20',
+        'respect_canevas_pct',
+        'canevas_evaluation_json',
+        'points_forts',
+        'axes_amelioration',
         'commentaires_superviseur',
         'plan_action_recommande',
         'local_uuid',
@@ -36,17 +45,40 @@ class CoachingSession extends Model
         'date_duo' => 'date',
         'objectifs_prevus_json' => 'array',
         'resultats_constates_json' => 'array',
+        'canevas_evaluation_json' => 'array',
         'taux_atteinte_pct' => 'float',
+        'note_globale' => 'float',
+        'note_sur_20' => 'float',
+        'respect_canevas_pct' => 'float',
     ];
+
+    protected $appends = [
+        'evaluator_name',
+    ];
+
+    public function getEvaluatorNameAttribute(): ?string
+    {
+        return $this->evaluator?->name ?? $this->supervisor?->name;
+    }
 
     public function supervisor()
     {
-        return $this->belongsTo(User::class, 'supervisor_id');
+        return $this->belongsTo(User::class, 'supervisor_id')->withoutGlobalScopes();
     }
 
     public function delegate()
     {
-        return $this->belongsTo(User::class, 'delegate_id');
+        return $this->belongsTo(User::class, 'delegate_id')->withoutGlobalScopes();
+    }
+
+    public function evaluator()
+    {
+        return $this->belongsTo(User::class, 'evaluator_id')->withoutGlobalScopes();
+    }
+
+    public function evaluated()
+    {
+        return $this->belongsTo(User::class, 'evaluated_id')->withoutGlobalScopes();
     }
 
     public function activity()

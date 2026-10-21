@@ -44,7 +44,7 @@ class Product extends Model
     public function sampleMovements() { return $this->hasMany(SampleMovement::class); }
     public function objectifs()       { return $this->hasMany(Objectif::class); }
     public function objections()      { return $this->hasMany(Objection::class); }
-    
+    public function users()           { return $this->belongsToMany(User::class, 'product_user')->withTimestamps(); }
 
 
     public function scopeActif($query)        { return $query->where('statut', 'actif'); }

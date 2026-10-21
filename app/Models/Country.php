@@ -40,7 +40,9 @@ class Country extends Model
 
     public function products()
     {
-        return $this->hasMany(Product::class);
+        return $this->belongsToMany(Product::class, 'country_product')
+            ->withPivot('pght', 'prix_cession', 'ppv', 'devise', 'stock_actuel', 'stock_alerte')
+            ->withTimestamps();
     }
 
     public function accountTypes()
