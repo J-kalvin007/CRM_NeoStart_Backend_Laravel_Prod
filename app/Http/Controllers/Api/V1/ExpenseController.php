@@ -227,6 +227,130 @@ class ExpenseController extends Controller
         return response()->json(['message' => 'Note de frais supprimée avec succès.'], 200);
     }
 
+    #[OA\Post(
+        path: '/api/v1/expenses/{id}/validate',
+        summary: 'Valider une note de frais (Manager / Direction)',
+        security: [['bearerAuth' => []]],
+        tags: ['Expenses'],
+        parameters: [
+            new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Note de frais approuvée'),
+            new OA\Response(response: 404, description: 'Note de frais introuvable'),
+            new OA\Response(response: 401, description: 'Non authentifié')
+        ]
+    )]
+    public function validateExpense(Expense $expense)
+    {
+        $expense->update([
+            'status' => 'approved',
+            'approved_by' => Auth::id(),
+            'approved_at' => now(),
+            'rejection_reason' => null,
+        ]);
+
+        if ($expense->user) {
+            app(\App\Services\NotificationService::class)->send(
+                $expense->user,
+                'Note de frais approuvée',
+                "Votre note de frais '{$expense->title}' a été approuvée.",
+                'expense',
+                ['expense_id' => $expense->id]
+            );
+        }
+
+        return response()->json(new ExpenseResource($expense->load(['user', 'approver'])));
+    }
+
+    #[OA\Post(
+        path: '/api/v1/expenses/{id}/reject',
+        summary: 'Rejeter une note de frais (Manager / Direction)',
+        security: [['bearerAuth' => []]],
+        tags: ['Expenses'],
+        parameters: [
+            new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))
+        ],
+        requestBody: new OA\RequestBody(
+            required: false,
+            content: new OA\JsonContent(
+                properties: [
+                    new OA\Property(property: 'rejection_reason', type: 'string', nullable: true),
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Note de frais rejetée'),
+            new OA\Response(response: 404, description: 'Note de frais introuvable'),
+            new OA\Response(response: 401, description: 'Non authentifié')
+        ]
+    )]
+    public function rejectExpense(Request $request, Expense $expense)
+    {
+        $v = $request->validate([
+            'rejection_reason' => 'nullable|string|max:500',
+            'reason' => 'nullable|string|max:500',
+        ]);
+        $reason = $v['rejection_reason'] ?? $v['reason'] ?? null;
+
+        $expense->update([
+            'status' => 'rejected',
+            'rejection_reason' => $reason,
+        ]);
+
+        if ($expense->user) {
+            $msg = "Votre note de frais '{$expense->title}' a été refusée.";
+            if ($reason) {
+                $msg .= " Motif : {$reason}";
+            }
+            app(\App\Services\NotificationService::class)->send(
+                $expense->user,
+                'Note de frais refusée',
+                $msg,
+                'expense',
+                ['expense_id' => $expense->id]
+            );
+        }
+
+        return response()->json(new ExpenseResource($expense->load(['user', 'approver'])));
+    }
+
+    #[OA\Post(
+        path: '/api/v1/expenses/{id}/reimburse',
+        summary: 'Marquer une note de frais comme remboursée (Comptabilité)',
+        security: [['bearerAuth' => []]],
+        tags: ['Expenses'],
+        parameters: [
+            new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Note de frais remboursée'),
+            new OA\Response(response: 400, description: 'Statut invalide pour le remboursement'),
+            new OA\Response(response: 404, description: 'Note de frais introuvable'),
+            new OA\Response(response: 401, description: 'Non authentifié')
+        ]
+    )]
+    public function reimburseExpense(Expense $expense)
+    {
+        if ($expense->status !== 'approved') {
+            return response()->json(['message' => 'Seule une note de frais approuvée peut être marquée comme remboursée.'], 400);
+        }
+
+        $expense->update(['status' => 'paid']);
+
+        if ($expense->user) {
+            app(\App\Services\NotificationService::class)->send(
+                $expense->user,
+                'Note de frais remboursée',
+                "Votre note de frais '{$expense->title}' a été remboursée.",
+                'expense',
+                ['expense_id' => $expense->id]
+            );
+        }
+
+        return response()->json(new ExpenseResource($expense->load(['user', 'approver'])));
+    }
+
     #[OA\Patch(
         path: '/api/v1/expenses/{id}/status',
         summary: 'Valider ou rejeter une note de frais (Manager / Direction)',

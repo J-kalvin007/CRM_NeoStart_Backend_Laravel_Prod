@@ -123,6 +123,21 @@ class AnalyticsController extends Controller
     public function teamPerformance(Request $request)
     {
         $user = auth()->user();
+        $period = $request->get('period', 'monthly');
+
+        // Détermine la plage de dates réelle correspondant au filtre de période demandé
+        $now = now();
+        $periodStart = match ($period) {
+            'quarterly' => $now->copy()->firstOfQuarter(),
+            'yearly'    => $now->copy()->startOfYear(),
+            default     => $now->copy()->startOfMonth(),
+        };
+        $periodEnd = match ($period) {
+            'quarterly' => $now->copy()->lastOfQuarter(),
+            'yearly'    => $now->copy()->endOfYear(),
+            default     => $now->copy()->endOfMonth(),
+        };
+
         $teamUsers = User::where('id', '!=', $user->id)
             ->whereDoesntHave('roles', function($q) {
                 $q->whereIn('name', ['superadmin', 'admin']);
@@ -132,39 +147,48 @@ class AnalyticsController extends Controller
                     $r->whereIn('name', ['delegue_medical', 'delegue']);
                 })->orWhereDoesntHave('roles');
             })
+            ->with('sector')
             ->get();
 
-        $data = $teamUsers->map(function ($delegue, $index) use ($request) {
+        $data = $teamUsers->map(function ($delegue) use ($request, $period, $periodStart, $periodEnd) {
             $baseActivities = Activity::where('user_id', $delegue->id)
-                ->where('activity_type', 'visite');
+                ->where('activity_type', 'visite')
+                ->whereBetween('date_activite', [$periodStart->toDateString(), $periodEnd->toDateString()]);
 
             $completedVisits = (clone $baseActivities)->whereIn('statut', ['realisee', 'effectuee', 'validee'])->count();
             $inProgressVisits = (clone $baseActivities)->where('statut', 'en_cours')->count();
             $noShowCount = (clone $baseActivities)->whereIn('statut', ['manquee', 'annulee'])->count();
 
-            $visitCount = $completedVisits > 0 ? $completedVisits : (28 - ($index * 2));
-            $target = 25;
-            $rate = min(100, round(($visitCount / max(1, $target)) * 100, 1));
+            $visitCount = $completedVisits + $inProgressVisits;
+            // La cible d'objectif s'ajuste à la durée de la période filtrée (mensuel = base, trimestre = x3, année = x12)
+            $target = match ($period) {
+                'quarterly' => 75,
+                'yearly'    => 300,
+                default     => 25,
+            };
+            $rate = min(100, round(($completedVisits / max(1, $target)) * 100, 1));
 
             $revenue = Order::where('user_id', $delegue->id)
                 ->whereIn('status', ['confirmed', 'invoiced', 'validee', 'livree'])
+                ->whereBetween('created_at', [$periodStart, $periodEnd])
                 ->sum('total_amount');
 
             return [
                 'delegate' => [
-                    'id'   => (string) $delegue->id,
-                    'name' => $delegue->name,
+                    'id'     => (string) $delegue->id,
+                    'name'   => $delegue->name,
+                    'sector' => $delegue->sector->name ?? null,
                 ],
                 'visit_count'        => (int) $visitCount,
                 'no_show_count'      => (int) $noShowCount,
-                'completed_visits'   => (int) ($completedVisits > 0 ? $completedVisits : max(1, $visitCount - 3)),
+                'completed_visits'   => (int) $completedVisits,
                 'in_progress_visits' => (int) $inProgressVisits,
                 'target_visits'      => (int) $target,
                 'objective_rate'     => (int) $rate,
                 'revenue'            => (float) $revenue,
-                'period'             => $request->get('period', 'monthly'),
+                'period'             => $period,
             ];
-        })->sortByDesc('visit_count')->values()->map(function ($item, $index) {
+        })->sortByDesc('completed_visits')->values()->map(function ($item, $index) {
             $item['rank'] = $index + 1;
             return $item;
         });
@@ -202,36 +226,37 @@ class AnalyticsController extends Controller
         $user = auth()->user();
         $teamUsers = User::where('id', '!=', $user->id)->get();
 
-        $defaultCoords = [
-            'Alice Delegue'  => ['lat' => 5.35995, 'lng' => -3.98701, 'status' => 'En visite'],
-            'Afi Mensah'     => ['lat' => 5.35210, 'lng' => -3.97890, 'status' => 'Disponible'],
-            'Koffi Agbeko'   => ['lat' => 5.30120, 'lng' => -4.00410, 'status' => 'En visite'],
-            'Sarah Lawson'   => ['lat' => 5.32450, 'lng' => -4.02100, 'status' => 'Disponible'],
-            'Mamadou Kane'   => ['lat' => 5.37210, 'lng' => -3.99800, 'status' => 'Disponible'],
-            'Jean Dupont'    => ['lat' => 5.34120, 'lng' => -4.08500, 'status' => 'Hors ligne'],
-        ];
+        // Position de repli neutre (siège / centre du secteur) utilisée uniquement lorsqu'aucun
+        // check-in GPS réel n'a jamais été enregistré pour ce délégué (pas de coordonnées inventées
+        // par nom d'utilisateur).
+        $fallbackCenterLat = 5.3450;
+        $fallbackCenterLng = -3.9820;
 
-        $locations = $teamUsers->values()->map(function ($u, $idx) use ($defaultCoords) {
+        $locations = $teamUsers->values()->map(function ($u, $idx) use ($fallbackCenterLat, $fallbackCenterLng) {
             $lastActivity = Activity::where('user_id', $u->id)
                 ->whereNotNull('gps_debut_lat')
                 ->latest('updated_at')
                 ->first();
 
-            $def = $defaultCoords[$u->name] ?? [
-                'lat' => 5.3450 + ($idx * 0.008),
-                'lng' => -3.9820 - ($idx * 0.005),
-                'status' => 'Disponible'
-            ];
+            $hasRealPosition = $lastActivity !== null;
+
+            $status = 'hors_ligne';
+            if ($hasRealPosition) {
+                if ($lastActivity->statut === 'en_cours') {
+                    $status = 'en_visite';
+                } elseif (in_array($lastActivity->statut, ['realisee', 'effectuee', 'validee'])) {
+                    $status = 'disponible';
+                }
+            }
 
             return [
                 'id'        => $u->id,
                 'name'      => $u->name,
-                'lat'       => $lastActivity ? (float) $lastActivity->gps_debut_lat : (float) $def['lat'],
-                'lng'       => $lastActivity ? (float) $lastActivity->gps_debut_lng : (float) $def['lng'],
-                'status'    => ($lastActivity && $lastActivity->statut === 'en_cours')
-                                ? 'En visite'
-                                : (($lastActivity && $lastActivity->statut === 'realisee') ? 'Disponible' : $def['status']),
-                'last_seen' => $lastActivity ? $lastActivity->updated_at->toISOString() : now()->toISOString(),
+                'lat'       => $hasRealPosition ? (float) $lastActivity->gps_debut_lat : $fallbackCenterLat + ($idx * 0.008),
+                'lng'       => $hasRealPosition ? (float) $lastActivity->gps_debut_lng : $fallbackCenterLng - ($idx * 0.005),
+                'status'    => $status,
+                'has_live_position' => $hasRealPosition,
+                'last_seen' => $hasRealPosition ? $lastActivity->updated_at->toISOString() : null,
             ];
         });
 
@@ -266,7 +291,12 @@ class AnalyticsController extends Controller
         $user = auth()->user();
         
         $query = ClmPresentationAnalytic::with('document')
-            ->select('document_id', DB::raw('count(*) as views_count'), DB::raw('avg(total_duration_seconds) as average_duration'))
+            ->select(
+                'document_id',
+                DB::raw('count(*) as views_count'),
+                DB::raw('avg(total_duration_seconds) as average_duration'),
+                DB::raw('sum(case when completed = true then 1 else 0 end) as completed_count')
+            )
             ->groupBy('document_id');
 
         // Filtrer par équipe si l'utilisateur n'est pas un administrateur global
@@ -281,6 +311,8 @@ class AnalyticsController extends Controller
                 'document_name' => $item->document->title ?? 'Document inconnu',
                 'views_count' => $item->views_count,
                 'average_duration_seconds' => round($item->average_duration),
+                'completed_count' => (int) $item->completed_count,
+                'engagement_rate' => $item->views_count > 0 ? round($item->completed_count / $item->views_count, 2) : 0,
             ];
         });
 

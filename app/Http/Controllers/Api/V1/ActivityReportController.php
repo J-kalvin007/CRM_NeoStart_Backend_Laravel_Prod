@@ -38,7 +38,20 @@ class ActivityReportController extends Controller
     {
         $validated = $request->validate([
             'report_content' => 'nullable|string',
-            'report_status' => 'required|in:draft,submitted'
+            'report_status' => 'required|in:draft,submitted',
+            // Champs complémentaires du compte-rendu terrain (déjà fillable sur Activity)
+            // — sans cela, tout ce que l'appli mobile envoie ici (GPS, notes, prochain
+            // rendez-vous, signature...) était silencieusement ignoré par le validate().
+            'statut' => 'nullable|string|in:planifiee,en_cours,realisee,manquee,annulee,brouillon,soumis_definitif,en_attente,en attente de validation,soumis',
+            'notes' => 'nullable|string',
+            'prochain_rdv' => 'nullable|date',
+            'gps_debut_lat' => 'nullable|numeric|between:-90,90',
+            'gps_debut_lng' => 'nullable|numeric|between:-180,180',
+            'gps_fin_lat' => 'nullable|numeric|between:-90,90',
+            'gps_fin_lng' => 'nullable|numeric|between:-180,180',
+            'signature_base64' => 'nullable|string',
+            'niveau_interet' => 'nullable|integer',
+            'motif' => 'nullable|string',
         ]);
 
         $activity->update($validated);

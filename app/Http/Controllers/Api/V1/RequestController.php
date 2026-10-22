@@ -10,6 +10,27 @@ use OpenApi\Attributes as OA;
 
 class RequestController extends Controller
 {
+    #[OA\Get(
+        path: '/api/v1/requests',
+        summary: 'Lister mes demandes (Arbitrage, Congés, etc.)',
+        security: [['bearerAuth' => []]],
+        tags: ['Requests'],
+        responses: [
+            new OA\Response(response: 200, description: 'Liste des demandes du délégué connecté'),
+        ]
+    )]
+    public function index(Request $request)
+    {
+        $requests = DelegateRequest::where('user_id', Auth::id())
+            ->orderByDesc('created_at')
+            ->get();
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $requests,
+        ]);
+    }
+
     #[OA\Post(
         path: '/api/v1/requests',
         summary: 'Soumettre une demande (Arbitrage, Congés, etc.)',

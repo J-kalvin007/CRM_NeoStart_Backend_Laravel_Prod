@@ -62,6 +62,7 @@ Route::prefix('v1')->group(function () {
     // ── Authentification ──────────────────────────────────────
     Route::post('/login', [AuthController::class, 'login']);
     Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
+    Route::post('/resend-otp', [AuthController::class, 'resendOtp']);
     Route::post('/auth/change-password', [AuthController::class, 'forceChangePassword']);
     Route::post('/password/email', [AuthController::class, 'sendResetLinkEmail']);
 
@@ -271,15 +272,17 @@ Route::prefix('v1')->group(function () {
         Route::patch('leaves/{id}/status', [LeaveController::class, 'updateStatus']);
 
         // ── Demandes & Escalade ────────────────────────────────
+        Route::get('requests', [\App\Http\Controllers\Api\V1\RequestController::class, 'index']);
         Route::post('requests', [\App\Http\Controllers\Api\V1\RequestController::class, 'store']);
 
         // ── Formations (Trainings) ─────────────────────────────
-        // Route::get('trainings', [TrainingController::class, 'index']);
+        // Note: GET /trainings (index) est déclarée plus haut, ligne ~239, avec TrainingController::index.
         Route::get('trainings/{id}', [TrainingController::class, 'show']);
         Route::patch('trainings/{id}/progress', [TrainingController::class, 'updateProgress']);
 
         // ── Messagerie Interne ─────────────────────────────────
         Route::get('conversations', [ConversationController::class, 'index']);
+        Route::post('conversations', [ConversationController::class, 'store']);
         Route::get('conversations/{id}/messages', [ConversationController::class, 'messages']);
         Route::post('conversations/{id}/messages', [ConversationController::class, 'sendMessage']);
 

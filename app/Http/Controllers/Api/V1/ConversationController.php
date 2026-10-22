@@ -70,6 +70,49 @@ class ConversationController extends Controller
         ]);
     }
 
+    public function store(Request $request)
+    {
+        $validated = $request->validate([
+            'title' => 'nullable|string|max:255',
+            'type' => 'nullable|string|max:100',
+            'message' => 'nullable|string',
+        ]);
+
+        $user = $request->user();
+
+        $conversation = Conversation::create([
+            'title' => $validated['title'] ?? null,
+            'type' => $validated['type'] ?? 'direct',
+        ]);
+
+        if ($user) {
+            $conversation->users()->attach($user->id);
+        }
+
+        $lastMessage = 'Aucun message';
+        if (!empty($validated['message'])) {
+            $msg = Message::create([
+                'conversation_id' => $conversation->id,
+                'sender_id' => $user?->id,
+                'content' => $validated['message'],
+                'is_read' => true,
+            ]);
+            $lastMessage = $msg->content;
+        }
+
+        return response()->json([
+            'data' => [
+                'id' => (string) $conversation->id,
+                'name' => $conversation->title ?? 'Discussion Équipe',
+                'title' => $conversation->title ?? 'Discussion Équipe',
+                'type' => $conversation->type,
+                'last_message' => $lastMessage,
+                'last_message_at' => $conversation->created_at->toIso8601String(),
+                'unread_count' => 0,
+            ],
+        ], 201);
+    }
+
     public function messages($id, Request $request)
     {
         try {
@@ -153,9 +196,16 @@ class ConversationController extends Controller
 
     public function sendMessage($id, Request $request)
     {
-        $content = $request->input('content', '');
+        $content = trim((string) $request->input('content', ''));
         $userId = $request->user() ? $request->user()->id : 'usr-current';
         $userName = $request->user() ? $request->user()->name : 'Moi';
+
+        if ($content === '') {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Le message ne peut pas être vide.',
+            ], 422);
+        }
 
         try {
             $msg = Message::create([
@@ -176,19 +226,12 @@ class ConversationController extends Controller
                     'content' => $msg->content,
                     'created_at' => $msg->created_at->toIso8601String(),
                 ]
-            ]);
+            ], 201);
         } catch (\Throwable $e) {
             return response()->json([
-                'status' => 'success',
-                'data' => [
-                    'id' => 'msg-' . time(),
-                    'conversation_id' => $id,
-                    'sender_id' => $userId,
-                    'sender_name' => $userName,
-                    'content' => $content,
-                    'created_at' => now()->toIso8601String(),
-                ]
-            ]);
+                'status' => 'error',
+                'message' => 'Impossible d\'envoyer le message.',
+            ], 500);
         }
     }
 }

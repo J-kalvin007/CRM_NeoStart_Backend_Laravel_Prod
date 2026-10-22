@@ -12,7 +12,7 @@ class NotificationController extends Controller
 {
     #[OA\Get(
         path: '/api/v1/notifications',
-        summary: 'Lister les notifications non lues',
+        summary: 'Lister les notifications (lues et non lues)',
         security: [['bearerAuth' => []]],
         tags: ['Notifications'],
         responses: [
@@ -21,7 +21,12 @@ class NotificationController extends Controller
     )]
     public function index(Request $request)
     {
-        return response()->json($request->user()->unreadNotifications);
+        // Retourne l'historique complet (lues + non lues) : le client mobile filtre
+        // lui-même les onglets "Toutes" / "Non lues" / "Alertes" sur ce même jeu de
+        // données. Ne renvoyer que les non-lues cassait l'onglet "Toutes".
+        return response()->json(
+            $request->user()->notifications()->latest()->limit(100)->get()
+        );
     }
 
     #[OA\Post(

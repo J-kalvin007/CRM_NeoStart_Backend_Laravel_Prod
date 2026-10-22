@@ -60,18 +60,35 @@ class CoachingController extends Controller
     )]
     public function storeSession(Request $request)
     {
-        $validated = $request->validate([
-            'delegate_id' => 'required|uuid|exists:users,id',
-            'date_duo' => 'required|date',
-            'zone' => 'required|string',
-            'motif' => 'required|string',
-            'objectifs_prevus' => 'required|array',
-        ]);
+        // Cette route sert deux usages du même modèle CoachingSession :
+        // 1) L'évaluation individuelle du délégué (points forts/faibles + plan d'action)
+        // 2) La planification d'une visite en duo (date_duo/zone/motif/objectifs_prevus)
+        $isEvaluation = $request->filled('strengths') || $request->filled('weaknesses') || $request->filled('action_plan');
+
+        if ($isEvaluation) {
+            $validated = $request->validate([
+                'delegate_id' => 'required|uuid|exists:users,id',
+                'strengths' => 'nullable|string',
+                'weaknesses' => 'nullable|string',
+                'action_plan' => 'nullable|string',
+                'next_review_date' => 'nullable|date',
+                'status' => 'nullable|in:draft,active,completed',
+            ]);
+            $validated['status'] = $validated['status'] ?? 'active';
+        } else {
+            $validated = $request->validate([
+                'delegate_id' => 'required|uuid|exists:users,id',
+                'date_duo' => 'required|date',
+                'zone' => 'required|string',
+                'motif' => 'required|string',
+                'objectifs_prevus' => 'required|array',
+            ]);
+            $validated['objectifs_prevus_json'] = $validated['objectifs_prevus'];
+            unset($validated['objectifs_prevus']);
+            $validated['status'] = 'planifie';
+        }
 
         $validated['supervisor_id'] = Auth::id();
-        $validated['objectifs_prevus_json'] = $validated['objectifs_prevus'];
-        unset($validated['objectifs_prevus']);
-        $validated['status'] = 'planifie';
 
         $session = CoachingSession::create($validated);
 
