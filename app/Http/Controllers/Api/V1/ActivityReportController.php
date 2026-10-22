@@ -45,6 +45,16 @@ class ActivityReportController extends Controller
             'pharmacy_inventory' => 'nullable|array',
             'products'           => 'nullable|array',
             'samples'            => 'nullable|array',
+            'statut' => 'nullable|string|in:planifiee,en_cours,realisee,manquee,annulee,brouillon,soumis_definitif,en_attente,en attente de validation,soumis',
+            'notes' => 'nullable|string',
+            'prochain_rdv' => 'nullable|date',
+            'gps_debut_lat' => 'nullable|numeric|between:-90,90',
+            'gps_debut_lng' => 'nullable|numeric|between:-180,180',
+            'gps_fin_lat' => 'nullable|numeric|between:-90,90',
+            'gps_fin_lng' => 'nullable|numeric|between:-180,180',
+            'signature_base64' => 'nullable|string',
+            'niveau_interet' => 'nullable|integer',
+            'motif' => 'nullable|string',
         ]);
 
         abort_unless((string) $activity->user_id === (string) auth()->id(), 403, 'Seul le délégué de cette visite peut rédiger son compte-rendu.');

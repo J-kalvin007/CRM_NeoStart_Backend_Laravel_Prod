@@ -237,6 +237,45 @@ class ExpenseController extends Controller
         return response()->json(['message' => 'Note de frais supprimée avec succès.'], 200);
     }
 
+    #[OA\Post(
+        path: '/api/v1/expenses/{id}/reimburse',
+        summary: 'Marquer une note de frais comme remboursée (Comptabilité)',
+        security: [['bearerAuth' => []]],
+        tags: ['Expenses'],
+        parameters: [
+            new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Note de frais remboursée'),
+            new OA\Response(response: 400, description: 'Statut invalide pour le remboursement'),
+            new OA\Response(response: 404, description: 'Note de frais introuvable'),
+            new OA\Response(response: 401, description: 'Non authentifié')
+        ]
+    )]
+    public function reimburseExpense(Expense $expense)
+    {
+        $user = Auth::user();
+        abort_unless($user->can('scope:global') || $user->hasAnyRole(['superadmin', 'super-admin', 'admin']) || $user->manages($expense->user_id), 403, "Cette note n'appartient pas à un délégué de votre équipe.");
+        if ($expense->status !== 'approved') {
+            return response()->json(['message' => 'Seule une note de frais approuvée peut être marquée comme remboursée.'], 400);
+        }
+
+        $expense->update(['status' => 'paid']);
+
+        if ($expense->user) {
+            NotificationController::sendNotification(
+                $expense->user,
+                'Note de frais remboursée',
+                "Votre note de frais '{$expense->title}' a été remboursée.",
+                'expense',
+                'delegue',
+                ['expense_id' => $expense->id]
+            );
+        }
+
+        return response()->json(new ExpenseResource($expense->load(['user', 'approver'])));
+    }
+
     #[OA\Patch(
         path: '/api/v1/expenses/{id}/status',
         summary: 'Valider ou rejeter une note de frais (Manager / Direction)',

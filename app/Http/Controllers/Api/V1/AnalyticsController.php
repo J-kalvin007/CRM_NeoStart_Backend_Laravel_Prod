@@ -125,7 +125,7 @@ class AnalyticsController extends Controller
         };
 
         // L'équipe = les collaborateurs encadrés (récursif via manager_id)
-        $teamUsers = $user->teamMembers()->orderBy('name')->get();
+        $teamUsers = $user->teamMembers()->with('sector')->orderBy('name')->get();
 
         $completedStatuses = ['realisee', 'effectuee', 'validee'];
         $excludedStatuses = ['annulee', 'refusee', 'brouillon'];
@@ -148,8 +148,9 @@ class AnalyticsController extends Controller
 
             return [
                 'delegate' => [
-                    'id'   => (string) $delegue->id,
-                    'name' => $delegue->name,
+                    'id'     => (string) $delegue->id,
+                    'name'   => $delegue->name,
+                    'sector' => $delegue->sector->name ?? null,
                 ],
                 'visit_count'        => $planned,
                 'completed_visits'   => $completed,

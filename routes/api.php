@@ -355,7 +355,7 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('requests', \App\Http\Controllers\Api\V1\RequestController::class)->except(['show']);
 
         // ── Formations (Trainings) ─────────────────────────────
-        // Route::get('trainings', [TrainingController::class, 'index']);
+        // Note: GET /trainings (index) est déclarée plus haut, ligne ~239, avec TrainingController::index.
         Route::get('trainings/{id}', [TrainingController::class, 'show']);
         Route::patch('trainings/{id}/progress', [TrainingController::class, 'updateProgress']);
 

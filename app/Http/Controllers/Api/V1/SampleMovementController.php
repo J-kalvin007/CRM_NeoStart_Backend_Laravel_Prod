@@ -145,6 +145,7 @@ class SampleMovementController extends Controller
                     'stock_alerte' => $alertThreshold,
                 ],
                 'quantity_available'   => $available,
+                'quantity_received'    => $in,
                 'quantity_distributed' => $items->where('movement_type', 'distribution')->sum('quantity'),
                 'alert_threshold'      => $alertThreshold,
                 'status'               => $available <= $alertThreshold ? 'Critique' : 'Normal',
