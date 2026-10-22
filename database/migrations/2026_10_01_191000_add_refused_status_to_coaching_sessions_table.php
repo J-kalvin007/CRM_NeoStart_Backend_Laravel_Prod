@@ -11,7 +11,7 @@ return new class extends Migration
     public function up(): void
     {
         if (DB::getDriverName() === 'mysql') {
-            DB::statement("ALTER TABLE coaching_sessions MODIFY status ENUM('draft','active','completed','refused') NOT NULL DEFAULT 'draft'");
+            DB::statement("ALTER TABLE coaching_sessions MODIFY status ENUM('draft','active','completed','planifie','cloture','refused') NOT NULL DEFAULT 'draft'");
         }
     }
 
@@ -19,7 +19,7 @@ return new class extends Migration
     {
         if (DB::getDriverName() === 'mysql') {
             DB::statement("UPDATE coaching_sessions SET status = 'draft' WHERE status = 'refused'");
-            DB::statement("ALTER TABLE coaching_sessions MODIFY status ENUM('draft','active','completed') NOT NULL DEFAULT 'draft'");
+            DB::statement("ALTER TABLE coaching_sessions MODIFY status ENUM('draft','active','completed','planifie','cloture') NOT NULL DEFAULT 'draft'");
         }
     }
 };
