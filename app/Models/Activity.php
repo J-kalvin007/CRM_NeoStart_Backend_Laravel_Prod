@@ -15,6 +15,14 @@ class Activity extends Model
     use HasFactory, HasUuids, SoftDeletes, HasPerimeter;
     use HasActivityLogs;
 
+    protected $appends = ['planning_kind'];
+
+    public function getPlanningKindAttribute(): string
+    {
+        $code = $this->activity_type_id ? $this->activityType?->code : $this->activity_type;
+        return \App\Services\PlanningOptions::kind($code);
+    }
+
     protected $fillable = [
         'tour_plan_id',
         'campaign_id',
@@ -39,6 +47,8 @@ class Activity extends Model
         'validation_date',
         'rejection_reason',
         'date_activite',
+        'date_fin',
+        'outside_weekly_plan',
         'heure_debut',
         'heure_fin',
         'duree_minutes',
@@ -66,6 +76,8 @@ class Activity extends Model
 
     protected $casts = [
         'date_activite'   => 'date',
+        'date_fin' => 'date',
+        'outside_weekly_plan' => 'boolean',
         'gps_debut_lat'   => 'float',
         'gps_debut_lng'   => 'float',
         'gps_fin_lat'     => 'float',
@@ -198,8 +210,8 @@ class Activity extends Model
         $today = now()->toDateString();
 
         // Visites sur des dates antérieures révolues non réalisées
-        static::whereDate('date_activite', '<', $today)
-            ->whereNotIn('statut', ['realisee', 'effectuee', 'manquee', 'annulee'])
+        static::whereRaw('COALESCE(date_fin, date_activite) < ?', [$today])
+            ->whereNotIn('statut', ['realisee', 'effectuee', 'manquee', 'annulee', 'en_cours'])
             ->update(['statut' => 'manquee']);
     }
 

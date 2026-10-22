@@ -70,7 +70,7 @@ class ActivityController extends Controller
             ->when($request->activity_type, fn($q, $v) => $q->where('activity_type', $v))
             ->when($request->statut, fn($q, $v) => $q->where('statut', $v))
             ->when($request->report_status, fn($q, $v) => $q->where('report_status', $v))
-            ->when($request->date_debut, fn($q, $v) => $q->whereDate('date_activite', '>=', $v))
+            ->when($request->date_debut, fn($q, $v) => $q->whereRaw('COALESCE(date_fin, date_activite) >= ?', [$v]))
             ->when($request->date_fin, fn($q, $v) => $q->whereDate('date_activite', '<=', $v))
             ->when($request->contact_id, fn($q, $v) => $q->where(function($sub) use ($v) {
                 $sub->where('activities.contact_id', $v)
@@ -188,6 +188,11 @@ class ActivityController extends Controller
     )]
     public function store(StoreActivityRequest $request)
     {
+        return \Illuminate\Support\Facades\DB::transaction(fn () => $this->storeInTransaction($request));
+    }
+
+    private function storeInTransaction(StoreActivityRequest $request)
+    {
         $data = $request->validated();
         $samples = $data['samples'] ?? [];
         $products = $data['products'] ?? [];
@@ -264,6 +269,13 @@ class ActivityController extends Controller
         if (isset($data['is_duo']) && $data['is_duo'] === true) {
             // Le statut reste tel quel (en_attente ou planifiee)
             // mais on peut avoir un champ is_duo à true
+        }
+
+        if (!empty($data['outside_weekly_plan'])) {
+            abort_unless((string) $targetUserId === (string) $user->id, 403, 'La marge hors planning concerne uniquement vos propres visites.');
+            abort_if(!empty($data['tour_plan_id']), 422, 'Une visite hors planning ne peut pas être rattachée à un planning hebdomadaire.');
+            app(\App\Services\OutsideWeeklyPlanning::class)->checkCapacity($targetUserId, $data['date_activite']);
+            $data['statut'] = 'validee';
         }
 
         $activity = Activity::create(array_merge($data, ['user_id' => $targetUserId]));
@@ -411,6 +423,11 @@ class ActivityController extends Controller
     )]
     public function update(UpdateActivityRequest $request, string $id)
     {
+        return \Illuminate\Support\Facades\DB::transaction(fn () => $this->updateInTransaction($request, $id));
+    }
+
+    private function updateInTransaction(UpdateActivityRequest $request, string $id)
+    {
         $activity = Activity::findOrFail($id);
 
         if ($activity->is_locked) {
@@ -419,6 +436,15 @@ class ActivityController extends Controller
 
         $validatedData = $request->validated();
         $targetStatus = $validatedData['statut'] ?? null;
+        if ($activity->outside_weekly_plan && array_key_exists('user_id', $validatedData)) {
+            abort_unless((string) $validatedData['user_id'] === (string) $activity->user_id, 422, 'Une visite hors planning ne peut pas changer de délégué.');
+        }
+        if ($activity->outside_weekly_plan && isset($validatedData['date_activite'])) {
+            app(\App\Services\OutsideWeeklyPlanning::class)->checkCapacity(
+                (string) $activity->user_id, $validatedData['date_activite'], (string) $activity->id
+            );
+        }
+
 
         // Validation / refus : décision du responsable (circuit validations), jamais du délégué lui-même
         $user = auth()->user();
@@ -967,6 +993,11 @@ class ActivityController extends Controller
 
     public function reschedule(Request $request, string $id)
     {
+        return \Illuminate\Support\Facades\DB::transaction(fn () => $this->rescheduleInTransaction($request, $id));
+    }
+
+    private function rescheduleInTransaction(Request $request, string $id)
+    {
         $activity = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($id);
         $user = auth()->user();
 
@@ -992,8 +1023,12 @@ class ActivityController extends Controller
             'motif'         => 'required|string', // Justificatif obligatoire
         ]);
 
-        // Une visite reprogrammée est directement validée et prête à démarrer sans ré-attendre de validation
-        $newStatus = 'validee';
+        if ($activity->outside_weekly_plan) {
+            app(\App\Services\OutsideWeeklyPlanning::class)->checkCapacity((string) $activity->user_id, $validated['date_activite'], (string) $activity->id);
+        }
+        // Rescheduling must not turn an unapproved draft into an unlimited exemption.
+        $approved = $activity->statut === 'validee' || !empty($activity->validated_by_id) || $activity->outside_weekly_plan;
+        $newStatus = (!$isOwner || $approved) ? 'validee' : 'brouillon';
 
         $justification = "[REPROGRAMMÉE]: " . $validated['motif'];
         $notes = $activity->notes ? $activity->notes . "\n" . $justification : $justification;
@@ -1029,7 +1064,7 @@ class ActivityController extends Controller
         }
 
         return response()->json([
-            'message' => 'Visite reprogrammée avec succès sans nécessiter de nouvelle validation manager.',
+            'message' => $newStatus === 'validee' ? 'Visite reprogrammée avec succès.' : 'Visite reprogrammée en brouillon, à soumettre dans votre planning hebdomadaire.',
             'data' => new ActivityResource($activity->load(['delegue', 'contact', 'account', 'products']))
         ]);
     }

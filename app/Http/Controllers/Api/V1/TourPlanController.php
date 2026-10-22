@@ -82,7 +82,9 @@ class TourPlanController extends Controller
             $activityIds = $request->input('activity_ids', []);
             $weekActivities = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
                 ->where('user_id', $user->id)
-                ->whereBetween('date_activite', [$monday->toDateString(), $friday->toDateString()])
+                ->whereDate('date_activite', '<=', $friday->toDateString())
+                ->where(fn ($q) => $q->whereDate('date_fin', '>=', $monday->toDateString())->orWhere(fn ($s) => $s->whereNull('date_fin')->whereDate('date_activite', '>=', $monday->toDateString())))
+                ->where('outside_weekly_plan', false)
                 ->where(function ($q) {
                     $q->whereIn('statut', ['brouillon', 'planifiee', 'en_attente', 'validee'])
                       ->orWhereIn('activity_type', ['conge', 'absence', 'indisponibilite', 'leave', 'Congé Annuel', 'Congé Maladie']);
@@ -95,7 +97,11 @@ class TourPlanController extends Controller
                 })
                 ->get();
 
-            $coveredDates = $weekActivities->map(fn($a) => \Illuminate\Support\Carbon::parse($a->date_activite)->toDateString())->unique()->toArray();
+            $coveredDates = $weekActivities->flatMap(function ($activity) use ($monday, $friday) {
+                $start = \Illuminate\Support\Carbon::parse($activity->date_activite)->max($monday);
+                $end = \Illuminate\Support\Carbon::parse($activity->date_fin ?? $activity->date_activite)->min($friday);
+                return $start->gt($end) ? [] : collect(\Carbon\CarbonPeriod::create($start, $end))->map(fn ($day) => $day->toDateString())->all();
+            })->unique()->toArray();
 
             $missingDays = [];
             foreach ($workingDays as $dayNum => $dayInfo) {
@@ -128,6 +134,7 @@ class TourPlanController extends Controller
         // Visites soumises : celles choisies par le délégué (ou toutes celles de la semaine)
         $activityIds = $request->input('activity_ids', []);
         $toSubmit = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
+            ->where('outside_weekly_plan', false)
             ->where('user_id', $user->id)
             ->where(function ($q) {
                 $q->whereIn('statut', ['brouillon', 'planifiee'])

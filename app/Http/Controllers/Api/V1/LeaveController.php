@@ -20,7 +20,10 @@ class LeaveController extends Controller
         $isManager = $user->hasAnyRole(['sales_manager', 'sales-manager', 'superviseur', 'supervisor', 'directeur_regional', 'manager']);
 
         $query = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
-            ->whereIn('activity_type', ['conge', 'absence', 'indisponibilite', 'leave', 'Congé Annuel', 'Congé Maladie'])
+            ->where(function ($q) {
+                $q->whereIn('activity_type', ['conge', 'Congé', 'permission', 'Permission', 'absence', 'indisponibilite', 'leave', 'Congé Annuel', 'Congé Maladie'])
+                    ->orWhereHas('activityType', fn ($type) => $type->whereIn('code', ['conge', 'permission']));
+            })
             ->with(['delegue', 'validatedBy'])
             ->when($request->user_id, fn($q, $v) => $q->where('user_id', $v))
             ->when($request->statut ?? $request->status, fn($q, $v) => $q->where('statut', $v))
@@ -47,7 +50,8 @@ class LeaveController extends Controller
                 'type'             => $act->activity_type,
                 'activity_type'    => $act->activity_type,
                 'start_date'       => $act->date_activite ? Carbon::parse($act->date_activite)->format('Y-m-d') : null,
-                'end_date'         => $act->date_activite ? Carbon::parse($act->date_activite)->format('Y-m-d') : null,
+                'end_date'         => ($act->date_fin ?? $act->date_activite)?->format('Y-m-d'),
+                'days' => $act->date_activite ? (int) Carbon::parse($act->date_activite)->diffInDays($act->date_fin ?? $act->date_activite) + 1 : 0,
                 'date_activite'    => $act->date_activite ? Carbon::parse($act->date_activite)->format('Y-m-d') : null,
                 'heure_debut'      => $act->heure_debut,
                 'heure_fin'        => $act->heure_fin,

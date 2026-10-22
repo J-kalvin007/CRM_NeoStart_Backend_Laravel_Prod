@@ -10,6 +10,13 @@ class ActivityType extends Model
 {
     use HasUuids, HasActivityLogs;
 
+    protected $appends = ['planning_kind'];
+
+    public function getPlanningKindAttribute(): string
+    {
+        return \App\Services\PlanningOptions::kind($this->code);
+    }
+
     protected $fillable = ['name', 'code', 'description', 'is_active', 'is_multi', 'is_account_only'];
 
     protected $casts = [

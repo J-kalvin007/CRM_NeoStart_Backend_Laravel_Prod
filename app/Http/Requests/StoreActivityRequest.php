@@ -104,7 +104,10 @@ class StoreActivityRequest extends FormRequest
             'contact_id'     => 'nullable|string|exists:contacts,id',
             'account_id'     => 'nullable|string|exists:accounts,id',
             'activity_type'  => 'required|string',
+            'activity_type_id' => 'nullable|uuid|exists:activity_types,id',
             'date_activite'  => 'required|date',
+            'date_fin' => 'nullable|date|after_or_equal:date_activite',
+            'outside_weekly_plan' => 'sometimes|boolean',
             'heure_debut'    => 'required|string',
             'heure_fin'      => 'nullable|string',
             'duree_minutes'  => 'nullable|integer',
@@ -138,6 +141,9 @@ class StoreActivityRequest extends FormRequest
     public function withValidator($validator): void
     {
         $validator->after(function ($validator) {
+            $this->validatePlanningRange($validator);
+            $selectedType = $this->activity_type_id ? \App\Models\ActivityType::find($this->activity_type_id) : null;
+            if ($selectedType && !$selectedType->is_active) $validator->errors()->add('activity_type', 'Ce type d’activité est désactivé.');
             if ($this->filled('contact_id')) {
                 $contact = \App\Models\Contact::withoutGlobalScopes()->find($this->contact_id);
                 if ($contact) {
@@ -162,5 +168,35 @@ class StoreActivityRequest extends FormRequest
                 }
             }
         });
+    }
+
+    private function validatePlanningRange($validator): void
+    {
+        $existing = null;
+        $id = $this->route('activity') ?? $this->route('id');
+        if ($id) $existing = \App\Models\Activity::withoutGlobalScopes()->find($id);
+        $typeId = $this->input('activity_type_id', $existing?->activity_type_id);
+        $record = $typeId ? \App\Models\ActivityType::find($typeId) : null;
+        $type = \App\Services\PlanningOptions::kind($record?->code ?? $this->input('activity_type', $existing?->activity_type ?? ''));
+        if ($type === 'visite') return;
+        if ($record && !$record->is_active) $validator->errors()->add('activity_type', 'Ce type d’activité est désactivé.');
+        $startDate = $this->input('date_activite', $existing?->date_activite?->toDateString());
+        $endDate = $this->input('date_fin', $existing?->date_fin?->toDateString());
+        $startTime = $this->input('heure_debut', $existing?->heure_debut);
+        $endTime = $this->input('heure_fin', $existing?->heure_fin);
+        if (!$endDate || !$endTime) {
+            $validator->errors()->add('date_fin', 'La date et l’heure de fin sont obligatoires pour cette activité.');
+            return;
+        }
+        try {
+            if (\Illuminate\Support\Carbon::parse($endDate . ' ' . $endTime)->lte(\Illuminate\Support\Carbon::parse($startDate . ' ' . $startTime))) {
+                $validator->errors()->add('date_fin', 'La fin doit être postérieure au début.');
+            }
+        } catch (\Throwable $e) {
+            $validator->errors()->add('date_fin', 'La période de planification est invalide.');
+        }
+        if ($this->boolean('outside_weekly_plan')) {
+            $validator->errors()->add('outside_weekly_plan', 'La marge hors planning est réservée aux visites.');
+        }
     }
 }

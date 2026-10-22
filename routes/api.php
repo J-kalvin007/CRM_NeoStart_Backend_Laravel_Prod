@@ -68,6 +68,8 @@ Route::prefix('v1')->group(function () {
 
     Route::middleware('auth:sanctum')->group(function () {
 
+    Route::get('planning-options', \App\Http\Controllers\Api\V1\PlanningOptionsController::class);
+
     // Sync
     Route::get('/sync/pull', [SyncController::class, 'pull']);
     Route::post('/sync/push', [SyncController::class, 'push']);
