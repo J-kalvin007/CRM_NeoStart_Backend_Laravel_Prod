@@ -9,7 +9,7 @@ use Illuminate\Support\Str;
 
 class PlanningOptions
 {
-    public const CALENDAR_CODES = ['rcp', 'reunion', 'conge', 'permission'];
+    public const CALENDAR_CODES = ['reunion', 'conge', 'permission'];
 
     public static function kind(?string $code): string
     {

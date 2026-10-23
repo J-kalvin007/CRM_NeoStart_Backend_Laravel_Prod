@@ -198,7 +198,13 @@ class CoachingController extends Controller
         $validated['motif'] ??= $isEvaluation ? 'Évaluation individuelle' : 'Visite DUO';
         $validated['objectifs_prevus'] ??= [];
 
-        abort_unless(Auth::user()->manages($validated['delegate_id']), 403, "Ce délégué ne fait pas partie de votre équipe.");
+        abort_unless(
+            Auth::user()->manages($validated['delegate_id']) || 
+            Auth::user()->hasAnyRole(['superadmin', 'admin', 'super-admin', 'superviseur', 'supervisor', 'manager', 'sales_manager', 'sales-manager', 'directeur-commercial', 'directeur_commercial']) || 
+            Auth::user()->can('scope:global'), 
+            403, 
+            "Ce délégué ne fait pas partie de votre équipe."
+        );
 
         $validated['supervisor_id'] = Auth::id();
         $validated['objectifs_prevus_json'] = $validated['objectifs_prevus'];
@@ -260,7 +266,8 @@ class CoachingController extends Controller
             $session->supervisor_id === $user->id || 
             $session->evaluator_id === $user->id || 
             $user->manages($session->delegate_id) ||
-            $user->hasAnyRole(['superadmin', 'admin', 'super-admin', 'directeur-commercial', 'directeur_commercial']),
+            $user->hasAnyRole(['superadmin', 'admin', 'super-admin', 'directeur-commercial', 'directeur_commercial', 'superviseur', 'supervisor', 'manager', 'sales_manager', 'sales-manager']) ||
+            $user->can('scope:global'),
             403,
             'Seul l\'évaluateur ou un responsable peut clôturer cette session.'
         );
