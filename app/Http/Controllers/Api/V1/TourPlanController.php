@@ -79,7 +79,6 @@ class TourPlanController extends Controller
                 5 => ['label' => 'Vendredi', 'date' => $monday->copy()->addDays(4)->toDateString()],
             ];
 
-            $activityIds = $request->input('activity_ids', []);
             $weekActivities = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
                 ->where('user_id', $user->id)
                 ->whereDate('date_activite', '<=', $friday->toDateString())
@@ -123,7 +122,6 @@ class TourPlanController extends Controller
         ]));
 
         // Visites soumises : celles choisies par le délégué (ou toutes celles de la semaine)
-        $activityIds = $request->input('activity_ids', []);
         $toSubmit = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
             ->where('outside_weekly_plan', false)
             ->whereDate('date_activite', '<=', $plan->date_fin)
@@ -132,12 +130,7 @@ class TourPlanController extends Controller
             ->where(function ($q) {
                 $q->whereIn('statut', ['brouillon', 'planifiee'])
                   ->orWhere(fn ($q2) => $q2->where('statut', 'en_attente')->whereNull('tour_plan_id'));
-            })
-            ->when(
-                !empty($activityIds) && is_array($activityIds),
-                fn ($q) => $q->whereIn('id', $activityIds),
-                fn ($q) => $q
-            );
+            });
 
         $linkedCount = $toSubmit->update(['tour_plan_id' => $plan->id, 'statut' => 'en_attente']);
         if ($linkedCount === 0) {

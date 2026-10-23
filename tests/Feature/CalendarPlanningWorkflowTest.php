@@ -35,11 +35,11 @@ class CalendarPlanningWorkflowTest extends TestCase
             Sanctum::actingAs($delegate);
             $id = $this->postJson('/api/v1/activities', $this->event($kind))->assertCreated()
                 ->assertJsonPath('data.statut', 'brouillon')->json('data.id');
-            $unsubmitted = Activity::create($this->event('visite', ['user_id' => $delegate->id, 'statut' => 'brouillon']));
             $plan = $this->postJson('/api/v1/tour-plans', [
                 'nom' => 'Semaine', 'date_debut' => $this->event()['date_activite'],
                 'date_fin' => $this->event()['date_fin'], 'statut' => 'soumis', 'activity_ids' => [$id],
             ])->assertCreated()->json('data.id');
+            $unsubmitted = Activity::create($this->event('visite', ['user_id' => $delegate->id, 'statut' => 'brouillon']));
             $this->assertSame('en_attente', Activity::find($id)->statut);
             Sanctum::actingAs($manager);
             $this->putJson("/api/v1/tour-plans/{$plan}", ['statut' => 'valide'])->assertOk();
