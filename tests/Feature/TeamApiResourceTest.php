@@ -2,115 +2,40 @@
 
 namespace Tests\Feature;
 
-use App\Models\Country;
-use App\Models\Region;
-use App\Models\Sector;
-use App\Models\Subsidiary;
-use App\Models\Team;
-use App\Models\Territory;
+use App\Models\Role;
 use App\Models\User;
-use App\Models\Zone;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 class TeamApiResourceTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_teams_api_returns_name_and_sector_id_for_frontend(): void
+    public function test_team_directory_uses_the_current_manager_relationship(): void
     {
-        $admin = User::factory()->create();
-
-        $country = Country::create([
-            'name' => 'France',
-            'iso_code' => 'FR',
-            'currency' => 'EUR',
-            'language' => 'fr',
-            'timezone' => 'Europe/Paris',
-            'status' => true,
-        ]);
-
-        $subsidiary = Subsidiary::create([
-            'country_id' => $country->id,
-            'name' => 'Filiale Paris',
-            'code' => 'SUB-001',
-            'status' => true,
-        ]);
-
-        $region = Region::create([
-            'subsidiary_id' => $subsidiary->id,
-            'name' => 'Île-de-France',
-        ]);
-
-        $territory = Territory::create([
-            'region_id' => $region->id,
-            'name' => 'Paris',
-        ]);
-
-        $zone = Zone::create([
-            'territory_id' => $territory->id,
-            'name' => 'Paris Centre',
-            'code' => 'Z-Paris',
-            'is_active' => true,
-        ]);
-
-        $sector = Sector::create([
-            'zone_id' => $zone->id,
-            'name' => 'Secteur Central',
-            'code' => 'SEC-001',
-            'is_active' => true,
-        ]);
-
-        Team::create([
-            'name' => 'Équipe Nord',
-            'manager_id' => $admin->id,
-        ]);
-
-        $response = $this->actingAs($admin, 'sanctum')->getJson('/api/v1/teams');
-
-        $response->assertOk();
-        $response->assertJsonFragment(['name' => 'Équipe Nord']);
-        $response->assertJsonPath('data.0.manager_id', $admin->id);
+        Role::firstOrCreate(['name' => 'superviseur', 'guard_name' => 'web']);
+        $manager = User::factory()->create();
+        $manager->assignRole('superviseur');
+        $delegate = User::factory()->create(['manager_id' => $manager->id]);
+        $outsider = User::factory()->create();
+        $response = $this->actingAs($manager, 'sanctum')->getJson('/api/v1/users?team=1')->assertOk();
+        $ids = collect($response->json('data'))->pluck('id')->all();
+        $this->assertContains($delegate->id, $ids);
+        $this->assertNotContains($outsider->id, $ids);
+        $this->assertNotContains($manager->id, $ids);
+        $this->getJson('/api/v1/supervisor/team-planning')->assertOk();
     }
 
-    public function test_team_manager_can_be_updated_via_api(): void
+    public function test_admin_can_reassign_a_collaborator_to_another_manager(): void
     {
-        // Les référentiels (dont les équipes) ne sont modifiables que par l'administration
-        \App\Models\Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
+        Mail::fake();
+        Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
         $admin = User::factory()->create();
         $admin->assignRole('admin');
         $manager = User::factory()->create();
-
-        $country = Country::create([
-            'name' => 'France',
-            'iso_code' => 'US',
-            'currency' => 'EUR',
-            'language' => 'fr',
-            'timezone' => 'Europe/Paris',
-            'status' => true,
-        ]);
-
-        $subsidiary = Subsidiary::create([
-            'country_id' => $country->id,
-            'name' => 'Filiale Paris',
-            'code' => 'SUB-002',
-            'status' => true,
-        ]);
-
-        $team = Team::create([
-            'name' => 'Équipe Sud',
-            'manager_id' => $admin->id,
-        ]);
-
-        $response = $this->actingAs($admin, 'sanctum')->putJson('/api/v1/teams/' . $team->id, [
-            'name' => 'Équipe Sud',
-            'manager_id' => $manager->id,
-        ]);
-
-        $response->assertOk();
-        $this->assertDatabaseHas('teams', [
-            'id' => $team->id,
-            'manager_id' => $manager->id,
-        ]);
+        $delegate = User::factory()->create(['manager_id' => $admin->id]);
+        $this->actingAs($admin, 'sanctum')->putJson('/api/v1/users/' . $delegate->id, ['manager_id' => $manager->id])->assertOk();
+        $this->assertDatabaseHas('users', ['id' => $delegate->id, 'manager_id' => $manager->id]);
     }
 }

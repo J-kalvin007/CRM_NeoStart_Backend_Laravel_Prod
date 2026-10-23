@@ -7,7 +7,6 @@ use App\Models\Contact;
 use App\Models\Country;
 use App\Models\Expense;
 use App\Models\Product;
-use App\Models\Subsidiary;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
@@ -20,7 +19,6 @@ class AllActionsNotificationTest extends TestCase
     protected User $supervisor;
     protected User $delegate;
     protected Country $country;
-    protected Subsidiary $subsidiary;
 
     protected function setUp(): void
     {
@@ -33,12 +31,6 @@ class AllActionsNotificationTest extends TestCase
             'currency' => 'XOF',
         ]);
 
-        $this->subsidiary = Subsidiary::create([
-            'name' => 'Filiale Bénin',
-            'code' => 'SUB-BJ',
-            'country_id' => $this->country->id,
-            'status' => true,
-        ]);
 
         $this->supervisor = User::factory()->create([
             'name' => 'Superviseur Test',
@@ -58,20 +50,20 @@ class AllActionsNotificationTest extends TestCase
 
     public function test_tour_plan_submission_triggers_notifications()
     {
-        // Une visite brouillon à soumettre dans la période (un planning vide est refusé)
-        \App\Models\Activity::create([
-            'user_id' => $this->delegate->id,
-            'activity_type' => 'visite',
-            'date_activite' => '2026-09-23',
-            'heure_debut' => '09:00:00',
-            'statut' => 'brouillon',
-        ]);
+        $monday = now()->startOfWeek()->addWeek();
+        for ($day = 0; $day < 5; $day++) {
+            \App\Models\Activity::create([
+                'user_id' => $this->delegate->id, 'activity_type' => 'visite',
+                'date_activite' => $monday->copy()->addDays($day)->toDateString(),
+                'heure_debut' => '09:00', 'statut' => 'brouillon',
+            ]);
+        }
 
         $response = $this->actingAs($this->delegate, 'sanctum')
             ->postJson('/api/v1/tour-plans', [
                 'nom' => 'Plan de tournée S38',
-                'date_debut' => '2026-09-22',
-                'date_fin' => '2026-09-28',
+                'date_debut' => $monday->toDateString(),
+                'date_fin' => $monday->copy()->addDays(6)->toDateString(),
                 'statut' => 'soumis',
             ]);
 
@@ -92,7 +84,7 @@ class AllActionsNotificationTest extends TestCase
     {
         $expense = Expense::create([
             'user_id' => $this->delegate->id,
-            'subsidiary_id' => $this->subsidiary->id,
+
             'title' => 'Déjeuner Pro',
             'type' => 'meal',
             'amount' => 25000,
@@ -164,14 +156,14 @@ class AllActionsNotificationTest extends TestCase
     {
         $product = Product::create([
             'nom' => 'SkynityCure 500mg',
-            'subsidiary_id' => $this->subsidiary->id,
+
         ]);
 
         $contact = Contact::create([
             'nom' => 'Lawson',
             'prenom' => 'Jean',
             'user_id' => $this->delegate->id,
-            'subsidiary_id' => $this->subsidiary->id,
+
         ]);
 
         $response = $this->actingAs($this->delegate, 'sanctum')

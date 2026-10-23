@@ -15,7 +15,6 @@ use App\Models\PharmacovigilanceReport;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Models\SampleMovement;
-use App\Models\Subsidiary;
 use App\Models\TourPlan;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -31,7 +30,6 @@ class EndToEndBusinessWorkflowsTest extends TestCase
     protected User $delegate;
     protected Product $product;
     protected Laboratory $laboratory;
-    protected Subsidiary $subsidiary;
 
     protected function setUp(): void
     {
@@ -43,12 +41,6 @@ class EndToEndBusinessWorkflowsTest extends TestCase
             'currency' => 'XOF',
         ]);
 
-        $this->subsidiary = Subsidiary::create([
-            'name' => 'Filiale Togo',
-            'code' => 'SUB-TG',
-            'country_id' => $country->id,
-            'status' => true,
-        ]);
 
         $this->supervisor = User::factory()->create([
             'name' => 'Kossi AMOUZOU',
@@ -57,10 +49,14 @@ class EndToEndBusinessWorkflowsTest extends TestCase
         ]);
 
         $this->delegate = User::factory()->create([
+            'manager_id' => $this->supervisor->id,
             'name' => 'Sena KPODAR',
             'email' => 'sena.kpodar@skynity.com',
             'password' => Hash::make('password123'),
         ]);
+
+        \App\Models\Role::firstOrCreate(['name' => 'superviseur', 'guard_name' => 'web']);
+        $this->supervisor->assignRole('superviseur');
 
         $this->laboratory = Laboratory::create([
             'nom' => 'Sanofi Togo',
@@ -69,7 +65,7 @@ class EndToEndBusinessWorkflowsTest extends TestCase
         ]);
 
         $this->product = Product::create([
-            'subsidiary_id' => $this->subsidiary->id,
+
             'nom' => 'Amoxil 500mg',
             'code' => 'AMX-500',
             'dci' => 'Amoxicilline',
@@ -78,6 +74,8 @@ class EndToEndBusinessWorkflowsTest extends TestCase
             'laboratory_id' => $this->laboratory->id,
             'statut' => 'actif',
         ]);
+        $this->product->countries()->attach($country->id, ['pght' => 2500, 'ppv' => 3200, 'devise' => 'XOF']);
+
     }
 
     /**
@@ -143,7 +141,7 @@ class EndToEndBusinessWorkflowsTest extends TestCase
         ]);
 
         $account = Account::create([
-            'subsidiary_id' => $this->subsidiary->id,
+
             'nom' => 'CHU Sylvanus Olympio',
             'statut' => 'en_attente',
             'user_id' => $this->delegate->id,
@@ -311,7 +309,7 @@ class EndToEndBusinessWorkflowsTest extends TestCase
     public function test_workflow_08_expense_note_submission_and_approval(): void
     {
         $expense = Expense::create([
-            'subsidiary_id' => $this->subsidiary->id,
+
             'user_id' => $this->delegate->id,
             'title' => 'Carburant Tournée Maritime',
             'amount' => 25000.00,
@@ -334,7 +332,7 @@ class EndToEndBusinessWorkflowsTest extends TestCase
     public function test_workflow_09_wholesale_sales_entry_and_revenue_calculation(): void
     {
         $account = Account::create([
-            'subsidiary_id' => $this->subsidiary->id,
+
             'nom' => 'SOCOPHAR TOGO',
             'statut' => 'valide',
             'user_id' => $this->delegate->id,
@@ -346,7 +344,7 @@ class EndToEndBusinessWorkflowsTest extends TestCase
 
         $sale = Sale::create([
             'user_id' => $this->delegate->id,
-            'subsidiary_id' => $this->subsidiary->id,
+
             'account_id' => $account->id,
             'amount' => $expectedTotal,
             'status' => 'valide',

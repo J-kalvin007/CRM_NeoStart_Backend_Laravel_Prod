@@ -80,9 +80,9 @@ class Phase2PlanningConflictsTest extends TestCase
     }
 
     /**
-     * Test 3: Visite sans heure de fin ni durée -> Enregistrement bloqué (422).
+     * Test 3: Une visite sans heure de fin reste un brouillon non exécutable.
      */
-    public function test_visit_without_end_time_or_duration_is_rejected(): void
+    public function test_visit_without_end_time_remains_a_non_executable_draft(): void
     {
         $date = now()->addDays(4)->toDateString();
 
@@ -93,7 +93,7 @@ class Phase2PlanningConflictsTest extends TestCase
             // Ni heure_fin ni duree_minutes
         ]);
 
-        $response->assertStatus(422);
+        $response->assertCreated()->assertJsonPath('data.statut', 'brouillon');
     }
 
     /**

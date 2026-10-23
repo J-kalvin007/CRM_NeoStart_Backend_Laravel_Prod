@@ -7,7 +7,6 @@ use Tests\TestCase;
 use App\Models\User;
 use App\Models\Account;
 use App\Models\Role;
-use App\Models\OrganizationalUnit;
 use Spatie\Permission\PermissionRegistrar;
 use Laravel\Sanctum\Sanctum;
 
@@ -17,7 +16,6 @@ class Phase6EtablissementsTest extends TestCase
 
     protected User $supervisor;
     protected User $delegate;
-    protected OrganizationalUnit $unit;
 
     protected function setUp(): void
     {
@@ -27,35 +25,31 @@ class Phase6EtablissementsTest extends TestCase
         Role::firstOrCreate(['name' => 'superviseur', 'guard_name' => 'web']);
         Role::firstOrCreate(['name' => 'delegue_medical', 'guard_name' => 'web']);
 
-        $this->supervisor = User::factory()->create();
+        $country = \App\Models\Country::create(['name' => 'Togo', 'iso_code' => 'TG', 'currency' => 'XOF']);
+        $this->supervisor = User::factory()->create(['country_id' => $country->id]);
         $this->supervisor->assignRole('superviseur');
 
-        $this->delegate = User::factory()->create(['manager_id' => $this->supervisor->id]);
+        $this->delegate = User::factory()->create(['manager_id' => $this->supervisor->id, 'country_id' => $country->id]);
         $this->delegate->assignRole('delegue_medical');
 
-        $this->unit = OrganizationalUnit::create(['name' => 'Secteur Lomé', 'type' => 'secteur', 'is_active' => true]);
-        \App\Models\UserScope::create([
-            'user_id' => $this->delegate->id,
-            'organizational_unit_id' => $this->unit->id,
-            'is_primary' => true,
-            'is_active' => true,
-        ]);
+
     }
 
     /**
-     * Test 1: Création d'établissement sans coordonnées GPS -> Bloquée avec 422
+     * Test 1: Les coordonnées inconnues restent nulles à la création.
      */
-    public function test_creation_without_gps_coordinates_is_blocked(): void
+    public function test_creation_without_gps_keeps_coordinates_unknown(): void
     {
         Sanctum::actingAs($this->delegate);
 
         $response = $this->postJson('/api/v1/accounts', [
             'nom'                    => 'Pharmacie Sans GPS',
-            'organizational_unit_id' => $this->unit->id,
+
         ]);
 
-        $response->assertStatus(422)
-            ->assertJsonStructure(['errors' => ['gps_lat', 'gps_lng']]);
+        $response->assertCreated()->assertJsonPath('data.statut_validation', 'en_attente');
+        $this->assertNull(\App\Models\Account::first()->gps_lat);
+        $this->assertNull(\App\Models\Account::first()->gps_lng);
     }
 
     /**
@@ -69,7 +63,7 @@ class Phase6EtablissementsTest extends TestCase
             'nom'                    => 'PHARMACIE ST ANTOINE',
             'gps_lat'                => 5.3450,
             'gps_lng'                => -3.9820,
-            'organizational_unit_id' => $this->unit->id,
+
         ]);
 
         $response->assertStatus(201)

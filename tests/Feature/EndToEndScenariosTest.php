@@ -68,7 +68,7 @@ class EndToEndScenariosTest extends TestCase
         ]);
     }
 
-    public function test_sales_manager_team_is_limited_to_direct_supervisors_and_their_delegates(): void
+    public function test_sales_manager_team_includes_managed_descendants_and_excludes_other_teams(): void
     {
         $otherSupervisor = User::factory()->create();
         $otherSupervisor->assignRole('superviseur');
@@ -85,7 +85,7 @@ class EndToEndScenariosTest extends TestCase
         $this->assertContains($this->delegate->id, $teamMemberIds);
         $this->assertNotContains($otherSupervisor->id, $teamMemberIds);
         $this->assertNotContains($otherDelegate->id, $teamMemberIds);
-        $this->assertNotContains($deeperDelegate->id, $teamMemberIds);
+        $this->assertContains($deeperDelegate->id, $teamMemberIds);
     }
 
     /**

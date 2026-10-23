@@ -7,27 +7,24 @@ use App\Services\FcmNotificationService;
 
 class FcmChannel
 {
-    protected FcmNotificationService $fcm;
-
-    public function __construct(FcmNotificationService $fcm)
-    {
-        $this->fcm = $fcm;
-    }
-
     public function send($notifiable, Notification $notification)
     {
-        if (!method_exists($notification, 'toFcm')) {
+        if (empty($notifiable->fcm_token) || !method_exists($notification, 'toFcm')) {
             return;
         }
 
         $message = $notification->toFcm($notifiable);
         if ($message) {
-            $this->fcm->sendToUser(
-                $notifiable, 
-                $message['title'], 
-                $message['body'], 
-                $message['data'] ?? []
-            );
+            try {
+                app(FcmNotificationService::class)->sendToUser(
+                    $notifiable,
+                    $message['title'],
+                    $message['body'],
+                    $message['data'] ?? []
+                );
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error('Push notification unavailable: ' . $e->getMessage());
+            }
         }
     }
 }

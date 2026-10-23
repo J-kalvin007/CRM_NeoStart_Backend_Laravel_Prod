@@ -20,7 +20,7 @@ use Illuminate\Support\Facades\DB;
 class SupervisorDashboardController extends Controller
 {
     // Visites effectuées ou validées pour le mois en cours
-    public const COMPLETED = ['realisee', 'effectuee', 'terminee', 'validee'];
+    public const COMPLETED = ['realisee', 'effectuee', 'terminee'];
     private const LEAVE_TYPES = ['conge', 'absence', 'indisponibilite', 'leave', 'Congé Annuel', 'Congé Maladie'];
 
     public function dashboard(Request $request)

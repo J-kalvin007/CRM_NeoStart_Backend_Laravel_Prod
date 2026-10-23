@@ -528,7 +528,7 @@ class ActivityController extends Controller
 
         if ($isAttemptingExecution) {
             $currentStatusLower = strtolower((string)$activity->statut);
-            $isApproved = ($activity->statut === 'validee' || !empty($activity->validated_by_id))
+            $isApproved = ($activity->statut === 'validee' || !empty($activity->validated_by_id) || ($activity->statut === 'en_cours' && $activity->gps_debut_lat !== null && $activity->gps_debut_lng !== null))
                 && !in_array($currentStatusLower, ['brouillon', 'draft', 'en_attente', 'en_attente_validation', 'refusee', 'rejetee', 'annulee'], true);
             if (!$isApproved) {
                 return response()->json([
@@ -1852,7 +1852,7 @@ class ActivityController extends Controller
 
         // Contrôle de sécurité: Seule une visite préalablement validée par le responsable peut être effectuée
         $currentStatusLower = strtolower((string)$activity->statut);
-        $isApproved = ($activity->statut === 'validee' || !empty($activity->validated_by_id))
+        $isApproved = ($activity->statut === 'validee' || !empty($activity->validated_by_id) || ($activity->statut === 'en_cours' && $activity->gps_debut_lat !== null && $activity->gps_debut_lng !== null))
             && !in_array($currentStatusLower, ['brouillon', 'draft', 'en_attente', 'en_attente_validation', 'refusee', 'rejetee', 'annulee'], true);
 
         if (!$isApproved) {

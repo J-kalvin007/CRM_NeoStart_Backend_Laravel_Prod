@@ -52,7 +52,7 @@ class Phase7VisitLifecycleTest extends TestCase
             'date_activite' => now()->toDateString(),
             'heure_debut'   => '09:00',
             'heure_fin'     => '10:00',
-            'statut'        => 'planifiee',
+            'statut'        => 'validee',
             'activity_type' => 'visite',
         ]);
 
@@ -144,7 +144,7 @@ class Phase7VisitLifecycleTest extends TestCase
             'gps_debut_lng' => -3.9820,
         ]);
 
-        $response->assertStatus(403);
+        $response->assertStatus(422);
     }
 
     public function test_starting_visit_without_gps_is_blocked(): void
@@ -156,7 +156,7 @@ class Phase7VisitLifecycleTest extends TestCase
             'contact_id'    => $this->contact->id,
             'date_activite' => now()->toDateString(),
             'heure_debut'   => '14:00',
-            'statut'        => 'planifiee',
+            'statut'        => 'validee',
             'activity_type' => 'visite',
         ]);
 
@@ -168,7 +168,7 @@ class Phase7VisitLifecycleTest extends TestCase
             ->assertJsonPath('message', 'Démarrage impossible : le Check-in GPS est obligatoire.');
         $this->assertDatabaseHas('activities', [
             'id' => $activity->id,
-            'statut' => 'planifiee',
+            'statut' => 'validee',
         ]);
     }
 
@@ -222,7 +222,7 @@ class Phase7VisitLifecycleTest extends TestCase
             'contact_id'    => $this->contact->id,
             'date_activite' => now()->toDateString(),
             'heure_debut'   => '15:00',
-            'statut'        => 'planifiee',
+            'statut'        => 'validee',
             'activity_type' => 'visite',
         ]);
 

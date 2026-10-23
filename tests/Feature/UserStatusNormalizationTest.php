@@ -75,4 +75,16 @@ class UserStatusNormalizationTest extends TestCase
 
         $this->assertDatabaseHas('users', ['id' => $targetUser->id, 'name' => $targetUser->name]);
     }
+    public function test_push_failure_does_not_discard_in_app_notification(): void
+    {
+        $user = User::factory()->create(['fcm_token' => 'test-device']);
+        $this->app->bind(\App\Services\FcmNotificationService::class, function () {
+            throw new \RuntimeException('Push service temporarily unavailable');
+        });
+        \Illuminate\Support\Facades\Notification::sendNow(
+            $user, new \App\Notifications\SystemNotification('Compte créé', 'Bienvenue'),
+            ['database', \App\Channels\FcmChannel::class]
+        );
+        $this->assertDatabaseHas('notifications', ['notifiable_id' => $user->id]);
+    }
 }

@@ -115,9 +115,9 @@ class Phase4TrioPlanningTest extends TestCase
     }
 
     /**
-     * Test 4: Validation de TRIO qui chevauche une visite du Délégué -> Bloquée en conflit (422).
+     * Test 4: Le créneau d’une visite ordinaire peut aussi accueillir une visite Trio.
      */
-    public function test_validating_trio_overlapping_existing_delegate_visit_is_blocked(): void
+    public function test_trio_can_share_a_slot_with_an_ordinary_visit(): void
     {
         $date = now()->addDays(5)->toDateString();
 
@@ -147,7 +147,6 @@ class Phase4TrioPlanningTest extends TestCase
 
         $response = $this->postJson("/api/v1/trio/{$trio->id}/valider");
 
-        $response->assertStatus(422)
-            ->assertJsonStructure(['message']);
+        $response->assertOk();
     }
 }

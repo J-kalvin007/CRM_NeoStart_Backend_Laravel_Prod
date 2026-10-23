@@ -32,3 +32,13 @@ Les activités calendaires ne sont pas des visites exécutables : pas de GPS, ra
 Les documents d’un produit sont associés exclusivement par identifiant (rattachement polymorphe `App\Models\Product`). Les titres, préfixes et dosages ne permettent pas de partager des documents entre produits. `GET /api/v1/documents?product_id=UUID` filtre cette affectation exacte. Appliquer aussi `2026_10_22_130000_remove_orphaned_document_subsidiary_constraint.php` pour retirer les contraintes restantes vers les anciennes tables supprimées ; les documents existants sont conservés.
 
 Les congés et permissions réservent leur intervalle : une visite ne peut pas être planifiée pendant une absence non annulée/non refusée, et une absence ne peut pas recouvrir une activité existante. Plusieurs visites peuvent toujours partager un créneau en dehors de ces absences.
+
+## Contrôle de qualité et organisation actuelle
+
+La hiérarchie utilise `users.manager_id` et le pays, sans recréer les anciens modèles de filiales, secteurs ou unités organisationnelles. Les tests de ces parcours utilisent désormais cette structure et les prix produits par pays.
+
+La migration `2026_10_23_090000_remove_orphaned_legacy_constraints.php` retire les clés étrangères encore dirigées vers les tables supprimées et rend facultatifs les anciens identifiants de filiale et d’unité. Les lignes et leurs anciennes valeurs sont conservées. Appliquer les migrations au déploiement avant d’utiliser les parcours corrigés.
+
+Une panne ou une configuration absente du service push ne doit pas empêcher la notification interne ni la création d’un utilisateur. Cette situation est journalisée ; aucun client Firebase n’est initialisé pour un utilisateur sans jeton.
+
+Vérification backend : `php artisan test`. Vérification web : `npm run typecheck`, `npm test`, `npm run build`. Le contrôle TypeScript parcourt les projets référencés ; une simple commande `vue-tsc --noEmit` à la racine ne suffit pas avec la configuration Nuxt actuelle.
