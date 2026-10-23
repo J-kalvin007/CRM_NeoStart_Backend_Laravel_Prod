@@ -220,6 +220,10 @@ class ActivityController extends Controller
             $targetUserId = $data['user_id'];
         }
 
+        $kind = \App\Services\PlanningOptions::kind(
+            !empty($data['activity_type_id']) ? \App\Models\ActivityType::find($data['activity_type_id'])?->code : ($data['activity_type'] ?? null)
+        );
+
         // Vérification de chevauchement horaire (partiel, identique ou total)
         if (!empty($data['date_activite']) && !empty($data['heure_debut'])) {
             $hasOverlap = Activity::checkOverlap(
@@ -227,7 +231,8 @@ class ActivityController extends Controller
                 $data['date_activite'],
                 $data['heure_debut'],
                 $data['heure_fin'] ?? null,
-                $data['duree_minutes'] ?? null
+                $data['duree_minutes'] ?? null, null,
+                in_array($kind, ['conge', 'permission'], true), $data['date_fin'] ?? null
             );
 
             if ($hasOverlap) {
@@ -263,6 +268,13 @@ class ActivityController extends Controller
                 // au superviseur (POST tour-plans), qui les passe en attente de validation
                 $data['statut'] = 'brouillon';
             }
+        }
+
+        abort_if($kind !== 'visite' && in_array($data['statut'] ?? '', ['en_cours', 'realisee'], true), 422, 'Cette activité ne peut pas être exécutée comme une visite.');
+        if ($kind !== 'visite') {
+            // Toutes les activités calendaires passent par la soumission hebdomadaire.
+            $data['statut'] = 'brouillon';
+            $data['tour_plan_id'] = null;
         }
 
         // Si c'est une visite en duo, on peut ajouter un indicateur
@@ -327,7 +339,7 @@ class ActivityController extends Controller
         // Notification au manager
         $user = auth()->user();
         $manager = $user?->manager ?? ($user?->manager_id ? \App\Models\User::find($user->manager_id) : null) ?? \App\Models\User::whereHas('roles', fn($q) => $q->whereIn('name', ['superviseur', 'supervisor', 'manager', 'Manager', 'Superviseur', 'dir-commercial']))->first();
-        if ($manager && $user) {
+        if ($manager && $user && $activity->statut !== 'brouillon') {
             $isRealized = in_array($activity->statut, ['realisee', 'soumis_definitif']);
             $title = $isRealized ? 'Nouveau compte-rendu de visite' : 'Nouvelle visite planifiée';
             $msg = $isRealized ? "Le délégué {$user->name} a finalisé son compte-rendu de visite." : "Le délégué {$user->name} a planifié une nouvelle visite.";
@@ -452,11 +464,17 @@ class ActivityController extends Controller
             return response()->json(['message' => 'Non authentifié'], 401);
         }
         $canDecide = $user->can('scope:global') || $user->hasAnyRole(['superadmin', 'super-admin', 'admin']) || ($activity->user_id && $user->manages((string) $activity->user_id));
+        abort_unless((string) $activity->user_id === (string) $user->id || $canDecide, 403);
+        if ($activity->isCalendarActivity()) {
+            abort_if(in_array($targetStatus, ['en_cours', 'realisee', 'terminee', 'cloturee', 'soumis_definitif', 'manquee'], true) || !empty($validatedData['report_status']) || !empty($validatedData['report_content']) || !empty($validatedData['start_time']) || !empty($validatedData['gps_debut_lat']), 422, 'Cette activité ne nécessite ni exécution GPS ni compte-rendu de visite.');
+            abort_if(in_array($targetStatus, ['validee', 'valide', 'refusee', 'rejetee', 'en_attente', 'planifiee'], true) && $targetStatus !== $activity->statut, 422, 'Validez ou refusez le planning hebdomadaire de cette activité.');
+            abort_unless($activity->statut === 'brouillon', 422, 'Retirez le planning soumis avant de modifier cette activité.');
+        }
         $decisionStatuts = ['validee', 'valide', 'refusee', 'rejetee', 'planifiee', 'planifiée'];
         
         // Si le délégué change la date de la visite, autoriser le changement de statut automatique
-        $dateChanged = isset($validatedData['date_activite']) && $validatedData['date_activite'] !== $activity->date_activite;
-        if ($dateChanged && !$canDecide && $targetStatus === null) {
+        $dateChanged = isset($validatedData['date_activite']) && $validatedData['date_activite'] !== $activity->date_activite?->toDateString();
+        if ($dateChanged && !$canDecide && $targetStatus === null && !$activity->isCalendarActivity()) {
             // Le délégué reporte la visite : mettre automatiquement le statut à planifiee
             $validatedData['statut'] = 'planifiee';
             $targetStatus = 'planifiee';
@@ -571,7 +589,9 @@ class ActivityController extends Controller
                 $checkTime,
                 $checkEndTime,
                 $checkDuration,
-                $activity->id
+                $activity->id,
+                in_array($activity->planning_kind, ['conge', 'permission'], true),
+                $validatedData['date_fin'] ?? $activity->date_fin?->toDateString()
             );
             if ($hasOverlap) {
                 return response()->json([
@@ -779,6 +799,7 @@ class ActivityController extends Controller
         $activity = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($id);
         abort_unless(!$activity->isTrio(), 403, 'Une visite Trio doit être validée via son circuit dédié.');
         $this->ensureSupervises($activity->user_id);
+        abort_if($activity->isCalendarActivity(), 422, 'Traitez cette activité avec son planning hebdomadaire.');
 
         $request->validate([
             'statut' => 'required|in:validee,validated,rejetee,refusee',
@@ -887,6 +908,7 @@ class ActivityController extends Controller
             ->whereIn('id', $activityIds)
             ->get();
 
+        abort_if($activities->contains(fn (Activity $activity) => $activity->isCalendarActivity()), 422, 'Traitez les activités de calendrier avec leur planning hebdomadaire.');
         if ($activities->contains(fn (Activity $activity) => $activity->isTrio())) {
             return response()->json(['message' => 'Les visites Trio doivent être traitées individuellement via leur circuit dédié.'], 422);
         }
@@ -1022,6 +1044,12 @@ class ActivityController extends Controller
             'heure_fin'     => 'nullable|string',
             'motif'         => 'required|string', // Justificatif obligatoire
         ]);
+
+        abort_if($activity->isCalendarActivity(), 422, 'Modifiez cette activité depuis son planning, avec sa période complète.');
+        abort_if(Activity::checkOverlap((string) $activity->user_id, $validated['date_activite'],
+            $validated['heure_debut'] ?? $activity->heure_debut,
+            $validated['heure_fin'] ?? $activity->heure_fin, $activity->duree_minutes, (string) $activity->id),
+            422, 'Cette période est réservée par un congé ou une permission.');
 
         if ($activity->outside_weekly_plan) {
             app(\App\Services\OutsideWeeklyPlanning::class)->checkCapacity((string) $activity->user_id, $validated['date_activite'], (string) $activity->id);
@@ -1806,6 +1834,7 @@ class ActivityController extends Controller
     {
         $user = auth()->user();
         $activity = Activity::withoutGlobalScopes()->findOrFail($id);
+        abort_if($activity->isCalendarActivity(), 422, 'Cette activité ne peut pas être démarrée comme une visite.');
 
         // Vérifier que l'utilisateur est le délégué assigné ou le superviseur en duo
         abort_unless(

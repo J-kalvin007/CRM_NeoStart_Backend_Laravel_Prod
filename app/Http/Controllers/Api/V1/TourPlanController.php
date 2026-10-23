@@ -85,16 +85,7 @@ class TourPlanController extends Controller
                 ->whereDate('date_activite', '<=', $friday->toDateString())
                 ->where(fn ($q) => $q->whereDate('date_fin', '>=', $monday->toDateString())->orWhere(fn ($s) => $s->whereNull('date_fin')->whereDate('date_activite', '>=', $monday->toDateString())))
                 ->where('outside_weekly_plan', false)
-                ->where(function ($q) {
-                    $q->whereIn('statut', ['brouillon', 'planifiee', 'en_attente', 'validee'])
-                      ->orWhereIn('activity_type', ['conge', 'absence', 'indisponibilite', 'leave', 'Congé Annuel', 'Congé Maladie']);
-                })
-                ->when(!empty($activityIds) && is_array($activityIds), function ($q) use ($activityIds) {
-                    $q->where(function ($sub) use ($activityIds) {
-                        $sub->whereIn('id', $activityIds)
-                            ->orWhereIn('activity_type', ['conge', 'absence', 'indisponibilite', 'leave', 'Congé Annuel', 'Congé Maladie']);
-                    });
-                })
+                ->whereIn('statut', ['brouillon', 'planifiee', 'en_attente', 'validee', 'realisee'])
                 ->get();
 
             $coveredDates = $weekActivities->flatMap(function ($activity) use ($monday, $friday) {
@@ -113,7 +104,7 @@ class TourPlanController extends Controller
             if (!empty($missingDays)) {
                 return response()->json([
                     'error' => 'WEEKLY_PLANNING_INCOMPLETE',
-                    'message' => "Planning hebdomadaire incomplet : vous devez planifier des visites sur toute la semaine (du lundi au vendredi) avant de pouvoir soumettre votre planning pour validation. Jour(s) manquant(s) : " . implode(', ', $missingDays) . ".",
+                    'message' => "Planning hebdomadaire incomplet : vous devez planifier des activités sur toute la semaine (du lundi au vendredi) avant de pouvoir soumettre votre planning pour validation. Jour(s) manquant(s) : " . implode(', ', $missingDays) . ".",
                     'missing_days' => $missingDays,
                 ], 422);
             }
@@ -135,6 +126,8 @@ class TourPlanController extends Controller
         $activityIds = $request->input('activity_ids', []);
         $toSubmit = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
             ->where('outside_weekly_plan', false)
+            ->whereDate('date_activite', '<=', $plan->date_fin)
+            ->whereRaw('COALESCE(date_fin, date_activite) >= ?', [$plan->date_debut])
             ->where('user_id', $user->id)
             ->where(function ($q) {
                 $q->whereIn('statut', ['brouillon', 'planifiee'])
@@ -143,7 +136,7 @@ class TourPlanController extends Controller
             ->when(
                 !empty($activityIds) && is_array($activityIds),
                 fn ($q) => $q->whereIn('id', $activityIds),
-                fn ($q) => $q->whereBetween('date_activite', [$plan->date_debut, $plan->date_fin])
+                fn ($q) => $q
             );
 
         $linkedCount = $toSubmit->update(['tour_plan_id' => $plan->id, 'statut' => 'en_attente']);
@@ -197,39 +190,19 @@ class TourPlanController extends Controller
             $data['valide_par'] = auth()->id();
             $data['valide_le'] = now();
 
-            if ($plan->delegue) {
-                $statusLabel = $data['statut'] === 'valide' ? 'approuvé' : 'rejeté / à réviser';
-                app(\App\Services\NotificationService::class)->send(
-                    $plan->delegue,
-                    'Planning de tournée ' . ucfirst($statusLabel),
-                    "Votre plan de tournée '{$plan->nom}' a été {$statusLabel} par votre manager.",
-                    'planning',
-                    ['tour_plan_id' => $plan->id]
-                );
-            }
         }
 
-        $plan->update($data);
-
-        // Si validé, passer les activités rattachées en statut 'validee'
-        if (isset($data['statut']) && $data['statut'] === 'valide') {
-            Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
-                ->where(function ($q) use ($plan) {
-                    $q->where('tour_plan_id', $plan->id)
-                      ->orWhere(function ($q2) use ($plan) {
-                          $q2->where('user_id', $plan->user_id)
-                             ->whereBetween('date_activite', [$plan->date_debut, $plan->date_fin]);
-                      });
-                })
-                ->where('statut', '!=', 'realisee')
-                ->update([
-                    'statut' => 'validee',
-                    'tour_plan_id' => $plan->id,
-                ]);
+        if (in_array($data['statut'] ?? null, ['valide', 'rejete'], true)) {
+            $plan = app(\App\Services\WeeklyPlanningDecision::class)->apply(
+                $plan, $data['statut'] === 'valide', $data['commentaire_validation'] ?? null
+            );
+        } else {
+            abort_unless(auth()->user()->canEditRecordOf($plan->user_id), 403);
+            $plan->update($data);
         }
 
         // Notification au délégué
-        if ($plan->user_id && isset($data['statut'])) {
+        if ($plan->user_id && in_array($data['statut'] ?? null, ['valide', 'rejete'], true)) {
             $delegate = User::find($plan->user_id);
             if ($delegate) {
                 $statusLabel = $data['statut'] === 'valide' ? 'validé' : 'rejeté';
@@ -271,8 +244,8 @@ class TourPlanController extends Controller
         // Les visites encore en attente redeviennent des brouillons, à resoumettre au besoin
         Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
             ->where('tour_plan_id', $tourPlan->id)
-            ->where('statut', 'en_attente')
-            ->update(['statut' => 'brouillon']);
+            ->whereIn('statut', ['en_attente', 'refusee', 'rejetee'])
+            ->update(['statut' => 'brouillon', 'rejection_reason' => null, 'validated_by_id' => null, 'validation_date' => null]);
         Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
             ->where('tour_plan_id', $tourPlan->id)
             ->update(['tour_plan_id' => null]);

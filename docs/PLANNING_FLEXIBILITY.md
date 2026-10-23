@@ -22,3 +22,13 @@ Le web et le mobile proposent après 20 minutes de visite en cours de continuer 
 Les libellés et l’activation des types se gèrent dans le référentiel existant `activity-types`. Les codes métier restent `rcp`, `reunion`, `conge`, `permission`. Les API d’activité renvoient `planning_kind` pour conserver la classification lorsque les libellés changent. Les types désactivés ne peuvent plus être utilisés pour une nouvelle activité.
 
 Les paramètres serveur `PLANNING_VISIT_REMINDER_MINUTES` et `PLANNING_OUTSIDE_WEEKLY_LIMIT` alimentent `config/planning.php` (valeurs par défaut : 20 minutes et 5 visites ; le maximum reste 5). Les clients lisent ces valeurs au lieu de recopier ces règles.
+
+## Soumission et documents
+
+Toutes les activités calendaires (congés et permissions inclus) sont créées en brouillon et soumises avec la semaine. L’écran Congés crée une seule activité avec une date de début et de fin. Les décisions individuelles sont refusées ; le responsable traite le planning. Le refus se répercute sur les activités rattachées. Retirer un planning soumis ou refusé les remet en brouillon pour révision. Une validation ne doit jamais inclure les nouveaux brouillons ajoutés après la soumission.
+
+Les activités calendaires ne sont pas des visites exécutables : pas de GPS, rappel de durée ou compte-rendu, pas de statut manqué calculé à leur échéance, et pas de décompte dans les objectifs de visites ou les étapes de tournée.
+
+Les documents d’un produit sont associés exclusivement par identifiant (rattachement polymorphe `App\Models\Product`). Les titres, préfixes et dosages ne permettent pas de partager des documents entre produits. `GET /api/v1/documents?product_id=UUID` filtre cette affectation exacte. Appliquer aussi `2026_10_22_130000_remove_orphaned_document_subsidiary_constraint.php` pour retirer les contraintes restantes vers les anciennes tables supprimées ; les documents existants sont conservés.
+
+Les congés et permissions réservent leur intervalle : une visite ne peut pas être planifiée pendant une absence non annulée/non refusée, et une absence ne peut pas recouvrir une activité existante. Plusieurs visites peuvent toujours partager un créneau en dehors de ces absences.

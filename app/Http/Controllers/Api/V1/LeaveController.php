@@ -20,14 +20,11 @@ class LeaveController extends Controller
         $isManager = $user->hasAnyRole(['sales_manager', 'sales-manager', 'superviseur', 'supervisor', 'directeur_regional', 'manager']);
 
         $query = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
-            ->where(function ($q) {
-                $q->whereIn('activity_type', ['conge', 'Congé', 'permission', 'Permission', 'absence', 'indisponibilite', 'leave', 'Congé Annuel', 'Congé Maladie'])
-                    ->orWhereHas('activityType', fn ($type) => $type->whereIn('code', ['conge', 'permission']));
-            })
+            ->calendar(['conge', 'permission'])
             ->with(['delegue', 'validatedBy'])
             ->when($request->user_id, fn($q, $v) => $q->where('user_id', $v))
             ->when($request->statut ?? $request->status, fn($q, $v) => $q->where('statut', $v))
-            ->when($request->start_date ?? $request->date_debut, fn($q, $v) => $q->whereDate('date_activite', '>=', $v))
+            ->when($request->start_date ?? $request->date_debut, fn($q, $v) => $q->whereRaw('COALESCE(date_fin, date_activite) >= ?', [$v]))
             ->when($request->end_date ?? $request->date_fin, fn($q, $v) => $q->whereDate('date_activite', '<=', $v))
             ->orderByDesc('date_activite');
 
@@ -47,10 +44,12 @@ class LeaveController extends Controller
                 'id'               => $act->id,
                 'user_id'          => $act->user_id,
                 'employee_name'    => $act->delegue?->name ?? 'Délégué',
-                'type'             => $act->activity_type,
-                'activity_type'    => $act->activity_type,
+                'type'             => $act->activity_type_name,
+                'activity_type'    => $act->activity_type_name,
+                'planning_kind' => $act->planning_kind,
                 'start_date'       => $act->date_activite ? Carbon::parse($act->date_activite)->format('Y-m-d') : null,
                 'end_date'         => ($act->date_fin ?? $act->date_activite)?->format('Y-m-d'),
+                'tour_plan_id' => $act->tour_plan_id,
                 'days' => $act->date_activite ? (int) Carbon::parse($act->date_activite)->diffInDays($act->date_fin ?? $act->date_activite) + 1 : 0,
                 'date_activite'    => $act->date_activite ? Carbon::parse($act->date_activite)->format('Y-m-d') : null,
                 'heure_debut'      => $act->heure_debut,
@@ -78,7 +77,7 @@ class LeaveController extends Controller
             'user_id'       => 'nullable|string',
             'type'          => 'nullable|string',
             'activity_type' => 'nullable|string',
-            'start_date'    => 'nullable|date',
+            'start_date'    => 'nullable|date|after_or_equal:today',
             'end_date'      => 'nullable|date',
             'date_debut'    => 'nullable|date',
             'date_fin'      => 'nullable|date',
@@ -114,55 +113,21 @@ class LeaveController extends Controller
             ], 422);
         }
 
-        // Vérification des chevauchements pour chaque jour de la plage de dates
-        $currentDate = $startDate->copy();
-        while ($currentDate->lte($endDate)) {
-            $dateFormatted = $currentDate->format('Y-m-d');
-            $hasOverlap = Activity::checkOverlap($targetUserId, $dateFormatted, $heureDebut, $heureFin);
+        abort_unless((string) $targetUserId === (string) $user->id || $user->can('scope:global') || $user->hasAnyRole(['superadmin', 'super-admin', 'admin']) || $user->manages($targetUserId), 403);
+        abort_if(Activity::checkOverlap($targetUserId, $startDateStr, $heureDebut, $heureFin, null, null, true, $endDateStr), 422, 'Cette période chevauche une activité existante.');
 
-            if ($hasOverlap) {
-                return response()->json([
-                    'message' => 'Conflit avec un congé/une indisponibilité ou une visite existante sur ce créneau.',
-                    'errors'  => ['date_activite' => ["Un conflit de planning existe le {$dateFormatted}."]]
-                ], 422);
-            }
-            $currentDate->addDay();
-        }
+        $initialStatus = 'brouillon';
 
-        $initialStatus = $user->hasAnyRole(['superadmin', 'admin', 'superviseur', 'manager']) ? 'validee' : 'en_attente';
-        $createdActivities = [];
-
-        $currentDate = $startDate->copy();
-        while ($currentDate->lte($endDate)) {
-            $activity = Activity::create([
-                'user_id'       => $targetUserId,
-                'activity_type' => $type,
-                'date_activite' => $currentDate->format('Y-m-d'),
-                'heure_debut'   => $heureDebut,
-                'heure_fin'     => $heureFin,
-                'notes'         => $reason,
-                'statut'        => $initialStatus,
-            ]);
-            $createdActivities[] = $activity;
-            $currentDate->addDay();
-        }
-
-        $firstActivity = $createdActivities[0];
-
-        // Notification au manager si créée par un délégué
-        $manager = $user->manager ?? ($user->manager_id ? User::find($user->manager_id) : null);
-        if ($manager && !$user->hasAnyRole(['superadmin', 'admin', 'superviseur', 'manager'])) {
-            try {
-                NotificationController::sendNotification(
-                    $manager,
-                    'Nouvelle demande de congé',
-                    "Le délégué {$user->name} a soumis une demande de congé du {$startDateStr} au {$endDateStr}.",
-                    'conge_soumis',
-                    'manager',
-                    ['activity_id' => (string) $firstActivity->id]
-                );
-            } catch (\Throwable $e) {}
-        }
+        $typeRecord = \App\Models\ActivityType::where('code', \App\Services\PlanningOptions::kind($type))->first();
+        abort_unless(in_array(\App\Services\PlanningOptions::kind($type), ['conge', 'permission'], true), 422, 'Type de demande invalide.');
+        abort_if($typeRecord && !$typeRecord->is_active, 422, 'Ce type d’activité est désactivé.');
+        $firstActivity = Activity::create([
+            'user_id' => $targetUserId, 'activity_type' => $type,
+            'activity_type_id' => $typeRecord?->id,
+            'date_activite' => $startDate->toDateString(), 'date_fin' => $endDate->toDateString(),
+            'heure_debut' => $heureDebut ?? '08:00', 'heure_fin' => $heureFin ?? '18:00',
+            'notes' => $reason, 'statut' => $initialStatus,
+        ]);
 
         $formattedResult = [
             'id'               => $firstActivity->id,
@@ -184,7 +149,7 @@ class LeaveController extends Controller
         ];
 
         return response()->json([
-            'message' => 'Demande de congé/indisponibilité créée avec succès.',
+            'message' => 'Activité enregistrée en brouillon. Soumettez votre planning hebdomadaire pour validation.',
             'data'    => $formattedResult,
         ], 201);
     }
@@ -195,80 +160,11 @@ class LeaveController extends Controller
     public function updateStatus(Request $request, string $id)
     {
         $activity = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($id);
+        abort_unless(in_array($activity->planning_kind, ['conge', 'permission'], true), 422, 'Cette activité n’est pas une demande de congé ou de permission.');
         $user = auth()->user();
         abort_unless(($user->can('scope:global') || $user->hasAnyRole(['superadmin', 'super-admin', 'admin'])) || $user->manages($activity->user_id), 403, "Ce congé n'appartient pas à un délégué de votre équipe.");
 
-        $validated = $request->validate([
-            'status'           => 'nullable|string',
-            'statut'           => 'nullable|string',
-            'rejection_reason' => 'nullable|string',
-            'motif'            => 'nullable|string',
-        ]);
-
-        $st = strtolower($validated['statut'] ?? $validated['status'] ?? '');
-        $rejectionReason = $validated['rejection_reason'] ?? $validated['motif'] ?? null;
-
-        $isRejection = in_array($st, ['rejetee', 'refusee', 'rejected']);
-
-        if ($isRejection && (empty($rejectionReason) || strlen(trim($rejectionReason)) < 2)) {
-            return response()->json([
-                'message' => 'Le motif du rejet est obligatoire.',
-                'errors'  => ['rejection_reason' => ['Le motif du rejet est obligatoire.']]
-            ], 422);
-        }
-
-        $newStatut = $isRejection ? 'rejetee' : 'validee';
-
-        $notes = $activity->notes;
-        if ($isRejection && $rejectionReason) {
-            $notes = $notes ? $notes . "\n[Rejeté]: " . $rejectionReason : "[Rejeté]: " . $rejectionReason;
-        }
-
-        $activity->update([
-            'statut'           => $newStatut,
-            'validated_by_id' => auth()->id(),
-            'validation_date' => now(),
-            'notes'            => $notes,
-            'rejection_reason' => $rejectionReason,
-        ]);
-
-        // Notifier le délégué
-        if ($activity->delegue) {
-            $title = $newStatut === 'validee' ? 'Congé Validé' : 'Congé Refusé';
-            $msg = $newStatut === 'validee'
-                ? "Votre demande de congé pour le {$activity->date_activite} a été validée."
-                : "Votre demande de congé pour le {$activity->date_activite} a été refusée. Motif : {$rejectionReason}";
-
-            try {
-                NotificationController::sendNotification(
-                    $activity->delegue,
-                    $title,
-                    $msg,
-                    'conge_decision',
-                    'delegate',
-                    ['activity_id' => (string) $activity->id]
-                );
-            } catch (\Throwable $e) {}
-        }
-
-        return response()->json([
-            'message' => 'Statut du congé mis à jour avec succès.',
-            'data'    => [
-                'id'               => $activity->id,
-                'user_id'          => $activity->user_id,
-                'employee_name'    => $activity->delegue?->name ?? 'Délégué',
-                'type'             => $activity->activity_type,
-                'activity_type'    => $activity->activity_type,
-                'start_date'       => $activity->date_activite ? Carbon::parse($activity->date_activite)->format('Y-m-d') : null,
-                'end_date'         => $activity->date_activite ? Carbon::parse($activity->date_activite)->format('Y-m-d') : null,
-                'date_activite'    => $activity->date_activite ? Carbon::parse($activity->date_activite)->format('Y-m-d') : null,
-                'status'           => $activity->statut,
-                'statut'           => $activity->statut,
-                'reason'           => $activity->notes,
-                'motif'            => $activity->notes,
-                'rejection_reason' => $activity->rejection_reason,
-            ]
-        ]);
+        abort(422, 'Les congés et permissions sont validés avec leur planning hebdomadaire.');
     }
 
     /**
@@ -300,6 +196,7 @@ class LeaveController extends Controller
             'type'          => 'nullable|string',
             'activity_type' => 'nullable|string',
             'date_activite' => 'nullable|date',
+            'date_fin' => 'nullable|date',
             'heure_debut'   => 'nullable|string',
             'heure_fin'     => 'nullable|string',
             'reason'        => 'nullable|string',
@@ -307,9 +204,21 @@ class LeaveController extends Controller
             'notes'         => 'nullable|string',
         ]);
 
+        $start = Carbon::parse($validated['date_activite'] ?? $leave->date_activite);
+        $end = Carbon::parse($validated['date_fin'] ?? $leave->date_fin ?? $start);
+        abort_if($end->lt($start), 422, 'La fin doit être postérieure ou égale au début.');
+        if (isset($validated['type']) || isset($validated['activity_type'])) {
+            abort_unless(in_array(\App\Services\PlanningOptions::kind($validated['activity_type'] ?? $validated['type']), ['conge', 'permission'], true), 422, 'Type de demande invalide.');
+        }
+        abort_if(Activity::checkOverlap((string) $leave->user_id, $start->toDateString(),
+            $validated['heure_debut'] ?? $leave->heure_debut, $validated['heure_fin'] ?? $leave->heure_fin,
+            null, (string) $leave->id, true, $end->toDateString()), 422, 'Cette période chevauche une activité existante.');
         $leave->update(array_filter([
             'activity_type' => $validated['activity_type'] ?? $validated['type'] ?? null,
-            'date_activite' => $validated['date_activite'] ?? null,
+            'activity_type_id' => isset($validated['type']) || isset($validated['activity_type'])
+                ? \App\Models\ActivityType::where('code', \App\Services\PlanningOptions::kind($validated['activity_type'] ?? $validated['type']))->value('id') : $leave->activity_type_id,
+            'date_activite' => $start->toDateString(),
+            'date_fin' => $end->toDateString(),
             'heure_debut'   => $validated['heure_debut'] ?? null,
             'heure_fin'     => $validated['heure_fin'] ?? null,
             'notes'         => $validated['reason'] ?? $validated['motif'] ?? $validated['notes'] ?? null,
@@ -331,11 +240,11 @@ class LeaveController extends Controller
     private function ownPendingLeave(string $id): Activity
     {
         $leave = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
-            ->whereIn('activity_type', ['conge', 'absence', 'indisponibilite', 'leave', 'Congé Annuel', 'Congé Maladie'])
+            ->calendar(['conge', 'permission'])
             ->findOrFail($id);
 
         abort_unless($leave->user_id === auth()->id(), 403, 'Vous ne pouvez modifier que vos propres demandes.');
-        abort_unless($leave->statut === 'en_attente', 422, 'Cette demande a déjà été traitée et ne peut plus être modifiée.');
+        abort_unless($leave->statut === 'brouillon', 422, 'Cette activité a déjà été soumise et ne peut plus être modifiée.');
 
         return $leave;
     }

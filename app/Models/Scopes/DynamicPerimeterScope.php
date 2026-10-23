@@ -38,9 +38,6 @@ class DynamicPerimeterScope implements Scope
         $this->applyHierarchyFiltering($builder, $table, $user, $countryId);
     }
 
-    /** @var array<string, array> Équipe encadrée, mise en cache le temps de la requête */
-    protected static array $teamIdsCache = [];
-
     /**
      * Collaborateurs encadrés (récursif via manager_id) d'un utilisateur de la hiérarchie.
      */
@@ -50,7 +47,12 @@ class DynamicPerimeterScope implements Scope
             return [];
         }
 
-        return self::$teamIdsCache[$user->id] ??= $user->teamMemberIds();
+        // Une requête suivante doit voir les nouveaux collaborateurs et les réaffectations.
+        $request = request();
+        $cache = $request->attributes->get('crm.team_ids', []);
+        $cache[$user->id] ??= $user->teamMemberIds();
+        $request->attributes->set('crm.team_ids', $cache);
+        return $cache[$user->id];
     }
 
     /**

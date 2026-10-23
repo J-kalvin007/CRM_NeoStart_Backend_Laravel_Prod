@@ -58,6 +58,7 @@ class ActivityReportController extends Controller
         ]);
 
         abort_unless((string) $activity->user_id === (string) auth()->id(), 403, 'Seul le délégué de cette visite peut rédiger son compte-rendu.');
+        abort_if($activity->isCalendarActivity(), 422, 'Cette activité ne nécessite pas de compte-rendu de visite.');
         abort_if($activity->report_status === 'validated', 422, 'Ce compte-rendu a déjà été validé par votre responsable.');
 
         // RÈGLE : Si on tente de soumettre le rapport d'aujourd'hui mais qu'il existe des rapports non soumis des jours précédents
@@ -70,7 +71,7 @@ class ActivityReportController extends Controller
                 $userId = $activity->user_id ?? auth()->id();
                 // Comptes-rendus en retard : visites des jours précédents effectivement démarrées ou réalisées
                 // dont le rapport n'a pas été soumis (ou a été rejeté et doit être corrigé)
-                $unsubmittedPastCount = Activity::where('user_id', $userId)
+                $unsubmittedPastCount = Activity::visits()->where('user_id', $userId)
                     ->where('id', '!=', $activity->id)
                     ->whereDate('date_activite', '<', $todayStart)
                     ->whereIn('statut', ['en_cours', 'realisee'])

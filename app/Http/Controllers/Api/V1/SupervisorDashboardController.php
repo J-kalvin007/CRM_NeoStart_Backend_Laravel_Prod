@@ -293,7 +293,7 @@ class SupervisorDashboardController extends Controller
             ->whereIn('user_id', $userIds)
             // Brouillons non soumis par le délégué : invisibles pour la hiérarchie
             ->where('statut', '!=', 'brouillon')
-            ->whereNotIn('activity_type', self::LEAVE_TYPES);
+            ->visits();
     }
 
     /** % des prescripteurs du portefeuille visités (visite réalisée) sur la période. */

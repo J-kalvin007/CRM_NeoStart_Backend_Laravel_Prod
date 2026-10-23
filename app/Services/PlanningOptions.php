@@ -14,6 +14,10 @@ class PlanningOptions
     public static function kind(?string $code): string
     {
         $code = strtolower(Str::ascii(trim((string) $code)));
+        $code = match ($code) {
+            'conge annuel', 'conge maladie', 'absence', 'indisponibilite', 'leave', 'arret maladie', 'conge paye', 'rtt', 'formation', 'evenement familial' => 'conge',
+            default => $code,
+        };
         return in_array($code, self::CALENDAR_CODES, true) ? $code : 'visite';
     }
 

@@ -71,4 +71,20 @@ class DocumentViewerTest extends TestCase
 
         $this->assertNull($doc->fresh()->viewer_path);
     }
+    public function test_document_listing_uses_the_exact_product_assignment(): void
+    {
+        Storage::fake('public');
+        Sanctum::actingAs(User::factory()->create());
+        $first = Product::create(['nom' => 'CEDIN 300', 'code' => 'CEDIN300', 'prix' => 1000]);
+        $other = Product::create(['nom' => 'CEDIN 125', 'code' => 'CEDIN125', 'prix' => 1000]);
+        foreach ([$first, $other] as $product) {
+            Document::create(['documentable_id' => $product->id, 'documentable_type' => Product::class,
+                'title' => 'CEDIN présentation', 'type' => 'presentation', 'file_path' => 'docs/deck.pdf']);
+        }
+        $this->getJson('/api/v1/documents?product_id=' . $first->id)->assertOk()
+            ->assertJsonCount(1, 'data')->assertJsonPath('data.0.product_id', $first->id);
+        $this->getJson('/api/v1/documents?documentable_type=' . urlencode(Product::class) . '&documentable_id=' . $other->id)
+            ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.product_id', $other->id);
+        $this->getJson('/api/v1/documents?documentable_type=' . urlencode(Product::class))->assertUnprocessable();
+    }
 }

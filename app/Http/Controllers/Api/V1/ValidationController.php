@@ -78,12 +78,35 @@ class ValidationController extends Controller
                 ];
             });
 
+        $pendingTourPlans = \App\Models\TourPlan::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
+            ->with(['delegue', 'activities.activityType', 'activities.contact', 'activities.account'])->tap($inTeam)->where('statut', 'soumis')->get()
+            ->map(fn ($plan) => [
+                'id' => (string) $plan->id, 'type' => 'tour_plan', 'nom' => $plan->nom,
+                'created_by' => $plan->delegue?->name, 'created_at' => $plan->created_at,
+                'date_debut' => $plan->date_debut, 'date_fin' => $plan->date_fin,
+                'activities' => $plan->activities->map(fn ($activity) => [
+                    'id' => $activity->id, 'label' => $activity->activity_type_name,
+                    'start' => $activity->date_activite?->toDateString(),
+                    'end' => ($activity->date_fin ?? $activity->date_activite)?->toDateString(),
+                    'heure_debut' => $activity->heure_debut, 'heure_fin' => $activity->heure_fin,
+                    'account' => $activity->account?->nom,
+                    'contact' => trim(($activity->contact?->prenom ?? '') . ' ' . ($activity->contact?->nom ?? '')),
+                ])->values(),
+            ]);
+        $pendingReports = \App\Models\Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
+            ->visits()->with(['delegue', 'contact'])->tap($inTeam)->where('report_status', 'submitted')->get()
+            ->map(fn ($activity) => [
+                'id' => (string) $activity->id, 'type' => 'activity_report',
+                'nom' => $activity->contact?->nom ?? $activity->activity_type_name,
+                'prenom' => $activity->contact?->prenom,
+                'created_by' => $activity->delegue?->name, 'created_at' => $activity->updated_at,
+                'date_activite' => $activity->date_activite, 'report_content' => $activity->report_content,
+            ]);
+
         $pending = $pendingContacts
             ->concat($pendingAccounts)
             ->concat($pendingTourPlans)
-            ->concat($pendingExpenses)
-            ->concat($pendingSampleRequests)
-            ->concat($pendingDelegateRequests)
+            ->concat($pendingReports)
             ->sortByDesc('created_at')
             ->values();
 
@@ -117,6 +140,7 @@ class ValidationController extends Controller
         if (in_array($type, ['visit', 'activity_report'])) {
             $activity = \App\Models\Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($id);
             $this->ensureManaged($activity->user_id);
+            abort_if($activity->isCalendarActivity(), 422, 'Traitez cette activité avec son planning hebdomadaire.');
             // Visite planifiée : validation du créneau ; compte-rendu : validation du rapport,
             // la visite reste « réalisée » (son statut n'est pas écrasé)
             $activity->update(array_merge(
@@ -161,17 +185,7 @@ class ValidationController extends Controller
         if ($type === 'tour_plan') {
             $plan = \App\Models\TourPlan::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($id);
             $this->ensureManaged($plan->user_id);
-            $plan->update([
-                'statut' => 'valide',
-                'valide_par' => auth()->id(),
-                'valide_le' => now(),
-            ]);
-
-            // Seules les visites encore en attente sont validées (les visites réalisées, annulées… gardent leur statut)
-            \App\Models\Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
-                ->where('tour_plan_id', $plan->id)
-                ->whereIn('statut', ['brouillon', 'en_attente', 'soumis'])
-                ->update(['statut' => 'validee', 'validated_by_id' => auth()->id(), 'validation_date' => now()]);
+            $plan = app(\App\Services\WeeklyPlanningDecision::class)->apply($plan, true);
 
             $recipient = $plan->delegue ?? $plan->user;
             if ($recipient) {
@@ -361,11 +375,12 @@ class ValidationController extends Controller
             ], 403);
         }
 
-        $reason = $request->input('rejection_reason') ?? $request->input('motif');
+        $reason = $request->input('rejection_reason') ?? $request->input('motif') ?? $request->input('reason');
 
         if (in_array($type, ['visit', 'activity_report'])) {
             $activity = \App\Models\Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($id);
             $this->ensureManaged($activity->user_id);
+            abort_if($activity->isCalendarActivity(), 422, 'Traitez cette activité avec son planning hebdomadaire.');
             // Compte-rendu rejeté : la visite reste réalisée, le délégué corrige son rapport ;
             // visite planifiée refusée : le créneau est refusé
             $activity->update(array_merge(
@@ -393,12 +408,7 @@ class ValidationController extends Controller
         if ($type === 'tour_plan') {
             $plan = \App\Models\TourPlan::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($id);
             $this->ensureManaged($plan->user_id);
-            $plan->update([
-                'statut' => 'rejete',
-                'valide_par' => auth()->id(),
-                'valide_le' => now(),
-                'commentaire_validation' => $reason,
-            ]);
+            $plan = app(\App\Services\WeeklyPlanningDecision::class)->apply($plan, false, $reason);
 
             $recipient = $plan->delegue ?? $plan->user;
             if ($recipient) {

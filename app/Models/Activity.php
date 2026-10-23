@@ -15,12 +15,40 @@ class Activity extends Model
     use HasFactory, HasUuids, SoftDeletes, HasPerimeter;
     use HasActivityLogs;
 
-    protected $appends = ['planning_kind'];
+    protected $appends = ['planning_kind', 'activity_type_name'];
 
     public function getPlanningKindAttribute(): string
     {
         $code = $this->activity_type_id ? $this->activityType?->code : $this->activity_type;
         return \App\Services\PlanningOptions::kind($code);
+    }
+
+    public function getActivityTypeNameAttribute(): string
+    {
+        return $this->activityType?->name ?? $this->getAttribute('activity_type') ?? 'Visite';
+    }
+
+    public function isCalendarActivity(): bool
+    {
+        return $this->planning_kind !== 'visite';
+    }
+
+    public function scopeCalendar($query, array $codes = \App\Services\PlanningOptions::CALENDAR_CODES)
+    {
+        $names = $codes;
+        foreach (['rcp' => 'RCP', 'reunion' => 'Réunion', 'conge' => 'Congé', 'permission' => 'Permission'] as $code => $label) {
+            if (in_array($code, $codes, true)) $names[] = $label;
+        }
+        if (in_array('conge', $codes, true)) {
+            $names = array_merge($names, ['Congé', 'absence', 'indisponibilite', 'leave', 'Congé Annuel', 'Congé Maladie', 'Congé Payé', 'RTT', 'Formation', 'Événement Familial', 'Arrêt maladie']);
+        }
+        return $query->where(fn ($q) => $q->whereIn('activity_type', $names)
+            ->orWhereHas('activityType', fn ($type) => $type->whereIn('code', $codes)));
+    }
+
+    public function scopeVisits($query)
+    {
+        return $query->whereNot(fn ($q) => $q->calendar());
     }
 
     protected $fillable = [
@@ -210,7 +238,7 @@ class Activity extends Model
         $today = now()->toDateString();
 
         // Visites sur des dates antérieures révolues non réalisées
-        static::whereRaw('COALESCE(date_fin, date_activite) < ?', [$today])
+        static::visits()->whereRaw('COALESCE(date_fin, date_activite) < ?', [$today])
             ->whereNotIn('statut', ['realisee', 'effectuee', 'manquee', 'annulee', 'en_cours'])
             ->update(['statut' => 'manquee']);
     }
@@ -227,10 +255,24 @@ class Activity extends Model
      * Détection de chevauchement horaire (partiel, identique ou total) pour un délégué.
      * Exclut les visites annulées ou rejetées.
      */
-    public static function checkOverlap(string $userId, mixed $date, ?string $startTime = null, ?string $endTime = null, ?int $durationMinutes = null, ?string $excludeId = null): bool
+    public static function checkOverlap(string $userId, mixed $date, ?string $startTime = null, ?string $endTime = null, ?int $durationMinutes = null, ?string $excludeId = null, bool $unavailability = false, ?string $endDate = null): bool
     {
-        // Contrôle de chevauchement désactivé (un délégué peut planifier plusieurs visites au même créneau)
-        return false;
+        $date = \Illuminate\Support\Carbon::parse($date)->toDateString();
+        $start = \Illuminate\Support\Carbon::parse($date . ' ' . ($startTime ?: '00:00'));
+        $end = $endTime || $endDate
+            ? \Illuminate\Support\Carbon::parse(($endDate ?: $date) . ' ' . ($endTime ?: '23:59:59'))
+            : ($unavailability ? $start->copy()->endOfDay() : $start->copy()->addMinutes($durationMinutes ?: 30));
+        // Les visites peuvent partager un créneau. Une absence, elle, réserve sa période.
+        $query = static::withoutGlobalScopes()->whereNull('deleted_at')->where('user_id', $userId)
+            ->whereIn('statut', ['brouillon', 'en_attente', 'planifiee', 'validee', 'en_cours', 'realisee'])
+            ->whereDate('date_activite', '<=', $end->toDateString())
+            ->whereRaw('COALESCE(date_fin, date_activite) >= ?', [$date])
+            ->when($excludeId, fn ($q) => $q->where('id', '!=', $excludeId));
+        if (!$unavailability) $query->calendar(['conge', 'permission']);
+        return $query->get()->contains(function ($activity) use ($start, $end) {
+            $activityStart = \Illuminate\Support\Carbon::parse($activity->date_activite->toDateString() . ' ' . ($activity->heure_debut ?: '00:00'));
+            $activityEnd = \Illuminate\Support\Carbon::parse(($activity->date_fin ?? $activity->date_activite)->toDateString() . ' ' . ($activity->heure_fin ?: '23:59:59'));
+            return $start->lt($activityEnd) && $end->gt($activityStart);
+        });
     }
 }
-

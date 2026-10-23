@@ -57,12 +57,12 @@ class Phase10LeavesAbsencesTest extends TestCase
         ]);
 
         $response->assertStatus(201)
-            ->assertJsonPath('data.statut', 'en_attente');
+            ->assertJsonPath('data.statut', 'brouillon');
 
         $this->assertNotNull(
             Activity::where('user_id', $this->delegate->id)
                 ->where('activity_type', 'conge')
-                ->where('statut', 'en_attente')
+                ->where('statut', 'brouillon')
                 ->whereDate('date_activite', '2026-11-10')
                 ->first()
         );
@@ -125,64 +125,40 @@ class Phase10LeavesAbsencesTest extends TestCase
         $response->assertStatus(422);
     }
 
-    /**
-     * Test 4: Le Superviseur valide la demande de congé
-     */
-    public function test_supervisor_validates_leave_request(): void
+    private function submitLeaveWeek(): array
     {
-        $leave = Activity::create([
-            'user_id'       => $this->delegate->id,
-            'activity_type' => 'conge',
-            'date_activite' => '2026-11-25',
-            'statut'        => 'en_attente',
-            'notes'         => 'Formation externe',
-        ]);
-
-        Sanctum::actingAs($this->supervisor);
-
-        $response = $this->postJson("/api/v1/leaves/{$leave->id}/validate");
-
-        $response->assertStatus(200)
-            ->assertJsonPath('data.statut', 'validee');
-
-        $this->assertDatabaseHas('activities', [
-            'id'     => $leave->id,
-            'statut' => 'validee',
-        ]);
+        \Illuminate\Support\Facades\Mail::fake();
+        Sanctum::actingAs($this->delegate);
+        $start = now()->startOfWeek()->addWeek();
+        $id = $this->postJson('/api/v1/leaves', [
+            'type' => 'conge', 'start_date' => $start->toDateString(),
+            'end_date' => $start->copy()->addDays(4)->toDateString(), 'reason' => 'Congés annuels',
+        ])->assertCreated()->json('data.id');
+        $plan = $this->postJson('/api/v1/tour-plans', ['nom' => 'Semaine de congés',
+            'date_debut' => $start->toDateString(), 'date_fin' => $start->copy()->addDays(6)->toDateString(),
+            'statut' => 'soumis',
+        ])->assertCreated()->json('data.id');
+        return [$id, $plan];
     }
 
-    /**
-     * Test 5: Le rejet de congé sans motif échoue (422), et avec motif passe en 'rejetee'
-     */
-    public function test_supervisor_rejects_leave_request_requires_motif(): void
+    public function test_supervisor_validates_leave_request_with_its_week(): void
     {
-        $leave = Activity::create([
-            'user_id'       => $this->delegate->id,
-            'activity_type' => 'conge',
-            'date_activite' => '2026-11-30',
-            'statut'        => 'en_attente',
-            'notes'         => 'Vacances de fin d\'année',
-        ]);
-
+        [$id, $plan] = $this->submitLeaveWeek();
         Sanctum::actingAs($this->supervisor);
+        $this->postJson("/api/v1/leaves/{$id}/validate")->assertUnprocessable();
+        $this->postJson("/api/v1/validations/tour_plan/{$plan}/approve")->assertOk();
+        $this->assertDatabaseHas('activities', ['id' => $id, 'statut' => 'validee']);
+    }
 
-        // Rejet sans motif -> Doit retourner 422
-        $failResponse = $this->postJson("/api/v1/leaves/{$leave->id}/reject", []);
-        $failResponse->assertStatus(422);
-
-        // Rejet avec motif obligatoire -> 200 OK
-        $successResponse = $this->postJson("/api/v1/leaves/{$leave->id}/reject", [
-            'motif' => 'Période de forte activité terrain non autorisée.'
-        ]);
-
-        $successResponse->assertStatus(200)
-            ->assertJsonPath('data.statut', 'rejetee')
-            ->assertJsonPath('data.rejection_reason', 'Période de forte activité terrain non autorisée.');
-
-        $this->assertDatabaseHas('activities', [
-            'id'               => $leave->id,
-            'statut'           => 'rejetee',
-            'rejection_reason' => 'Période de forte activité terrain non autorisée.',
-        ]);
+    public function test_supervisor_rejects_leave_week_with_mandatory_reason(): void
+    {
+        [$id, $plan] = $this->submitLeaveWeek();
+        Sanctum::actingAs($this->supervisor);
+        $this->postJson("/api/v1/validations/tour_plan/{$plan}/reject")->assertUnprocessable();
+        $this->postJson("/api/v1/validations/tour_plan/{$plan}/reject", [
+            'rejection_reason' => 'Période de forte activité terrain.',
+        ])->assertOk();
+        $this->assertDatabaseHas('activities', ['id' => $id, 'statut' => 'refusee',
+            'rejection_reason' => 'Période de forte activité terrain.']);
     }
 }

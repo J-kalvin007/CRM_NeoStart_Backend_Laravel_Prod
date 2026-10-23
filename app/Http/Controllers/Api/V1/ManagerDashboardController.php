@@ -22,8 +22,8 @@ class ManagerDashboardController extends Controller {
 
         $rankCounter = 1;
         $performanceList = $subordinates->map(function ($sub) use (&$rankCounter) {
-            $visitCount = Activity::where('user_id', $sub->id)->count();
-            $completedVisits = Activity::where('user_id', $sub->id)
+            $visitCount = Activity::visits()->where('user_id', $sub->id)->count();
+            $completedVisits = Activity::visits()->where('user_id', $sub->id)
                 ->whereIn('statut', ['effectuee', 'cloturee', 'validee', 'terminee'])
                 ->count();
 

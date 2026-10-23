@@ -16,6 +16,15 @@ class DocumentController extends Controller
     {
         $query = Document::query();
 
+        $request->validate([
+            'product_id' => 'sometimes|uuid',
+            'documentable_type' => 'required_with:documentable_id|string',
+            'documentable_id' => 'required_with:documentable_type|uuid',
+        ]);
+        if ($request->filled('product_id')) {
+            $query->where('documentable_type', \App\Models\Product::class)->where('documentable_id', $request->product_id);
+        }
+
         if ($request->has('documentable_type') && $request->has('documentable_id')) {
             $query->where('documentable_type', $request->documentable_type)
                   ->where('documentable_id', $request->documentable_id);
@@ -209,6 +218,7 @@ class DocumentController extends Controller
             'statut' => $status,
             'status' => $doc->status,
             'is_active' => (bool) $doc->is_active,
+            'product_id' => $doc->documentable_type === \App\Models\Product::class ? $doc->documentable_id : null,
             'documentable_id' => $doc->documentable_id,
             'documentable_type' => $doc->documentable_type,
             'file_path' => $doc->file_path,
