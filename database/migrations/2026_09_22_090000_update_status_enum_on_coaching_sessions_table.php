@@ -20,7 +20,8 @@ return new class extends Migration
             return;
         }
 
-        DB::statement("ALTER TABLE coaching_sessions MODIFY COLUMN status ENUM('draft', 'active', 'completed', 'planifie', 'cloture') NOT NULL DEFAULT 'draft'");
+        // A delayed migration must also preserve newer statuses such as 'refused'.
+        DB::statement("ALTER TABLE coaching_sessions MODIFY COLUMN status VARCHAR(30) NOT NULL DEFAULT 'draft'");
     }
 
     /**

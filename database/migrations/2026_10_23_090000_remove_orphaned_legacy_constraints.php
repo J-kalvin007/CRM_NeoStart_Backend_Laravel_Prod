@@ -9,7 +9,7 @@ return new class extends Migration
     public function up(): void
     {
         $retired = ['subsidiaries', 'organizational_units', 'regions', 'territories', 'zones', 'sectors', 'teams'];
-        foreach (Schema::getTableListing() as $tableName) {
+        foreach (Schema::getTableListing(Schema::getCurrentSchemaListing(), schemaQualified: false) as $tableName) {
             $obsolete = array_filter(Schema::getForeignKeys($tableName), fn ($foreign) =>
                 in_array($foreign['foreign_table'], $retired, true) && !Schema::hasTable($foreign['foreign_table']));
             if ($obsolete) {

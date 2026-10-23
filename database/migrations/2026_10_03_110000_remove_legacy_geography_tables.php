@@ -13,40 +13,26 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // Blueprint operations execute after the callback: inspect actual FK names.
+        $retired = ['teams', 'sectors', 'zones', 'territories', 'subsidiaries', 'regions'];
+        foreach (Schema::getTableListing(Schema::getCurrentSchemaListing(), schemaQualified: false) as $name) {
+            foreach (Schema::getForeignKeys($name) as $foreign) {
+                if (in_array($foreign['foreign_table'], $retired, true)) {
+                    Schema::table($name, fn (Blueprint $t) => $t->dropForeign($foreign['name'] ?? $foreign['columns']));
+                }
+            }
+        }
+        foreach (['objectifs', 'campaigns', 'campaign_equipes'] as $name) {
+            if (Schema::hasColumn($name, 'team_id')) {
+                foreach (Schema::getIndexes($name) as $index) {
+                    if (!$index['primary'] && in_array('team_id', $index['columns'], true)) {
+                        Schema::table($name, fn (Blueprint $t) => $t->dropIndex($index['name']));
+                    }
+                }
+                Schema::table($name, fn (Blueprint $t) => $t->dropColumn('team_id'));
+            }
+        }
         Schema::disableForeignKeyConstraints();
-
-        // 1. Drop columns from tables that reference legacy geography tables
-        Schema::table('objectifs', function (Blueprint $table) {
-            if (Schema::hasColumn('objectifs', 'team_id')) {
-                try {
-                    $table->dropForeign(['team_id']);
-                } catch (\Throwable $e) {}
-                try {
-                    $table->dropIndex('objectifs_team_id_date_debut_date_fin_index');
-                } catch (\Throwable $e) {}
-                try {
-                    $table->dropColumn('team_id');
-                } catch (\Throwable $e) {}
-            }
-        });
-
-        Schema::table('campaigns', function (Blueprint $table) {
-            if (Schema::hasColumn('campaigns', 'team_id')) {
-                try {
-                    $table->dropForeign(['team_id']);
-                } catch (\Throwable $e) {}
-                $table->dropColumn('team_id');
-            }
-        });
-
-        Schema::table('campaign_equipes', function (Blueprint $table) {
-            if (Schema::hasColumn('campaign_equipes', 'team_id')) {
-                try {
-                    $table->dropForeign(['team_id']);
-                } catch (\Throwable $e) {}
-                $table->dropColumn('team_id');
-            }
-        });
 
         // 2. Drop legacy geography tables
         $tables = [

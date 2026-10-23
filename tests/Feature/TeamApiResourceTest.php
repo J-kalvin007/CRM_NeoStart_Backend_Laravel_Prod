@@ -27,6 +27,16 @@ class TeamApiResourceTest extends TestCase
         $this->getJson('/api/v1/supervisor/team-planning')->assertOk();
     }
 
+    public function test_supervisor_without_collaborators_gets_an_empty_team(): void
+    {
+        Role::firstOrCreate(['name' => 'superviseur', 'guard_name' => 'web']);
+        $manager = User::factory()->create();
+        $manager->assignRole('superviseur');
+        $this->actingAs($manager, 'sanctum')->getJson('/api/v1/supervisor/team-planning')
+            ->assertOk()->assertJsonCount(1, 'delegates')->assertJsonCount(0, 'schedules')
+            ->assertJsonPath('summary.total_delegates', 0);
+    }
+
     public function test_admin_can_reassign_a_collaborator_to_another_manager(): void
     {
         Mail::fake();

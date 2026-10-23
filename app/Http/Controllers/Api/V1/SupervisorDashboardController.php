@@ -136,13 +136,7 @@ class SupervisorDashboardController extends Controller
         $targetPerDelegate = $this->visitsPerDay() * $workingDays;
 
         $team = $user->teamMembers()->with('country')->orderBy('name')->get();
-        if ($team->isEmpty()) {
-            $team = collect([$user]);
-        }
         $teamIds = $team->pluck('id')->all();
-        if (!in_array($user->id, $teamIds)) {
-            $teamIds[] = $user->id;
-        }
 
         // Planifiées / réalisées par délégué sur la période affichée
         $stats = $this->visitQuery($teamIds)
@@ -201,9 +195,13 @@ class SupervisorDashboardController extends Controller
 
         \App\Models\Activity::markMissedPastActivities();
 
-        $schedules = $this->visitQuery($filteredIds)
-            ->with(['delegue.country', 'contact', 'account', 'products', 'duoUser', 'duoActivityType'])
-            ->whereBetween('date_activite', [$start->toDateString(), $end->toDateString()])
+        $schedules = Activity::withoutGlobalScopes()
+            ->whereNull('deleted_at')
+            ->whereIn('user_id', $filteredIds)
+            ->where('statut', '!=', 'brouillon')
+            ->with(['delegue.country', 'contact', 'account', 'products', 'activityType', 'duoUser', 'duoActivityType'])
+            ->whereDate('date_activite', '<=', $end->toDateString())
+            ->whereRaw('COALESCE(date_fin, date_activite) >= ?', [$start->toDateString()])
             ->orderBy('date_activite')
             ->orderBy('heure_debut')
             ->get()
@@ -235,7 +233,8 @@ class SupervisorDashboardController extends Controller
 
     private function formatSchedule(Activity $act, User $supervisor): array
     {
-        $actType = !empty($act->activity_type) ? ucfirst($act->activity_type) : 'Visite médicale';
+        $actType = $act->activity_type_name;
+        $isCalendar = $act->isCalendarActivity();
         if (strtolower($actType) === 'visite') {
             $actType = 'Visite médicale';
         }
@@ -252,10 +251,12 @@ class SupervisorDashboardController extends Controller
             'delegate' => $act->delegue?->name ?? 'Délégué',
             'delegate_id' => (string) $act->user_id,
             'dateActivite' => $act->date_activite?->toDateString(),
+            'date_fin' => $act->date_fin?->toDateString(),
+            'planning_kind' => $act->planning_kind,
             'time' => $act->heure_debut ? substr($act->heure_debut, 0, 5) : '--:--',
             'heure_fin' => $act->heure_fin ? substr($act->heure_fin, 0, 5) : null,
             'duree_minutes' => $act->duree_minutes,
-            'title' => "{$actType} — {$contactName}",
+            'title' => $isCalendar ? $actType : "{$actType} — {$contactName}",
             'specialty' => trim(($act->account?->nom ?? '') . ($act->notes ? ' • ' . $act->notes : ''), ' •'),
             'type' => $actType,
             'status' => $this->statusLabel($act->statut),
@@ -275,7 +276,7 @@ class SupervisorDashboardController extends Controller
             // pending | accepted | rejected : réponse du délégué à l'accompagnement
             'duo_delegue_status' => $act->is_duo ? $act->duo_delegue_status : null,
             'duo_delegue_rejection_reason' => $act->duo_delegue_rejection_reason,
-            'can_duo' => !$act->hasActiveDuo() && $act->user_id !== $supervisor->id && !$isClosed && !$isPast,
+            'can_duo' => !$isCalendar && !$act->hasActiveDuo() && $act->user_id !== $supervisor->id && !$isClosed && !$isPast,
             // Le superviseur qui anime ce DUO peut le modifier ou l'annuler tant qu'il n'est pas passé
             'can_manage_duo' => $act->hasActiveDuo() && $act->duo_user_id === $supervisor->id && !$isPast,
             // Visite modifiable / supprimable par le superviseur

@@ -42,6 +42,14 @@ class CalendarPlanningWorkflowTest extends TestCase
             $unsubmitted = Activity::create($this->event('visite', ['user_id' => $delegate->id, 'statut' => 'brouillon']));
             $this->assertSame('en_attente', Activity::find($id)->statut);
             Sanctum::actingAs($manager);
+            $planning = $this->getJson('/api/v1/supervisor/team-planning?date=' . $this->event()['date_activite'])
+                ->assertOk();
+            $scheduled = collect($planning->json('schedules'))->firstWhere('id', $id);
+            $this->assertNotNull($scheduled, 'Submitted calendar must reach the supervisor');
+            $this->assertSame($kind, $scheduled['planning_kind']);
+            $this->assertFalse($scheduled['can_duo']);
+            $this->assertStringNotContainsString('{', $scheduled['title']);
+            $this->assertNotContains($unsubmitted->id, array_column($planning->json('schedules'), 'id'));
             $this->putJson("/api/v1/tour-plans/{$plan}", ['statut' => 'valide'])->assertOk();
             $this->assertSame('validee', Activity::withoutGlobalScopes()->find($id)->statut);
             $this->assertSame('brouillon', $unsubmitted->fresh()->statut);
@@ -101,6 +109,8 @@ class CalendarPlanningWorkflowTest extends TestCase
             'date_fin' => $event['date_fin'], 'statut' => 'soumis', 'activity_ids' => [$id],
         ])->assertCreated()->json('data.id');
         Sanctum::actingAs($manager);
+        $planning = $this->getJson('/api/v1/supervisor/team-planning?date=' . $event['date_activite'])->assertOk();
+        $this->assertContains($id, array_column($planning->json('schedules'), 'id'));
         $this->putJson("/api/v1/tour-plans/{$plan}", ['statut' => 'rejete', 'commentaire_validation' => 'Période indisponible'])->assertOk();
         $this->assertSame('refusee', Activity::withoutGlobalScopes()->find($id)->statut);
     }
