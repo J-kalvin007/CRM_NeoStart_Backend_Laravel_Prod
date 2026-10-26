@@ -8,12 +8,20 @@ use App\Models\CoachingSession;
 use App\Models\User;
 use App\Services\NotificationService;
 use Illuminate\Http\Request;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use OpenApi\Attributes as OA;
 
 #[OA\Tag(name: 'Coaching', description: 'Gestion des sessions de coaching et visites en duo')]
 class CoachingController extends Controller
 {
+    private function filterUserCountry(Builder $users, string $value): Builder
+    {
+        return $users->whereHas('country', fn ($country) => $country->where(
+            fn ($match) => $match->where('id', $value)->orWhere('name', $value)->orWhere('iso_code', $value)
+        ));
+    }
+
     #[OA\Get(
         path: '/api/v1/coaching/delegates/{id}',
         summary: 'Récupérer les sessions de coaching d\'un délégué',
@@ -80,7 +88,7 @@ class CoachingController extends Controller
 
         $sessions = CoachingSession::with([
                 'supervisor', 'delegate', 'evaluator', 'evaluated', 
-                'activity.contact', 'activity.account'
+                'activity.contact', 'activity.account', 'delegate.country', 'evaluated.country'
             ])
             ->where(function ($q) use ($user, $teamIds, $isGlobal) {
                 if ($isGlobal) return;
@@ -97,7 +105,7 @@ class CoachingController extends Controller
             ->when($request->query('supervisor_id') ?? $request->query('evaluator_id'), fn ($q, $v) => $q->where(fn($sub) => $sub->where('supervisor_id', $v)->orWhere('evaluator_id', $v)))
             ->when($request->query('status'), fn ($q, $v) => $q->where('status', $v))
             ->when($request->query('country') ?? $request->query('pays'), function ($q, $pays) {
-                $q->whereHas('delegate', fn ($u) => $u->where('country', $pays)->orWhere('pays', $pays));
+                $q->whereHas('delegate', fn ($u) => $this->filterUserCountry($u, $pays));
             })
             ->when($request->query('type'), fn ($q, $v) => $q->whereHas('activity.duoActivityType', fn ($t) => $t->where('code', $v)))
             ->when($request->boolean('this_month'), fn ($q) => $q->whereBetween('date_duo', [now()->startOfMonth(), now()->endOfMonth()]))
@@ -330,7 +338,7 @@ class CoachingController extends Controller
         $targetUserId = $session->evaluated_id ?: $session->delegate_id;
         $evaluatedUser = User::withoutGlobalScopes()->find($targetUserId);
         if ($evaluatedUser) {
-            $isTrio = $session->session_type === 'trio';
+            $isTrio = strtolower((string) $session->session_type) === 'trio';
             $title = $isTrio ? 'Évaluation TRIO enregistrée' : 'Évaluation DUO enregistrée';
             $noteDisplay = $noteSur20 !== null ? "{$noteSur20}/20" : "{$tauxAtteinte}%";
             $msg = $isTrio 
@@ -432,7 +440,7 @@ class CoachingController extends Controller
 
         // Récupère les évaluations où l'utilisateur connecté est la personne évaluée
         $evaluations = CoachingSession::with([
-                'evaluator', 'supervisor', 'activity.contact', 'activity.account'
+                'evaluator', 'supervisor', 'activity.contact', 'activity.account', 'delegate.country', 'evaluated.country'
             ])
             ->where(function ($q) use ($user) {
                 $q->where('evaluated_id', $user->id)
@@ -443,7 +451,7 @@ class CoachingController extends Controller
             ->get();
 
         $avgScore = $evaluations->avg('note_sur_20');
-        $avgCompliance = $evaluations->avg('respect_canevas_pct') ?: $evaluations->avg('taux_atteinte_pct');
+        $avgCompliance = $evaluations->avg('respect_canevas_pct');
         $latest = $evaluations->first();
 
         return response()->json([
@@ -451,8 +459,8 @@ class CoachingController extends Controller
             'data' => $evaluations,
             'kpis' => [
                 'total_evaluations'   => $evaluations->count(),
-                'avg_note_sur_20'     => $avgScore ? round($avgScore, 1) : null,
-                'avg_compliance_pct'  => $avgCompliance ? round($avgCompliance, 1) : null,
+                'avg_note_sur_20'     => $avgScore !== null ? round($avgScore, 1) : null,
+                'avg_compliance_pct'  => $avgCompliance !== null ? round($avgCompliance, 1) : null,
                 'latest_note_sur_20'  => $latest?->note_sur_20,
                 'latest_evaluator'    => $latest?->evaluator?->name ?? $latest?->supervisor?->name ?? 'Responsable',
                 'latest_date'         => $latest?->date_duo?->format('d/m/Y'),
@@ -552,7 +560,7 @@ class CoachingController extends Controller
         // Notification
         $evaluatedUser = User::withoutGlobalScopes()->find($evaluatedId);
         if ($evaluatedUser) {
-            $isTrio = $sessionType === 'trio';
+            $isTrio = $sessionType === 'TRIO';
             $title = $isTrio ? 'Évaluation TRIO enregistrée' : 'Évaluation DUO enregistrée';
             $noteDisplay = $noteSur20 !== null ? "{$noteSur20}/20" : "{$tauxAtteinte}%";
             $msg = $isTrio 
@@ -590,18 +598,18 @@ class CoachingController extends Controller
         $delegatesQuery = User::withoutGlobalScopes()
             ->whereHas('roles', fn ($r) => $r->whereIn('name', ['delegue', 'délégué', 'delegue-medical', 'delegue_medical']))
             ->when(!$isGlobal, fn ($q) => $q->whereIn('id', $teamIds))
-            ->when($request->query('country') ?? $request->query('pays'), fn ($q, $p) => $q->where('country', $p)->orWhere('pays', $p))
+            ->when($request->query('country') ?? $request->query('pays'), fn ($q, $p) => $this->filterUserCountry($q, $p))
             ->when($request->query('delegate_id'), fn ($q, $id) => $q->where('id', $id));
 
-        $delegates = $delegatesQuery->orderBy('name')->get();
+        $delegates = $delegatesQuery->with('country')->orderBy('name')->get();
 
         // Sessions DUO complétées
         $sessionsQuery = CoachingSession::with([
-                'evaluator', 'supervisor', 'delegate', 
-                'activity.contact', 'activity.account'
+                'evaluator', 'supervisor', 'delegate', 'evaluated',
+                'activity.contact', 'activity.account', 'delegate.country', 'evaluated.country'
             ])
             ->where(function ($q) {
-                $q->where('session_type', 'duo')->orWhereNull('session_type');
+                $q->whereIn('session_type', ['duo', 'DUO'])->orWhereNull('session_type');
             })
             ->where('status', 'completed')
             ->when(!$isGlobal, function ($q) use ($user, $teamIds) {
@@ -612,7 +620,7 @@ class CoachingController extends Controller
             })
             ->when($request->query('delegate_id'), fn ($q, $v) => $q->where(fn($s) => $s->where('delegate_id', $v)->orWhere('evaluated_id', $v)))
             ->when($request->query('country') ?? $request->query('pays'), function ($q, $p) {
-                $q->whereHas('delegate', fn ($u) => $u->where('country', $p)->orWhere('pays', $p));
+                $q->whereHas('delegate', fn ($u) => $this->filterUserCountry($u, $p));
             })
             ->when($request->boolean('this_month'), fn ($q) => $q->whereBetween('date_duo', [now()->startOfMonth(), now()->endOfMonth()]))
             ->when($request->query('date_debut'), fn ($q, $d) => $q->whereDate('date_duo', '>=', $d))
@@ -622,7 +630,7 @@ class CoachingController extends Controller
 
         $totalDuos = $sessions->count();
         $avgScore = $sessions->avg('note_sur_20');
-        $avgCanevas = $sessions->avg('respect_canevas_pct') ?: $sessions->avg('taux_atteinte_pct');
+        $avgCanevas = $sessions->avg('respect_canevas_pct');
 
         // Répartition et suivi par délégué
         $byDelegate = $delegates->map(function ($del) use ($sessions) {
@@ -635,9 +643,10 @@ class CoachingController extends Controller
                 'delegate_id'         => (string) $del->id,
                 'delegate_name'       => $del->name,
                 'delegate_email'      => $del->email,
-                'delegate_country'    => $del->country ?? $del->pays ?? '—',
+                'delegate_country'    => $del->country?->name ?? '—',
                 'duos_count'          => $count,
-                'avg_note_sur_20'     => $avg ? round($avg, 1) : null,
+                'avg_note_sur_20'     => $avg !== null ? round($avg, 1) : null,
+                'avg_respect_canevas' => $delSessions->avg('respect_canevas_pct'),
                 'latest_note_sur_20'  => $latest?->note_sur_20,
                 'latest_date'         => $latest?->date_duo?->format('d/m/Y'),
                 'latest_feedback'     => $latest?->commentaires_superviseur,
@@ -662,8 +671,8 @@ class CoachingController extends Controller
             'success'   => true,
             'kpis' => [
                 'total_duos'             => $totalDuos,
-                'avg_note_sur_20'        => $avgScore ? round($avgScore, 1) : null,
-                'avg_respect_canevas'    => $avgCanevas ? round($avgCanevas, 1) : null,
+                'avg_note_sur_20'        => $avgScore !== null ? round($avgScore, 1) : null,
+                'avg_respect_canevas'    => $avgCanevas !== null ? round($avgCanevas, 1) : null,
                 'delegates_count'        => $delegates->count(),
                 'evaluated_count'        => $byDelegate->filter(fn($d) => $d['duos_count'] > 0)->count(),
             ],
@@ -685,17 +694,17 @@ class CoachingController extends Controller
         $supervisorsQuery = User::withoutGlobalScopes()
             ->whereHas('roles', fn ($r) => $r->whereIn('name', ['superviseur', 'supervisor', 'manager']))
             ->when(!$isGlobal, fn ($q) => $q->whereIn('id', $teamIds))
-            ->when($request->query('country') ?? $request->query('pays'), fn ($q, $p) => $q->where('country', $p)->orWhere('pays', $p))
+            ->when($request->query('country') ?? $request->query('pays'), fn ($q, $p) => $this->filterUserCountry($q, $p))
             ->when($request->query('supervisor_id'), fn ($q, $id) => $q->where('id', $id));
 
-        $supervisors = $supervisorsQuery->orderBy('name')->get();
+        $supervisors = $supervisorsQuery->with('country')->orderBy('name')->get();
 
         // Sessions TRIO complétées
         $sessionsQuery = CoachingSession::with([
                 'evaluator', 'supervisor', 'delegate', 'evaluated', 
-                'activity.contact', 'activity.account'
+                'activity.contact', 'activity.account', 'delegate.country', 'evaluated.country'
             ])
-            ->where('session_type', 'trio')
+            ->whereIn('session_type', ['trio', 'TRIO'])
             ->where('status', 'completed')
             ->when(!$isGlobal, function ($q) use ($user, $teamIds) {
                 $q->where(fn($sub) => $sub->where('evaluator_id', $user->id)
@@ -705,7 +714,7 @@ class CoachingController extends Controller
             })
             ->when($request->query('supervisor_id'), fn ($q, $v) => $q->where(fn($s) => $s->where('evaluated_id', $v)->orWhere('delegate_id', $v)))
             ->when($request->query('country') ?? $request->query('pays'), function ($q, $p) {
-                $q->whereHas('delegate', fn ($u) => $u->where('country', $p)->orWhere('pays', $p));
+                $q->whereHas('delegate', fn ($u) => $this->filterUserCountry($u, $p));
             })
             ->when($request->boolean('this_month'), fn ($q) => $q->whereBetween('date_duo', [now()->startOfMonth(), now()->endOfMonth()]))
             ->when($request->query('date_debut'), fn ($q, $d) => $q->whereDate('date_duo', '>=', $d))
@@ -727,9 +736,10 @@ class CoachingController extends Controller
                 'supervisor_id'       => (string) $sup->id,
                 'supervisor_name'     => $sup->name,
                 'supervisor_email'    => $sup->email,
-                'supervisor_country'  => $sup->country ?? $sup->pays ?? '—',
+                'supervisor_country'  => $sup->country?->name ?? '—',
                 'trios_count'         => $count,
-                'avg_note_sur_20'     => $avg ? round($avg, 1) : null,
+                'avg_note_sur_20'     => $avg !== null ? round($avg, 1) : null,
+                'avg_respect_canevas' => $supSessions->avg('respect_canevas_pct'),
                 'latest_note_sur_20'  => $latest?->note_sur_20,
                 'latest_date'         => $latest?->date_duo?->format('d/m/Y'),
                 'latest_feedback'     => $latest?->commentaires_superviseur,
@@ -752,7 +762,8 @@ class CoachingController extends Controller
             'success'     => true,
             'kpis' => [
                 'total_trios'             => $totalTrios,
-                'avg_note_sur_20'         => $avgScore ? round($avgScore, 1) : null,
+                'avg_note_sur_20'         => $avgScore !== null ? round($avgScore, 1) : null,
+                'avg_respect_canevas'     => $sessions->avg('respect_canevas_pct'),
                 'supervisors_count'       => $supervisors->count(),
                 'evaluated_count'         => $bySupervisor->filter(fn($d) => $d['trios_count'] > 0)->count(),
             ],
@@ -775,7 +786,7 @@ class CoachingController extends Controller
         foreach ($sessions as $s) {
             $date = !empty($s['date_duo']) ? date('d/m/Y', strtotime($s['date_duo'])) : '';
             $delegue = $s['delegate']['name'] ?? $s['evaluated']['name'] ?? '—';
-            $pays = $s['delegate']['country'] ?? $s['delegate']['pays'] ?? '—';
+            $pays = $s['delegate']['country']['name'] ?? '—';
             $superviseur = $s['evaluator']['name'] ?? $s['supervisor']['name'] ?? '—';
             $note = $s['note_sur_20'] !== null ? $s['note_sur_20'] . '/20' : ($s['taux_atteinte_pct'] ? $s['taux_atteinte_pct'] . '%' : '—');
             $canevas = $s['respect_canevas_pct'] ? $s['respect_canevas_pct'] . '%' : '—';
@@ -809,7 +820,7 @@ class CoachingController extends Controller
         foreach ($sessions as $s) {
             $date = !empty($s['date_duo']) ? date('d/m/Y', strtotime($s['date_duo'])) : '—';
             $delegue = htmlspecialchars($s['delegate']['name'] ?? $s['evaluated']['name'] ?? '—');
-            $pays = htmlspecialchars($s['delegate']['country'] ?? $s['delegate']['pays'] ?? '—');
+            $pays = htmlspecialchars($s['delegate']['country']['name'] ?? '—');
             $superviseur = htmlspecialchars($s['evaluator']['name'] ?? $s['supervisor']['name'] ?? '—');
             $note = $s['note_sur_20'] !== null ? "<strong>{$s['note_sur_20']}/20</strong>" : ($s['taux_atteinte_pct'] ? "{$s['taux_atteinte_pct']}%" : '—');
             $canevas = $s['respect_canevas_pct'] ? "{$s['respect_canevas_pct']}%" : '—';
@@ -915,7 +926,7 @@ class CoachingController extends Controller
         foreach ($sessions as $s) {
             $date = !empty($s['date_duo']) ? date('d/m/Y', strtotime($s['date_duo'])) : '';
             $superviseur = $s['evaluated']['name'] ?? $s['delegate']['name'] ?? '—';
-            $pays = $s['evaluated']['country'] ?? $s['evaluated']['pays'] ?? '—';
+            $pays = $s['evaluated']['country']['name'] ?? $s['delegate']['country']['name'] ?? '—';
             $dv = $s['evaluator']['name'] ?? $s['supervisor']['name'] ?? '—';
             $note = $s['note_sur_20'] !== null ? $s['note_sur_20'] . '/20' : ($s['taux_atteinte_pct'] ? $s['taux_atteinte_pct'] . '%' : '—');
             $comm = str_replace(["\r", "\n", '"'], [' ', ' ', '""'], (string) ($s['commentaires_superviseur'] ?? ''));
@@ -946,7 +957,7 @@ class CoachingController extends Controller
         foreach ($sessions as $s) {
             $date = !empty($s['date_duo']) ? date('d/m/Y', strtotime($s['date_duo'])) : '—';
             $superviseur = htmlspecialchars($s['evaluated']['name'] ?? $s['delegate']['name'] ?? '—');
-            $pays = htmlspecialchars($s['evaluated']['country'] ?? $s['evaluated']['pays'] ?? '—');
+            $pays = htmlspecialchars($s['evaluated']['country']['name'] ?? $s['delegate']['country']['name'] ?? '—');
             $dv = htmlspecialchars($s['evaluator']['name'] ?? $s['supervisor']['name'] ?? '—');
             $note = $s['note_sur_20'] !== null ? "<strong>{$s['note_sur_20']}/20</strong>" : ($s['taux_atteinte_pct'] ? "{$s['taux_atteinte_pct']}%" : '—');
             $feedback = htmlspecialchars(mb_strimwidth((string)($s['commentaires_superviseur'] ?? ''), 0, 150, '...'));

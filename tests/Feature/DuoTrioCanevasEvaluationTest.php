@@ -282,5 +282,126 @@ class DuoTrioCanevasEvaluationTest extends TestCase
         $pdfResponse = $this->get('/api/v1/export/activities/pdf?sort_by=country&order_by=asc');
         $pdfResponse->assertStatus(200);
     }
+
+    public function test_duo_dashboard_returns_real_delegate_details_counts_and_zero_scores(): void
+    {
+        foreach (['DUO', 'duo'] as $type) {
+            CoachingSession::create([
+                'session_type' => $type,
+                'supervisor_id' => $this->supervisor->id,
+                'delegate_id' => $this->delegate->id,
+                'evaluated_id' => $this->delegate->id,
+                'date_duo' => now()->toDateString(),
+                'status' => 'completed',
+                'note_sur_20' => 0,
+                'respect_canevas_pct' => 0,
+            ]);
+        }
+
+        Sanctum::actingAs($this->supervisor);
+        $this->getJson('/api/v1/coaching/duo-dashboard')
+            ->assertOk()
+            ->assertJsonPath('kpis.total_duos', 2)
+            ->assertJsonPath('kpis.avg_note_sur_20', 0)
+            ->assertJsonPath('kpis.avg_respect_canevas', 0)
+            ->assertJsonPath('delegates.0.delegate_id', $this->delegate->id)
+            ->assertJsonPath('delegates.0.delegate_name', $this->delegate->name)
+            ->assertJsonPath('delegates.0.delegate_email', $this->delegate->email)
+            ->assertJsonPath('delegates.0.duos_count', 2)
+            ->assertJsonPath('delegates.0.avg_respect_canevas', 0)
+            ->assertJsonCount(2, 'delegates.0.evaluations');
+
+        Sanctum::actingAs($this->delegate);
+        $this->getJson('/api/v1/coaching/my-evaluations')
+            ->assertOk()
+            ->assertJsonPath('kpis.total_evaluations', 2)
+            ->assertJsonPath('kpis.avg_note_sur_20', 0)
+            ->assertJsonPath('kpis.avg_compliance_pct', 0);
+    }
+
+    public function test_trio_dashboard_returns_supervisor_identity_and_both_session_type_spellings(): void
+    {
+        foreach (['TRIO', 'trio'] as $type) {
+            CoachingSession::create([
+                'session_type' => $type,
+                'supervisor_id' => $this->dv->id,
+                'evaluator_id' => $this->dv->id,
+                'delegate_id' => $this->supervisor->id,
+                'evaluated_id' => $this->supervisor->id,
+                'date_duo' => now()->toDateString(),
+                'status' => 'completed',
+                'note_sur_20' => 18,
+                'respect_canevas_pct' => 90,
+            ]);
+        }
+
+        Sanctum::actingAs($this->dv);
+        $this->getJson('/api/v1/coaching/trio-dashboard')
+            ->assertOk()
+            ->assertJsonPath('kpis.total_trios', 2)
+            ->assertJsonPath('kpis.avg_respect_canevas', 90)
+            ->assertJsonPath('supervisors.0.supervisor_name', $this->supervisor->name)
+            ->assertJsonPath('supervisors.0.supervisor_email', $this->supervisor->email)
+            ->assertJsonPath('supervisors.0.trios_count', 2)
+            ->assertJsonPath('supervisors.0.avg_note_sur_20', 18)
+            ->assertJsonPath('supervisors.0.avg_respect_canevas', 90);
+    }
+
+    public function test_no_evaluation_has_no_measured_grade_or_compliance(): void
+    {
+        Sanctum::actingAs($this->supervisor);
+        $this->getJson('/api/v1/coaching/duo-dashboard')
+            ->assertOk()
+            ->assertJsonPath('delegates.0.delegate_name', $this->delegate->name)
+            ->assertJsonPath('delegates.0.duos_count', 0)
+            ->assertJsonPath('delegates.0.avg_note_sur_20', null)
+            ->assertJsonPath('delegates.0.avg_respect_canevas', null)
+            ->assertJsonPath('kpis.avg_respect_canevas', null);
+
+        Sanctum::actingAs($this->delegate);
+        $this->getJson('/api/v1/coaching/my-evaluations')
+            ->assertOk()
+            ->assertJsonCount(0, 'data')
+            ->assertJsonPath('kpis.total_evaluations', 0)
+            ->assertJsonPath('kpis.avg_note_sur_20', null);
+    }
+
+    public function test_country_filters_use_the_real_relation_and_preserve_team_visibility(): void
+    {
+        $country = \App\Models\Country::create(['name' => 'Togo', 'iso_code' => 'TG']);
+        $this->delegate->update(['country_id' => $country->id]);
+        $this->supervisor->update(['country_id' => $country->id]);
+        $outsider = User::factory()->create(['country_id' => $country->id]);
+        $outsider->assignRole('delegue_medical');
+
+        CoachingSession::create([
+            'session_type' => 'DUO',
+            'supervisor_id' => $this->supervisor->id,
+            'delegate_id' => $this->delegate->id,
+            'evaluated_id' => $this->delegate->id,
+            'date_duo' => now()->toDateString(),
+            'status' => 'completed',
+            'note_sur_20' => 16,
+        ]);
+
+        Sanctum::actingAs($this->supervisor);
+        foreach (['Togo', 'TG', $country->id] as $value) {
+            $this->getJson('/api/v1/coaching/duo-dashboard?country=' . $value)
+                ->assertOk()
+                ->assertJsonCount(1, 'delegates')
+                ->assertJsonPath('delegates.0.delegate_name', $this->delegate->name)
+                ->assertJsonPath('delegates.0.delegate_country', 'Togo')
+                ->assertJsonPath('kpis.total_duos', 1);
+        }
+        $this->get('/api/v1/export/duos?country=Togo')->assertOk()->assertSee('Togo');
+        $this->get('/api/v1/export/duos/pdf?country=Togo')->assertOk()->assertSee('Togo');
+
+        Sanctum::actingAs($this->dv);
+        $this->getJson('/api/v1/coaching/trio-dashboard?country=Togo')
+            ->assertOk()
+            ->assertJsonCount(1, 'supervisors')
+            ->assertJsonPath('supervisors.0.supervisor_name', $this->supervisor->name)
+            ->assertJsonPath('supervisors.0.supervisor_country', 'Togo');
+    }
 }
 
