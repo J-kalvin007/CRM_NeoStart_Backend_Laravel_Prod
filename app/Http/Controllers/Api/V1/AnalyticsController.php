@@ -125,7 +125,9 @@ class AnalyticsController extends Controller
         };
 
         // L'équipe = les collaborateurs encadrés (récursif via manager_id)
-        $teamUsers = $user->teamMembers()->orderBy('name')->get();
+        $teamQuery = $user->teamMembers()->orderBy('name');
+        \App\Support\CountryFilter::apply($teamQuery);
+        $teamUsers = $teamQuery->get();
 
         $completedStatuses = ['realisee', 'effectuee', 'validee'];
         $excludedStatuses = ['annulee', 'refusee', 'brouillon'];
@@ -210,7 +212,9 @@ class AnalyticsController extends Controller
     )]
     public function usersLocations(Request $request)
     {
-        $team = auth()->user()->teamMembers()->orderBy('name')->get();
+        $teamQuery = auth()->user()->teamMembers()->orderBy('name');
+        \App\Support\CountryFilter::apply($teamQuery);
+        $team = $teamQuery->get();
         $today = now()->toDateString();
 
         $result = $team->map(function ($u) use ($today) {
@@ -316,6 +320,7 @@ class AnalyticsController extends Controller
             $query->whereIn('user_id', $teamUsers);
         }
 
+        \App\Support\CountryFilter::apply($query);
         $analyticsData = $query->get();
 
         $totalSessions = $analyticsData->count();
@@ -600,17 +605,12 @@ class AnalyticsController extends Controller
         $query = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
             ->with(['delegue', 'contact.account', 'account', 'products', 'sampleMovements.product'])
             ->when($request->delegate_id ?? $request->user_id, fn($q, $v) => $q->where('user_id', $v))
-            ->when($request->country ?? $request->pays, function($q, $pays) {
-                $q->where(function($sub) use ($pays) {
-                    $sub->whereHas('contact', fn($c) => $c->where('pays', $pays)->orWhere('country', $pays))
-                        ->orWhereHas('account', fn($a) => $a->where('pays', $pays)->orWhere('country', $pays))
-                        ->orWhereHas('user', fn($u) => $u->where('country', $pays)->orWhere('pays', $pays));
-                });
-            })
+            ->when($request->country ?? $request->pays, fn ($query, $country) => \App\Support\CountryFilter::apply($query, $country))
             ->when($request->statut, fn($q, $v) => $q->where('statut', $v))
             ->when($request->date_debut, fn($q, $v) => $q->whereDate('date_activite', '>=', $v))
             ->when($request->date_fin, fn($q, $v) => $q->whereDate('date_activite', '<=', $v));
 
+        \App\Support\CountryFilter::apply($query);
         $sortBy = $request->input('sort_by');
         if ($sortBy === 'delegue' || $sortBy === 'delegue_asc') {
             $activities = $query->get()->sortBy(fn($a) => $a->delegue?->name ?? '');
@@ -671,17 +671,12 @@ class AnalyticsController extends Controller
         $query = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
             ->with(['delegue', 'contact.account', 'account', 'products', 'sampleMovements.product'])
             ->when($request->delegate_id ?? $request->user_id, fn($q, $v) => $q->where('user_id', $v))
-            ->when($request->country ?? $request->pays, function($q, $pays) {
-                $q->where(function($sub) use ($pays) {
-                    $sub->whereHas('contact', fn($c) => $c->where('pays', $pays)->orWhere('country', $pays))
-                        ->orWhereHas('account', fn($a) => $a->where('pays', $pays)->orWhere('country', $pays))
-                        ->orWhereHas('user', fn($u) => $u->where('country', $pays)->orWhere('pays', $pays));
-                });
-            })
+            ->when($request->country ?? $request->pays, fn ($query, $country) => \App\Support\CountryFilter::apply($query, $country))
             ->when($request->statut, fn($q, $v) => $q->where('statut', $v))
             ->when($request->date_debut, fn($q, $v) => $q->whereDate('date_activite', '>=', $v))
             ->when($request->date_fin, fn($q, $v) => $q->whereDate('date_activite', '<=', $v));
 
+        \App\Support\CountryFilter::apply($query);
         $sortBy = $request->input('sort_by');
         if ($sortBy === 'delegue' || $sortBy === 'delegue_asc') {
             $activities = $query->limit(500)->get()->sortBy(fn($a) => $a->delegue?->name ?? '');

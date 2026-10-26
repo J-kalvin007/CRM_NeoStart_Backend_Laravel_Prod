@@ -130,6 +130,14 @@ class ActivityController extends Controller
             });
         }
 
+        if ($request->boolean('reports_only')) {
+            $query->visits();
+            if ($isGlobal || $isManager) {
+                $query->publishedReports();
+            } else {
+                $query->where(fn ($reports) => $reports->where('activities.user_id', $user->id)->orWhere(fn ($shared) => $shared->publishedReports()));
+            }
+        }
         \App\Support\CountryFilter::apply($query);
         $perPage = max(1, min(500, (int) $request->query('per_page', 200)));
         return response()->json($query->paginate($perPage));
@@ -382,7 +390,7 @@ class ActivityController extends Controller
                 'products' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class),
                 'sampleMovements' => fn($q) => $q->with('product'),
                 'objections.product',
-            ])->findOrFail($id);
+            ])->tap(fn ($query) => \App\Support\CountryFilter::apply($query))->findOrFail($id);
 
         $user = auth()->user();
         if ($user && (string) $activity->user_id !== (string) $user->id) {

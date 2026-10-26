@@ -17,6 +17,23 @@ class Activity extends Model
 
     protected $appends = ['planning_kind', 'activity_type_name'];
 
+    public const PUBLISHED_REPORT_STATUSES = ['submitted', 'soumis', 'validated', 'valide', 'rejected', 'rejete', 'modified'];
+
+    public function getReportContentAttribute($value): ?string
+    {
+        // A scheduled/completed visit can be visible while its report is still private.
+        if (auth()->check() && (string) auth()->id() !== (string) $this->user_id
+            && !in_array(strtolower(trim((string) $this->report_status)), self::PUBLISHED_REPORT_STATUSES, true)) {
+            return null;
+        }
+        return $value;
+    }
+
+    public function scopePublishedReports($query)
+    {
+        return $query->whereIn(\Illuminate\Support\Facades\DB::raw('LOWER(TRIM(report_status))'), self::PUBLISHED_REPORT_STATUSES);
+    }
+
     public function getPlanningKindAttribute(): string
     {
         $code = $this->activity_type_id ? $this->activityType?->code : $this->activity_type;
