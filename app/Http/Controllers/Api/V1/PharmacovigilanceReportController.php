@@ -23,7 +23,9 @@ class PharmacovigilanceReportController extends Controller
     )]
     public function index()
     {
-        return response()->json(PharmacovigilanceReport::paginate(25));
+        $query = PharmacovigilanceReport::with(['contact', 'product']);
+        \App\Support\CountryFilter::apply($query);
+        return response()->json($query->paginate(25));
     }
 
     #[OA\Post(

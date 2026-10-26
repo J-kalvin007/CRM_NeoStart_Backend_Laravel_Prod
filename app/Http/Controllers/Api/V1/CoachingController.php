@@ -608,6 +608,7 @@ class CoachingController extends Controller
             ->when($request->query('country') ?? $request->query('pays'), fn ($q, $p) => $this->filterUserCountry($q, $p))
             ->when($request->query('delegate_id'), fn ($q, $id) => $q->where('id', $id));
 
+        \App\Support\CountryFilter::apply($delegatesQuery);
         $delegates = $delegatesQuery->with('country')->orderBy('name')->get();
 
         // Sessions DUO complétées
@@ -633,6 +634,7 @@ class CoachingController extends Controller
             ->when($request->query('date_debut'), fn ($q, $d) => $q->whereDate('date_duo', '>=', $d))
             ->when($request->query('date_fin'), fn ($q, $d) => $q->whereDate('date_duo', '<=', $d));
 
+        \App\Support\CountryFilter::apply($sessionsQuery);
         $sessions = $sessionsQuery->orderByDesc('date_duo')->get();
 
         $totalDuos = $sessions->count();
@@ -668,6 +670,8 @@ class CoachingController extends Controller
             $byDelegate = $byDelegate->sortByDesc(fn($d) => $d['avg_note_sur_20'] ?? -1)->values();
         } elseif ($sortBy === 'note_asc') {
             $byDelegate = $byDelegate->sortBy(fn($d) => $d['avg_note_sur_20'] !== null ? $d['avg_note_sur_20'] : 99)->values();
+        } elseif ($sortBy === 'recent') {
+            $byDelegate = $byDelegate->sortByDesc(fn ($person) => $person['evaluations']->first()?->date_duo?->toDateString() ?? '')->values();
         } elseif ($sortBy === 'count_desc') {
             $byDelegate = $byDelegate->sortByDesc('duos_count')->values();
         } else {
@@ -704,6 +708,7 @@ class CoachingController extends Controller
             ->when($request->query('country') ?? $request->query('pays'), fn ($q, $p) => $this->filterUserCountry($q, $p))
             ->when($request->query('supervisor_id'), fn ($q, $id) => $q->where('id', $id));
 
+        \App\Support\CountryFilter::apply($supervisorsQuery);
         $supervisors = $supervisorsQuery->with('country')->orderBy('name')->get();
 
         // Sessions TRIO complétées
@@ -727,6 +732,7 @@ class CoachingController extends Controller
             ->when($request->query('date_debut'), fn ($q, $d) => $q->whereDate('date_duo', '>=', $d))
             ->when($request->query('date_fin'), fn ($q, $d) => $q->whereDate('date_duo', '<=', $d));
 
+        \App\Support\CountryFilter::apply($sessionsQuery);
         $sessions = $sessionsQuery->orderByDesc('date_duo')->get();
 
         $totalTrios = $sessions->count();
@@ -761,6 +767,8 @@ class CoachingController extends Controller
             $bySupervisor = $bySupervisor->sortByDesc(fn($d) => $d['avg_note_sur_20'] ?? -1)->values();
         } elseif ($sortBy === 'note_asc') {
             $bySupervisor = $bySupervisor->sortBy(fn($d) => $d['avg_note_sur_20'] !== null ? $d['avg_note_sur_20'] : 99)->values();
+        } elseif ($sortBy === 'recent') {
+            $bySupervisor = $bySupervisor->sortByDesc(fn ($person) => $person['evaluations']->first()?->date_duo?->toDateString() ?? '')->values();
         } else {
             $bySupervisor = $bySupervisor->sortBy('supervisor_name')->values();
         }

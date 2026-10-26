@@ -41,6 +41,7 @@ class AccountResource extends JsonResource
             'account_type_id' => $this->account_type_id,
             'account_type'    => $accountTypeLabel, // string pour le mobile
             'nom'             => $nomAffichage,
+            'nom_structure'   => $this->nom,
             'adresse'         => $this->adresse,
             'ville'           => $this->ville,
             'quartier'        => $this->quartier,

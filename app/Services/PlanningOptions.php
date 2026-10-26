@@ -10,6 +10,7 @@ use Illuminate\Support\Str;
 class PlanningOptions
 {
     public const CALENDAR_CODES = ['reunion', 'conge', 'permission'];
+    public const STORED_CALENDAR_CODES = ['reunion', 'conge', 'permission', 'rcp'];
 
     public static function kind(?string $code): string
     {
@@ -18,7 +19,7 @@ class PlanningOptions
             'conge annuel', 'conge maladie', 'absence', 'indisponibilite', 'leave', 'arret maladie', 'conge paye', 'rtt', 'formation', 'evenement familial' => 'conge',
             default => $code,
         };
-        return in_array($code, self::CALENDAR_CODES, true) ? $code : 'visite';
+        return in_array($code, self::STORED_CALENDAR_CODES, true) ? $code : 'visite';
     }
 
     public function forUser(string $userId, string $date): array
@@ -29,7 +30,7 @@ class PlanningOptions
             ->where('user_id', $userId)->where('outside_weekly_plan', true)
             ->whereBetween('date_activite', [$monday->toDateString(), $monday->copy()->addDays(6)->toDateString()])->count();
         $types = ActivityType::where('is_active', true)->orderBy('name')->get()
-            ->filter(fn ($type) => self::kind($type->code) !== 'visite')
+            ->filter(fn ($type) => in_array(self::kind($type->code), self::CALENDAR_CODES, true))
             ->map(fn ($type) => ['id' => $type->id, 'code' => self::kind($type->code), 'label' => $type->name])
             ->values()->all();
 

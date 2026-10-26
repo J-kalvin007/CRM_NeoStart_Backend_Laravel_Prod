@@ -93,6 +93,7 @@ class ProductController extends Controller
                   ->orWhere('marque', 'like', "%$v%");
             }));
 
+        \App\Support\CountryFilter::apply($query);
         return ProductResource::collection($query->paginate(min(1000, max(1, $request->integer('per_page', 25)))));
     }
 

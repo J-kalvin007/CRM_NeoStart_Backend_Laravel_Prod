@@ -47,8 +47,8 @@ class ActivityController extends Controller
         $query = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
             ->with([
                 'delegue' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class),
-                'contact' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account', 'speciality', 'potential', 'influence']),
-                'contacts' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account', 'speciality', 'potential', 'influence']),
+                'contact' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account' => fn ($account) => $account->withoutGlobalScopes(), 'accounts' => fn ($account) => $account->withoutGlobalScopes(), 'speciality', 'potential', 'influence']),
+                'contacts' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account' => fn ($account) => $account->withoutGlobalScopes(), 'accounts' => fn ($account) => $account->withoutGlobalScopes(), 'speciality', 'potential', 'influence']),
                 'account' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class),
                 'accompanyingUser' => fn($q) => $q->withoutGlobalScopes(),
                 'duoActivityType',
@@ -60,13 +60,7 @@ class ActivityController extends Controller
             ])
             ->when($request->user_id, fn($q, $v) => $q->where('activities.user_id', $v))
             ->when($request->delegate_id, fn($q, $v) => $q->where('activities.user_id', $v))
-            ->when($request->country ?? $request->pays, function($q, $pays) {
-                $q->where(function($sub) use ($pays) {
-                    $sub->whereHas('contact', fn($c) => $c->where('pays', $pays)->orWhere('country', $pays))
-                        ->orWhereHas('account', fn($a) => $a->where('pays', $pays)->orWhere('country', $pays))
-                        ->orWhereHas('user', fn($u) => $u->where('country', $pays)->orWhere('pays', $pays));
-                });
-            })
+            ->when($request->country ?? $request->pays, fn ($q, $country) => \App\Support\CountryFilter::apply($q, $country))
             ->when($request->activity_type, fn($q, $v) => $q->where('activity_type', $v))
             ->when($request->statut, fn($q, $v) => $q->where('statut', $v))
             ->when($request->report_status, fn($q, $v) => $q->where('report_status', $v))
@@ -136,10 +130,9 @@ class ActivityController extends Controller
             });
         }
 
-        $perPage = (int) $request->query('per_page', 200);
-        return response()->json([
-            'data' => $query->paginate($perPage)->items()
-        ]);
+        \App\Support\CountryFilter::apply($query);
+        $perPage = max(1, min(500, (int) $request->query('per_page', 200)));
+        return response()->json($query->paginate($perPage));
     }
 
 
@@ -356,7 +349,7 @@ class ActivityController extends Controller
 
         return new ActivityResource($activity->load([
             'delegue', 
-            'contact' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account', 'speciality', 'potential', 'influence']), 
+            'contact' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account' => fn ($account) => $account->withoutGlobalScopes(), 'accounts' => fn ($account) => $account->withoutGlobalScopes(), 'speciality', 'potential', 'influence']),
             'account' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class), 
             'products' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class), 
             'sampleMovements'
@@ -381,8 +374,8 @@ class ActivityController extends Controller
         $activity = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
             ->with([
                 'delegue',
-                'contact' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account', 'speciality', 'potential', 'influence']),
-                'contacts' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account', 'speciality', 'potential', 'influence']),
+                'contact' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account' => fn ($account) => $account->withoutGlobalScopes(), 'accounts' => fn ($account) => $account->withoutGlobalScopes(), 'speciality', 'potential', 'influence']),
+                'contacts' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account' => fn ($account) => $account->withoutGlobalScopes(), 'accounts' => fn ($account) => $account->withoutGlobalScopes(), 'speciality', 'potential', 'influence']),
                 'account' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class),
                 'tourPlan',
                 'duoActivityType',
@@ -733,7 +726,7 @@ class ActivityController extends Controller
 
         return new ActivityResource($activity->load([
             'delegue', 
-            'contact' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account', 'speciality', 'potential', 'influence']), 
+            'contact' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account' => fn ($account) => $account->withoutGlobalScopes(), 'accounts' => fn ($account) => $account->withoutGlobalScopes(), 'speciality', 'potential', 'influence']),
             'account' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class), 
             'products' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class),
             'sampleMovements' => fn($q) => $q->where('movement_type', 'distribution')->with('product'),

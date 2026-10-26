@@ -26,18 +26,26 @@ class SupervisorDashboardController extends Controller
     public function dashboard(Request $request)
     {
         $user = auth()->user();
-        $team = $user->teamMembers()->with('country')->get();
+        $teamQuery = $user->teamMembers()->with('country');
+        \App\Support\CountryFilter::apply($teamQuery);
+        $team = $teamQuery->get();
         $teamIds = $team->pluck('id')->all();
         $count = $team->count();
 
-        $start = now()->startOfMonth()->toDateString();
-        $end = now()->endOfMonth()->toDateString();
+        $dates = $request->validate([
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+        ]);
+        $start = isset($dates['start_date']) ? Carbon::parse($dates['start_date'])->toDateString() : now()->startOfMonth()->toDateString();
+        $end = isset($dates['end_date']) ? Carbon::parse($dates['end_date'])->toDateString() : now()->endOfMonth()->toDateString();
 
         $completed = $this->visitQuery($teamIds)
-            ->whereBetween('date_activite', [$start, $end])
+            ->whereDate('date_activite', '>=', $start)
+            ->whereDate('date_activite', '<=', $end)
             ->whereIn('statut', self::COMPLETED)
             ->count();
-        $target = $this->weeklyTarget() * 4 * $count;
+        $workingDays = collect(\Carbon\CarbonPeriod::create($start, $end))->filter(fn ($date) => $date->isWeekday())->count();
+        $target = $this->visitsPerDay() * $workingDays * $count;
         $progress = $target > 0 ? round($completed / $target, 2) : 0;
 
         $coverage = $this->coverageRate($teamIds, $start, $end);
@@ -84,7 +92,7 @@ class SupervisorDashboardController extends Controller
             ],
             'kpis' => [
                 [
-                    'title' => 'VISITES MTD',
+                    'title' => 'VISITES',
                     'value' => (string) $completed,
                     'subtitle' => "/{$target}",
                     'progress' => min(1, $progress),
@@ -94,7 +102,7 @@ class SupervisorDashboardController extends Controller
                     'title' => 'COUVERTURE',
                     'value' => $coverage . '%',
                     'progress' => $coverage / 100,
-                    'bottomLabel' => 'Prescripteurs visités ce mois',
+                    'bottomLabel' => 'Prescripteurs visités sur la période',
                 ],
                 [
                     'title' => 'VALIDATIONS EN COURS',
@@ -135,12 +143,15 @@ class SupervisorDashboardController extends Controller
         };
         $targetPerDelegate = $this->visitsPerDay() * $workingDays;
 
-        $team = $user->teamMembers()->with('country')->orderBy('name')->get();
+        $teamQuery = $user->teamMembers()->with('country')->orderBy('name');
+        \App\Support\CountryFilter::apply($teamQuery);
+        $team = $teamQuery->get();
         $teamIds = $team->pluck('id')->all();
 
         // Planifiées / réalisées par délégué sur la période affichée
         $stats = $this->visitQuery($teamIds)
-            ->whereBetween('date_activite', [$start->toDateString(), $end->toDateString()])
+            ->whereDate('date_activite', '>=', $start->toDateString())
+            ->whereDate('date_activite', '<=', $end->toDateString())
             ->selectRaw('user_id, COUNT(*) as planned, SUM(CASE WHEN statut IN (?, ?, ?) THEN 1 ELSE 0 END) as completed', self::COMPLETED)
             ->groupBy('user_id')
             ->get()
@@ -308,7 +319,8 @@ class SupervisorDashboardController extends Controller
             return 0;
         }
         $visited = $this->visitQuery($userIds)
-            ->whereBetween('date_activite', [$start, $end])
+            ->whereDate('date_activite', '>=', $start)
+            ->whereDate('date_activite', '<=', $end)
             ->whereIn('statut', self::COMPLETED)
             ->whereNotNull('contact_id')
             ->distinct()

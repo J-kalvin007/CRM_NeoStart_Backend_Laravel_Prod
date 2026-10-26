@@ -21,13 +21,12 @@ class DynamicPerimeterScope implements Scope
 
         $user = Auth::user();
         $table = $model->getTable();
+        if (!in_array($table, ['countries', 'categories', 'product_types', 'specialities', 'galenic_forms'], true)) {
+            \App\Support\CountryFilter::apply($builder);
+        }
         
         // 1. Global admin & superadmin bypass isolation, BUT can filter by X-Country-Id
-        if ($user->can('scope:global') || $user->hasAnyRole(['superadmin', 'admin'])) {
-            $requestedCountryId = request()->header('X-Country-Id');
-            if ($requestedCountryId) {
-                $this->applyHierarchyFiltering($builder, $table, $user, $requestedCountryId, true);
-            }
+        if ($user->can('scope:global') || $user->hasAnyRole(['superadmin', 'admin', 'super-admin'])) {
             return;
         }
 

@@ -20,7 +20,9 @@ class CampaignController extends Controller
     )]
     public function index()
     {
-        return response()->json(Campaign::with(['products', 'country'])->get());
+        $query = Campaign::with(['products', 'country']);
+        \App\Support\CountryFilter::apply($query);
+        return response()->json($query->get());
     }
 
     #[OA\Post(

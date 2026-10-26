@@ -33,7 +33,7 @@ class Activity extends Model
         return $this->planning_kind !== 'visite';
     }
 
-    public function scopeCalendar($query, array $codes = \App\Services\PlanningOptions::CALENDAR_CODES)
+    public function scopeCalendar($query, array $codes = \App\Services\PlanningOptions::STORED_CALENDAR_CODES)
     {
         $names = $codes;
         foreach (['rcp' => 'RCP', 'reunion' => 'Réunion', 'conge' => 'Congé', 'permission' => 'Permission'] as $code => $label) {

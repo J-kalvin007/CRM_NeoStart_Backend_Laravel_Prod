@@ -26,6 +26,7 @@ class SampleRequestController extends Controller
             });
         }
 
+        \App\Support\CountryFilter::apply($query);
         return response()->json($query->get());
     }
 

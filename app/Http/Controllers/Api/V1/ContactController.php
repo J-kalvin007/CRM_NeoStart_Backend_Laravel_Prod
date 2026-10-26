@@ -49,7 +49,7 @@ class ContactController extends Controller
             ->when($request->specialite ?? $request->speciality, function($q, $v) {
                 if (!$v || $v === 'Tous') return;
                 $q->where(function($sub) use ($v) {
-                    $sub->whereHas('speciality', fn($sq) => $sq->where('nom', 'like', "%$v%"))
+                    $sub->whereHas('speciality', fn($sq) => $sq->where(fn ($spec) => $spec->where('name', 'like', "%$v%")->orWhere('specialities.id', $v)))
                         ->orWhere('meta->specialite', 'like', "%$v%")
                         ->orWhere('titre', 'like', "%$v%");
                 });
@@ -58,8 +58,7 @@ class ContactController extends Controller
                 if (!$v || $v === 'Tous') return;
                 $q->where(function($sub) use ($v) {
                     $sub->whereHas('account', function($aq) use ($v) {
-                        $aq->where('type', 'like', "%$v%")
-                           ->orWhere('nom', 'like', "%$v%");
+                        $aq->where('nom', 'like', "%$v%")->orWhereHas('accountType', fn ($type) => $type->where('libelle', 'like', "%$v%")->orWhere('code', $v));
                     })->orWhere('meta->etablissement', 'like', "%$v%");
                 });
             })
@@ -67,22 +66,21 @@ class ContactController extends Controller
                 if (!$v || $v === 'Tous') return;
                 $q->where('statut', 'like', "%$v%");
             })
-            ->when($request->has('is_kol'), fn($q) => $q->where('is_kol', $request->boolean('is_kol')))
-            ->when($request->account_id, fn($q, $v) => $q->where('account_id', $v))
-            ->when($request->delegate_id ?? $request->user_id, fn($q, $v) => $q->where('contacts.user_id', $v))
-            ->when($request->country ?? $request->pays, function($q, $pays) {
-                $q->where(function($sub) use ($pays) {
-                    $sub->where('pays', $pays)
-                        ->orWhere('country', $pays)
-                        ->orWhereHas('account', fn($aq) => $aq->where('pays', $pays)->orWhere('country', $pays));
+            ->when($request->has('is_kol'), function ($q) use ($request) {
+                $q->where(function ($contacts) use ($request) {
+                    $contacts->where('meta->is_kol', $request->boolean('is_kol'));
+                    if (!$request->boolean('is_kol')) $contacts->orWhereNull('meta->is_kol');
                 });
             })
+            ->when($request->account_id, fn ($q, $v) => $q->where(fn ($contacts) => $contacts->where('account_id', $v)->orWhereHas('accounts', fn ($account) => $account->where('accounts.id', $v))))
+            ->when($request->delegate_id ?? $request->user_id, fn($q, $v) => $q->where('contacts.user_id', $v))
+            ->when($request->country ?? $request->pays, fn ($q, $country) => \App\Support\CountryFilter::apply($q, $country))
             ->when($request->search, fn($q, $v) => $q->where(function ($q) use ($v) {
                 $q->where('nom', 'like', "%$v%")
                   ->orWhere('prenom', 'like', "%$v%")
                   ->orWhere('titre', 'like', "%$v%")
                   ->orWhere('meta->specialite', 'like', "%$v%")
-                  ->orWhereHas('speciality', fn($sq) => $sq->where('nom', 'like', "%$v%"))
+                  ->orWhereHas('speciality', fn($sq) => $sq->where(fn ($spec) => $spec->where('name', 'like', "%$v%")->orWhere('specialities.id', $v)))
                   ->orWhereHas('account', fn($aq) => $aq->where('nom', 'like', "%$v%"));
             }));
 
@@ -115,7 +113,8 @@ class ContactController extends Controller
             }
         }
 
-        $perPage = $request->get('per_page', 500);
+        \App\Support\CountryFilter::apply($query);
+        $perPage = max(1, min(500, (int) $request->get('per_page', 500)));
         return ContactResource::collection($query->orderBy('created_at', 'desc')->paginate($perPage));
     }
 

@@ -36,7 +36,12 @@ class AccountController extends Controller
         $query = Account::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
             ->with(['country', 'categories', 'accountType', 'potential', 'user', 'delegue'])
             ->withCount('contacts')
-            ->when($request->account_type, fn($q, $v) => $q->where('account_type', $v))
+            ->when($request->account_type ?? $request->account_type_id, function ($q, $value) {
+                $aliases = ['pharmacie' => 'PHA', 'hopital' => 'HOP', 'clinique' => 'CLI', 'cabinet' => 'CAB', 'grossiste' => 'GRO'];
+                $code = $aliases[strtolower($value)] ?? $value;
+                $q->whereHas('accountType', fn ($type) => $type->where(fn ($match) => $match
+                    ->where('id', $value)->orWhere('code', $code)->orWhere('libelle', $value)));
+            })
             ->when($request->statut, fn($q, $v) => $q->where(function ($sq) use ($v) {
                 if (in_array($v, ['valide', 'actif'])) {
                     $sq->whereIn('statut', ['valide', 'actif'])->orWhere('statut_validation', 'valide');
@@ -110,7 +115,8 @@ class AccountController extends Controller
         // Ordre par défaut pour éviter les sauts de pagination lors des mises à jour
         $query->orderBy('created_at', 'desc');
 
-        $perPage = $request->get('per_page', 500);
+        \App\Support\CountryFilter::apply($query, $request->country ?? $request->pays);
+        $perPage = max(1, min(500, (int) $request->get('per_page', 500)));
         return AccountResource::collection($query->paginate($perPage));
     }
 

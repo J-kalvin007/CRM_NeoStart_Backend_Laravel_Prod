@@ -11,6 +11,10 @@ class ActivityResource extends JsonResource
     {
         return [
             'id'             => $this->id,
+            'user_id'        => $this->user_id,
+            'delegate_id'    => $this->user_id,
+            'contact_id'     => $this->contact_id,
+            'account_id'     => $this->account_id,
             'local_uuid'     => $this->local_uuid,
             'activity_type_id' => $this->activity_type_id,
             'activity_type'  => $this->activity_type,

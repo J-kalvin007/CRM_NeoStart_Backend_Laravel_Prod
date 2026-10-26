@@ -23,8 +23,8 @@ class TourPlanController extends Controller
         $query = TourPlan::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
             ->with(['delegue', 'validePar', 'activities.contact', 'activities.account'])
             ->when($request->statut, fn($q, $v) => $q->where('statut', $v))
-            ->when($request->date_debut, fn($q, $v) => $q->where('date_debut', '>=', $v))
-            ->when($request->date_fin, fn($q, $v) => $q->where('date_fin', '<=', $v))
+            ->when($request->date_debut, fn($q, $v) => $q->whereDate('date_fin', '>=', $v))
+            ->when($request->date_fin, fn($q, $v) => $q->whereDate('date_debut', '<=', $v))
             ->when($request->user_id, fn($q, $v) => $q->where('user_id', $v))
             ->withCount('activities')
             ->orderByDesc('created_at');
@@ -34,7 +34,8 @@ class TourPlanController extends Controller
             $query->whereIn('user_id', array_merge([$user->id], $user->teamMemberIds()));
         }
 
-        $plans = $query->paginate(30);
+        \App\Support\CountryFilter::apply($query);
+        $plans = $query->paginate(max(1, min(500, (int) $request->query('per_page', 30))));
 
         // Auto-synchronisation des plannings dont toutes les activités ont été validées
         foreach ($plans as $plan) {
