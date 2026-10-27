@@ -1,0 +1,18 @@
+{
+  "resource": "/api/v1/leaves",
+  "workflow": "Brouillon puis soumission et décision avec le planning hebdomadaire",
+  "types": "Catalogue GET /api/v1/planning-options, codes conge et permission actifs",
+  "write_fields": {
+    "type": "Code du catalogue, stocké dans activities.activity_type et activity_type_id",
+    "start_date": "YYYY-MM-DD, activities.date_activite",
+    "end_date": "YYYY-MM-DD inclus, activities.date_fin",
+    "heure_debut": "HH:mm, activities.heure_debut",
+    "heure_fin": "HH:mm, activities.heure_fin",
+    "reason": "Motif, activities.notes"
+  },
+  "read_fields": ["id", "user_id", "employee_name", "type", "type_label", "planning_kind", "start_date", "end_date", "heure_debut", "heure_fin", "days", "days_count", "reason", "status", "rejection_reason", "tour_plan_id", "created_at"],
+  "duration": "days et days_count sont identiques, calculés côté serveur en jours calendaires inclusifs",
+  "responses": "GET: data contient une liste; POST et PUT: data contient la même ressource",
+  "editing": "PUT et DELETE réservés au propriétaire tant que statut=brouillon",
+  "visits": "GET /api/v1/activities?visits_only=1 exclut les congés, permissions, réunions et RCP; l'agenda conserve les indisponibilités"
+}

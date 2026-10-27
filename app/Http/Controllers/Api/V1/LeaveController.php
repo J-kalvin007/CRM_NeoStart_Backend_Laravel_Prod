@@ -39,29 +39,7 @@ class LeaveController extends Controller
             });
         }
 
-        $leaves = $query->get()->map(function ($act) {
-            return [
-                'id'               => $act->id,
-                'user_id'          => $act->user_id,
-                'employee_name'    => $act->delegue?->name ?? 'Délégué',
-                'type'             => $act->activity_type_name,
-                'activity_type'    => $act->activity_type_name,
-                'planning_kind' => $act->planning_kind,
-                'start_date'       => $act->date_activite ? Carbon::parse($act->date_activite)->format('Y-m-d') : null,
-                'end_date'         => ($act->date_fin ?? $act->date_activite)?->format('Y-m-d'),
-                'tour_plan_id' => $act->tour_plan_id,
-                'days' => $act->date_activite ? (int) Carbon::parse($act->date_activite)->diffInDays($act->date_fin ?? $act->date_activite) + 1 : 0,
-                'date_activite'    => $act->date_activite ? Carbon::parse($act->date_activite)->format('Y-m-d') : null,
-                'heure_debut'      => $act->heure_debut,
-                'heure_fin'        => $act->heure_fin,
-                'status'           => $act->statut,
-                'statut'           => $act->statut,
-                'reason'           => $act->notes,
-                'motif'            => $act->notes,
-                'rejection_reason' => $act->rejection_reason,
-                'created_at'       => $act->created_at,
-            ];
-        });
+        $leaves = $query->get()->map(fn (Activity $activity) => $this->serializeLeave($activity));
 
         return response()->json([
             'data' => $leaves
@@ -73,17 +51,21 @@ class LeaveController extends Controller
      */
     public function store(Request $request)
     {
+        $request->merge([
+            'start_date' => $request->input('start_date') ?? $request->input('date_debut') ?? $request->input('date_activite'),
+            'end_date' => $request->input('end_date') ?? $request->input('date_fin') ?? $request->input('start_date') ?? $request->input('date_debut') ?? $request->input('date_activite'),
+        ]);
         $validated = $request->validate([
             'user_id'       => 'nullable|string',
             'type'          => 'nullable|string',
             'activity_type' => 'nullable|string',
-            'start_date'    => 'nullable|date|after_or_equal:today',
-            'end_date'      => 'nullable|date',
+            'start_date'    => 'required|date|after_or_equal:today',
+            'end_date'      => 'required|date|after_or_equal:start_date',
             'date_debut'    => 'nullable|date',
             'date_fin'      => 'nullable|date',
             'date_activite' => 'nullable|date',
-            'heure_debut'   => 'nullable|string',
-            'heure_fin'     => 'nullable|string',
+            'heure_debut'   => ['nullable', 'regex:/^([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$/'],
+            'heure_fin'     => ['nullable', 'regex:/^([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$/'],
             'reason'        => 'nullable|string',
             'motif'         => 'nullable|string',
             'notes'         => 'nullable|string',
@@ -116,6 +98,7 @@ class LeaveController extends Controller
         abort_unless((string) $targetUserId === (string) $user->id || $user->can('scope:global') || $user->hasAnyRole(['superadmin', 'super-admin', 'admin']) || $user->manages($targetUserId), 403);
         abort_if(Activity::checkOverlap($targetUserId, $startDateStr, $heureDebut, $heureFin, null, null, true, $endDateStr), 422, 'Cette période chevauche une activité existante.');
 
+        $this->validateTimes($startDate, $endDate, $heureDebut ?? '08:00', $heureFin ?? '18:00');
         $initialStatus = 'brouillon';
 
         $typeRecord = \App\Models\ActivityType::where('code', \App\Services\PlanningOptions::kind($type))->first();
@@ -129,24 +112,7 @@ class LeaveController extends Controller
             'notes' => $reason, 'statut' => $initialStatus,
         ]);
 
-        $formattedResult = [
-            'id'               => $firstActivity->id,
-            'user_id'          => $firstActivity->user_id,
-            'employee_name'    => $firstActivity->delegue?->name ?? $user->name,
-            'type'             => $firstActivity->activity_type,
-            'activity_type'    => $firstActivity->activity_type,
-            'start_date'       => $startDateStr,
-            'end_date'         => $endDateStr,
-            'date_activite'    => $startDateStr,
-            'heure_debut'      => $firstActivity->heure_debut,
-            'heure_fin'        => $firstActivity->heure_fin,
-            'status'           => $firstActivity->statut,
-            'statut'           => $firstActivity->statut,
-            'reason'           => $firstActivity->notes,
-            'motif'            => $firstActivity->notes,
-            'rejection_reason' => null,
-            'created_at'       => $firstActivity->created_at,
-        ];
+        $formattedResult = $this->serializeLeave($firstActivity);
 
         return response()->json([
             'message' => 'Activité enregistrée en brouillon. Soumettez votre planning hebdomadaire pour validation.',
@@ -192,23 +158,32 @@ class LeaveController extends Controller
     {
         $leave = $this->ownPendingLeave($id);
 
+        $request->merge([
+            'start_date' => $request->input('start_date') ?? $request->input('date_debut') ?? $request->input('date_activite'),
+            'end_date' => $request->input('end_date') ?? $request->input('date_fin'),
+        ]);
         $validated = $request->validate([
             'type'          => 'nullable|string',
             'activity_type' => 'nullable|string',
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date',
             'date_activite' => 'nullable|date',
             'date_fin' => 'nullable|date',
-            'heure_debut'   => 'nullable|string',
-            'heure_fin'     => 'nullable|string',
+            'heure_debut'   => ['nullable', 'regex:/^([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$/'],
+            'heure_fin'     => ['nullable', 'regex:/^([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$/'],
             'reason'        => 'nullable|string',
             'motif'         => 'nullable|string',
             'notes'         => 'nullable|string',
         ]);
 
-        $start = Carbon::parse($validated['date_activite'] ?? $leave->date_activite);
-        $end = Carbon::parse($validated['date_fin'] ?? $leave->date_fin ?? $start);
+        $start = Carbon::parse($validated['start_date'] ?? $validated['date_activite'] ?? $leave->date_activite);
+        $end = Carbon::parse($validated['end_date'] ?? $validated['date_fin'] ?? $leave->date_fin ?? $start);
         abort_if($end->lt($start), 422, 'La fin doit être postérieure ou égale au début.');
+        $this->validateTimes($start, $end, $validated['heure_debut'] ?? $leave->heure_debut, $validated['heure_fin'] ?? $leave->heure_fin);
         if (isset($validated['type']) || isset($validated['activity_type'])) {
-            abort_unless(in_array(\App\Services\PlanningOptions::kind($validated['activity_type'] ?? $validated['type']), ['conge', 'permission'], true), 422, 'Type de demande invalide.');
+            $kind = \App\Services\PlanningOptions::kind($validated['activity_type'] ?? $validated['type']);
+            abort_unless(in_array($kind, ['conge', 'permission'], true), 422, 'Type de demande invalide.');
+            abort_if(\App\Models\ActivityType::where('code', $kind)->where('is_active', false)->exists(), 422, 'Ce type d’activité est désactivé.');
         }
         abort_if(Activity::checkOverlap((string) $leave->user_id, $start->toDateString(),
             $validated['heure_debut'] ?? $leave->heure_debut, $validated['heure_fin'] ?? $leave->heure_fin,
@@ -224,7 +199,7 @@ class LeaveController extends Controller
             'notes'         => $validated['reason'] ?? $validated['motif'] ?? $validated['notes'] ?? null,
         ], fn ($v) => $v !== null));
 
-        return response()->json(['message' => 'Demande de congé modifiée.', 'data' => $leave->fresh()]);
+        return response()->json(['message' => 'Demande de congé modifiée.', 'data' => $this->serializeLeave($leave->fresh())]);
     }
 
     /**
@@ -235,6 +210,34 @@ class LeaveController extends Controller
         $this->ownPendingLeave($id)->delete();
 
         return response()->json(['message' => 'Demande de congé annulée.']);
+    }
+
+    private function validateTimes(Carbon $start, Carbon $end, ?string $startTime, ?string $endTime): void
+    {
+        if ($start->isSameDay($end) && $startTime && $endTime) {
+            abort_if(substr($endTime, 0, 5) <= substr($startTime, 0, 5), 422, 'L’heure de fin doit être postérieure à l’heure de début.');
+        }
+    }
+
+    private function serializeLeave(Activity $activity): array
+    {
+        $start = Carbon::parse($activity->date_activite)->toDateString();
+        $end = Carbon::parse($activity->date_fin ?? $activity->date_activite)->toDateString();
+        $days = (int) Carbon::parse($start)->diffInDays(Carbon::parse($end)) + 1;
+        return [
+            'id' => $activity->id, 'user_id' => $activity->user_id,
+            'employee_name' => $activity->delegue?->name,
+            'type' => $activity->planning_kind, 'activity_type' => $activity->planning_kind,
+            'type_label' => $activity->activity_type_name, 'planning_kind' => $activity->planning_kind,
+            'start_date' => $start, 'end_date' => $end,
+            'date_activite' => $start, 'date_fin' => $end,
+            'heure_debut' => $activity->heure_debut, 'heure_fin' => $activity->heure_fin,
+            'days' => $days, 'days_count' => $days,
+            'status' => $activity->statut, 'statut' => $activity->statut,
+            'reason' => $activity->notes, 'motif' => $activity->notes,
+            'rejection_reason' => $activity->rejection_reason,
+            'tour_plan_id' => $activity->tour_plan_id, 'created_at' => $activity->created_at,
+        ];
     }
 
     private function ownPendingLeave(string $id): Activity

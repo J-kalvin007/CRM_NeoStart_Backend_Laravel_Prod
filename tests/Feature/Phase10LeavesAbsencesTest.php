@@ -161,4 +161,33 @@ class Phase10LeavesAbsencesTest extends TestCase
         $this->assertDatabaseHas('activities', ['id' => $id, 'statut' => 'refusee',
             'rejection_reason' => 'Période de forte activité terrain.']);
     }
+
+    public function test_leave_contract_is_identical_after_creation_listing_and_editing(): void
+    {
+        Sanctum::actingAs($this->delegate);
+        $data = ['type' => 'permission', 'start_date' => now()->addDays(20)->toDateString(),
+            'end_date' => now()->addDays(22)->toDateString(), 'heure_debut' => '09:30',
+            'heure_fin' => '16:15', 'reason' => 'Rendez-vous personnel'];
+        $created = $this->postJson('/api/v1/leaves', $data)->assertCreated()
+            ->assertJsonPath('data.days', 3)->assertJsonPath('data.planning_kind', 'permission')->json('data');
+        $listed = $this->getJson('/api/v1/leaves')->assertOk()->json('data.0');
+        $this->assertSame($created, $listed);
+        $data['end_date'] = now()->addDays(23)->toDateString();
+        $data['reason'] = 'Motif modifié';
+        $edited = $this->putJson('/api/v1/leaves/'.$created['id'], $data)->assertOk()
+            ->assertJsonPath('data.days_count', 4)->assertJsonPath('data.reason', 'Motif modifié')->json('data');
+        $this->assertSame($edited, $this->getJson('/api/v1/leaves')->assertOk()->json('data.0'));
+        $this->assertDatabaseHas('activities', ['id' => $created['id'], 'date_fin' => $data['end_date'].' 00:00:00', 'notes' => $data['reason']]);
+        $this->getJson('/api/v1/activities?visits_only=1')->assertOk()->assertJsonCount(0, 'data');
+        $this->getJson('/api/v1/activities')->assertOk()->assertJsonCount(1, 'data');
+    }
+
+    public function test_leave_dates_and_hours_are_validated_with_legacy_and_canonical_fields(): void
+    {
+        Sanctum::actingAs($this->delegate);
+        $future = now()->addDays(20)->toDateString();
+        $this->postJson('/api/v1/leaves', ['type' => 'conge', 'date_activite' => now()->subDay()->toDateString()])->assertUnprocessable();
+        $this->postJson('/api/v1/leaves', ['type' => 'conge', 'start_date' => $future, 'heure_debut' => '25:00'])->assertUnprocessable();
+        $this->postJson('/api/v1/leaves', ['type' => 'conge', 'start_date' => $future, 'heure_debut' => '16:00', 'heure_fin' => '09:00'])->assertUnprocessable();
+    }
 }

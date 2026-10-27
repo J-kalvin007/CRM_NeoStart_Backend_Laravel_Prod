@@ -130,6 +130,10 @@ class ActivityController extends Controller
             });
         }
 
+        if ($request->boolean('visits_only')) {
+            $query->visits();
+        }
+
         if ($request->boolean('reports_only')) {
             $query->visits();
             if ($isGlobal || $isManager) {
