@@ -24,9 +24,13 @@ class ObjectifController extends Controller
     public function index(Request $request)
     {
         $user = auth()->user();
-        $query = Objectif::with(['user.country', 'product', 'indicator', 'type'])
-            ->when(!$user?->isAdminOrSupervisor(), fn($q) => $q->where('user_id', $user->id))
+        $global = $user->can('scope:global') || $user->hasAnyRole(['superadmin', 'super-admin', 'admin']);
+        $visibleIds = array_merge([$user->id], $user->teamMemberIds());
+        $query = Objectif::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
+            ->with(['user.country', 'user.roles', 'country', 'product', 'indicator', 'type'])
+            ->when(!$global, fn($q) => $q->whereIn('user_id', $visibleIds))
             ->when($request->user_id, fn($q, $v) => $q->where('user_id', $v))
+            ->when($request->role_id, fn($q, $v) => $q->whereHas('user.roles', fn($roles) => $roles->where('roles.id', $v)))
             ->when($request->indicator_id, fn($q, $v) => $q->where('indicator_id', $v))
             ->when($request->statut, fn($q, $v) => $q->where('statut', $v))
             ->when($request->periode, fn($q, $v) => $q->where('periode', 'like', "%$v%"));
@@ -80,7 +84,7 @@ class ObjectifController extends Controller
                 ['objectif_id' => (string) $objectif->id]
             );
         }
-        return new ObjectifResource($objectif->load(['user.country', 'product', 'indicator', 'type']));
+        return new ObjectifResource($objectif->load(['user.country', 'user.roles', 'country', 'product', 'indicator', 'type']));
     }
 
     #[OA\Get(path: '/api/v1/objectifs/{id}', summary: 'Détails d\'un objectif', security: [['bearerAuth' => []]], tags: ['Objectifs'],
@@ -118,7 +122,7 @@ class ObjectifController extends Controller
 
         $objectif->update($data);
         $objectif->recalculerTaux();
-        return new ObjectifResource($objectif->load(['user.country', 'product', 'indicator', 'type']));
+        return new ObjectifResource($objectif->load(['user.country', 'user.roles', 'country', 'product', 'indicator', 'type']));
     }
 
     #[OA\Delete(path: '/api/v1/objectifs/{id}', summary: 'Supprimer un objectif', security: [['bearerAuth' => []]], tags: ['Objectifs'],

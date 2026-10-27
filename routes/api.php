@@ -68,6 +68,8 @@ Route::prefix('v1')->group(function () {
 
     Route::middleware('auth:sanctum')->group(function () {
 
+    Route::post('reports/document', \App\Http\Controllers\Api\V1\ReportDocumentController::class)->middleware('throttle:20,1');
+
     Route::get('planning-options', \App\Http\Controllers\Api\V1\PlanningOptionsController::class);
 
     // Sync
@@ -288,6 +290,7 @@ Route::prefix('v1')->group(function () {
         // -- Statistiques & Dashboards --
         Route::get('/analytics/executive', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'executiveSummary']);
         // Route::get('/analytics/dashboard', ...) — méthode AnalyticsController::dashboard() inexistante, non enregistrée
+        Route::get('/analytics/performance', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'performanceOverview']);
         Route::get('/analytics/team-performance', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'teamPerformance']);
         Route::get('/analytics/edetailing-summary', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'edetailingSummary']);
         Route::get('/export/performance', [\App\Http\Controllers\Api\V1\AnalyticsController::class, 'exportPerformance']);

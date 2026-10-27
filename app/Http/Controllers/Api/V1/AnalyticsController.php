@@ -73,6 +73,14 @@ class AnalyticsController extends Controller
             ],
         ]);
     }
+    #[OA\Get(path: '/api/v1/analytics/performance', summary: 'Objectifs et performance par pays et poste',
+        security: [['bearerAuth' => []]], tags: ['Manager Analytics'],
+        responses: [new OA\Response(response: 200, description: 'Performance des collaborateurs autorisés')])]
+    public function performanceOverview(Request $request)
+    {
+        return response()->json(app(\App\Services\PerformanceOverview::class)->forRequest($request));
+    }
+
     #[OA\Get(
         path: '/api/v1/analytics/team-performance',
         summary: 'Afficher les performances de l\'équipe du manager',
@@ -129,11 +137,11 @@ class AnalyticsController extends Controller
         \App\Support\CountryFilter::apply($teamQuery);
         $teamUsers = $teamQuery->get();
 
-        $completedStatuses = ['realisee', 'effectuee', 'validee'];
+        $completedStatuses = \App\Services\VisitExecution::COMPLETED;
         $excludedStatuses = ['annulee', 'refusee', 'brouillon'];
 
         $data = $teamUsers->map(function ($delegue) use ($start, $end, $target, $completedStatuses, $excludedStatuses, $period, $label) {
-            $base = Activity::withoutGlobalScopes()
+            $base = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->visits()
                 ->where('user_id', $delegue->id)
                 ->whereNull('deleted_at')
                 ->whereBetween('date_activite', [$start->toDateString(), $end->toDateString()]);
@@ -212,76 +220,7 @@ class AnalyticsController extends Controller
     )]
     public function usersLocations(Request $request)
     {
-        $teamQuery = auth()->user()->teamMembers()->orderBy('name');
-        \App\Support\CountryFilter::apply($teamQuery);
-        $team = $teamQuery->get();
-        $today = now()->toDateString();
-
-        $result = $team->map(function ($u) use ($today) {
-            // Position : suivi GPS en direct (users.last_*), à défaut le dernier pointage de visite
-            $lastGps = Activity::withoutGlobalScopes()
-                ->where('user_id', $u->id)
-                ->whereNotNull('gps_debut_lat')
-                ->where('gps_debut_lat', '!=', 0)
-                ->latest('updated_at')
-                ->first();
-
-            $currentVisit = Activity::withoutGlobalScopes()
-                ->with(['contact', 'account'])
-                ->where('user_id', $u->id)
-                ->whereDate('date_activite', $today)
-                ->where('statut', 'en_cours')
-                ->latest('updated_at')
-                ->first();
-
-            $nextVisit = $currentVisit ?: Activity::withoutGlobalScopes()
-                ->with(['contact', 'account'])
-                ->where('user_id', $u->id)
-                ->whereDate('date_activite', $today)
-                ->where('statut', 'planifiee')
-                ->orderBy('heure_debut')
-                ->first();
-
-            $liveAt = $u->last_location_at;
-            $checkInAt = $lastGps?->updated_at;
-            $useLive = $u->last_lat !== null && (!$checkInAt || ($liveAt && $liveAt->gte($checkInAt)));
-            $lat = $useLive ? $u->last_lat : ($lastGps ? (float) $lastGps->gps_debut_lat : null);
-            $lng = $useLive ? $u->last_lng : ($lastGps ? (float) $lastGps->gps_debut_lng : null);
-            $positionAt = $useLive ? $liveAt : $checkInAt;
-
-            // Position reçue il y a moins de 15 min : le délégué est suivi en temps réel
-            $isLive = $liveAt && $liveAt->gt(now()->subMinutes(15));
-            $status = $currentVisit ? 'en_visite' : ($isLive ? 'disponible' : 'hors_ligne');
-            $statusLabel = ['en_visite' => 'En visite', 'disponible' => 'En ligne', 'hors_ligne' => 'Hors ligne'][$status];
-
-            $contact = $nextVisit?->contact;
-            $parts = array_values(array_filter(explode(' ', trim(preg_replace('/\(.*?\)/', '', $u->name)))));
-
-            return [
-                'id' => (string) $u->id,
-                'name' => $u->name,
-                'initials' => strtoupper(implode('', array_map(fn ($p) => mb_substr($p, 0, 1), array_slice($parts, 0, 2)))) ?: 'DM',
-                'photo_url' => null,
-                'status' => $status,
-                'status_label' => $statusLabel,
-                'has_position' => $lat !== null,
-                'is_live' => (bool) $isLive,
-                'position_source' => $lat === null ? null : ($useLive ? 'gps_live' : 'check_in'),
-                'accuracy' => $useLive ? $u->last_accuracy : null,
-                'lat' => $lat,
-                'lng' => $lng,
-                'location_name' => $nextVisit?->account?->nom ?? '',
-                'hcp_name' => $contact ? trim(($contact->titre ?: 'Dr.') . ' ' . $contact->prenom . ' ' . $contact->nom) : '',
-                'hcp_spec' => '',
-                'sector' => '',
-                'phone' => $u->phone ?? '',
-                'last_seen' => ($positionAt ?? $u->last_login_at)?->toISOString(),
-                'last_check_in' => $positionAt?->format('H:i'),
-                'time_left' => null,
-            ];
-        })->values();
-
-        return response()->json($result);
+        return response()->json(app(\App\Services\DelegateLocations::class)->forViewer($request->user()));
     }
 
     #[OA\Get(
@@ -511,245 +450,65 @@ class AnalyticsController extends Controller
 
     #[OA\Get(
         path: '/api/v1/export/performance',
-        summary: 'Exporter la performance de l\'équipe au format CSV',
+        summary: 'Exporter la performance de l\'équipe aux formats Excel/PDF',
         security: [['bearerAuth' => []]],
         tags: ['Manager Analytics'],
         responses: [
-            new OA\Response(response: 200, description: 'Fichier CSV généré')
+            new OA\Response(response: 200, description: 'Fichier Excel ou PDF généré')
         ]
     )]
     public function exportPerformance(Request $request)
     {
-        $perfResponse = $this->teamPerformance($request);
-        $data = json_decode($perfResponse->getContent(), true);
-
-        $csv = "Rang,Délégué,Visites Réalisées,Non Présent,Objectif Cible,Taux (%),Chiffre d'Affaires\n";
-        foreach ($data as $row) {
-            $csv .= sprintf(
-                "%d,\"%s\",%d,%d,%d,%.1f,%.2f\n",
-                $row['rank'] ?? 0,
-                str_replace('"', '""', $row['delegate']['name'] ?? 'Inconnu'),
-                $row['completed_visits'] ?? 0,
-                $row['no_show_count'] ?? 0,
-                $row['target_visits'] ?? 0,
-                $row['objective_rate'] ?? 0,
-                $row['revenue'] ?? 0
-            );
-        }
-
-        return response($csv, 200, [
-            'Content-Type' => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="team_performance_' . date('Y-m-d') . '.csv"',
-        ]);
+        $request->validate(['format' => 'sometimes|in:xlsx,pdf']);
+        $data = app(\App\Services\BusinessReportExports::class)->performance($request, $request->input('format', 'xlsx'));
+        return app(\App\Services\ReportDocument::class)->download($request, $data);
     }
 
     #[OA\Get(
         path: '/api/v1/export/expenses',
-        summary: 'Exporter le bilan des dépenses au format CSV',
+        summary: 'Exporter le bilan des dépenses aux formats Excel/PDF',
         security: [['bearerAuth' => []]],
         tags: ['Manager Analytics'],
         responses: [
-            new OA\Response(response: 200, description: 'Fichier CSV généré')
+            new OA\Response(response: 200, description: 'Fichier Excel ou PDF généré')
         ]
     )]
     public function exportExpenses(Request $request)
     {
-        $expenses = \App\Models\Expense::with('user')->get();
-
-        $csv = "ID,Délégué,Catégorie,Montant,Devise,Statut,Date,Description\n";
-        foreach ($expenses as $e) {
-            $csv .= sprintf(
-                "%d,\"%s\",\"%s\",%.2f,\"%s\",\"%s\",\"%s\",\"%s\"\n",
-                $e->id,
-                str_replace('"', '""', $e->user->name ?? 'Inconnu'),
-                str_replace('"', '""', $e->category ?? $e->type ?? 'Général'),
-                $e->amount ?? 0,
-                $e->currency ?? 'EUR',
-                $e->status ?? 'soumis',
-                $e->expense_date ? $e->expense_date->format('Y-m-d') : $e->created_at->format('Y-m-d'),
-                str_replace('"', '""', $e->description ?? '')
-            );
-        }
-
-        return response($csv, 200, [
-            'Content-Type' => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="expenses_' . date('Y-m-d') . '.csv"',
-        ]);
+        $request->validate(['format' => 'sometimes|in:xlsx,pdf']);
+        $data = app(\App\Services\BusinessReportExports::class)->expenses($request, $request->input('format', 'xlsx'));
+        return app(\App\Services\ReportDocument::class)->download($request, $data);
     }
 
     #[OA\Get(
         path: '/api/v1/export/activities',
-        summary: 'Exporter l\'état des visites au format CSV/Excel compatible',
+        summary: 'Exporter l\'état des visites au format Excel',
         security: [['bearerAuth' => []]],
         tags: ['Manager Analytics'],
         responses: [
-            new OA\Response(response: 200, description: 'Fichier CSV/Excel généré')
+            new OA\Response(response: 200, description: 'Fichier Excel généré')
         ]
     )]
     public function exportActivities(Request $request)
     {
-        $query = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
-            ->with(['delegue', 'contact.account', 'account', 'products', 'sampleMovements.product'])
-            ->when($request->delegate_id ?? $request->user_id, fn($q, $v) => $q->where('user_id', $v))
-            ->when($request->country ?? $request->pays, fn ($query, $country) => \App\Support\CountryFilter::apply($query, $country))
-            ->when($request->statut, fn($q, $v) => $q->where('statut', $v))
-            ->when($request->date_debut, fn($q, $v) => $q->whereDate('date_activite', '>=', $v))
-            ->when($request->date_fin, fn($q, $v) => $q->whereDate('date_activite', '<=', $v));
-
-        \App\Support\CountryFilter::apply($query);
-        $sortBy = $request->input('sort_by');
-        if ($sortBy === 'delegue' || $sortBy === 'delegue_asc') {
-            $activities = $query->get()->sortBy(fn($a) => $a->delegue?->name ?? '');
-        } elseif ($sortBy === 'country' || $sortBy === 'country_asc') {
-            $activities = $query->get()->sortBy(fn($a) => $a->contact?->pays ?? $a->account?->pays ?? $a->delegue?->country ?? '');
-        } else {
-            $activities = $query->orderByDesc('date_activite')->get();
-        }
-
-        // UTF-8 BOM pour ouverture directe sans corruption dans Excel
-        $csv = "\xEF\xBB\xBF";
-        $csv .= "Date,Heure Debut,Heure Fin,Delegue,Pays,Prescripteur,Specialite,Etablissement,Statut,Type,Compte-Rendu,Produits Presentes,Echantillons Remis\n";
-
-        foreach ($activities as $act) {
-            $contactName = $act->contact ? trim("{$act->contact->titre} {$act->contact->prenom} {$act->contact->nom}") : ($act->contact_name ?? '—');
-            $specialite = $act->contact?->specialite ?? data_get($act->contact?->meta, 'specialite') ?? '—';
-            $etablissement = $act->account?->nom ?? $act->contact?->account?->nom ?? $act->establishment ?? '—';
-            $pays = $act->contact?->pays ?? $act->account?->pays ?? $act->delegue?->country ?? $act->delegue?->pays ?? '—';
-            $prods = $act->canViewReport() ? $act->products->pluck('nom')->join('; ') : '';
-            $samples = $act->canViewReport() ? $act->sampleMovements->map(fn($sm) => ($sm->product?->nom ?? 'Produit') . ' (x' . ($sm->quantity ?? 1) . ')')->join('; ') : '';
-            $report = str_replace(["\r", "\n", '"'], [' ', ' ', '""'], (string) ($act->canViewReport() ? ($act->report_content ?? $act->notes ?? '') : ''));
-
-            $csv .= sprintf(
-                "\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\"\n",
-                $act->date_activite ? \Illuminate\Support\Carbon::parse($act->date_activite)->format('d/m/Y') : '',
-                $act->heure_debut ?? '',
-                $act->heure_fin ?? '',
-                str_replace('"', '""', $act->delegue?->name ?? 'Inconnu'),
-                str_replace('"', '""', $pays),
-                str_replace('"', '""', $contactName),
-                str_replace('"', '""', $specialite),
-                str_replace('"', '""', $etablissement),
-                str_replace('"', '""', $act->statut ?? ''),
-                str_replace('"', '""', $act->activity_type ?? 'Visite'),
-                $report,
-                str_replace('"', '""', $prods),
-                str_replace('"', '""', $samples)
-            );
-        }
-
-        return response($csv, 200, [
-            'Content-Type' => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="rapport_visites_' . date('Y-m-d') . '.csv"',
-        ]);
+        $request->validate(['format' => 'sometimes|in:xlsx,pdf']);
+        $data = app(\App\Services\BusinessReportExports::class)->activities($request, 'xlsx');
+        return app(\App\Services\ReportDocument::class)->download($request, $data);
     }
 
     #[OA\Get(
         path: '/api/v1/export/activities/pdf',
-        summary: 'Édition PDF / HTML imprimable de l\'état des visites',
+        summary: 'Exporter un fichier PDF de l\'état des visites',
         security: [['bearerAuth' => []]],
         tags: ['Manager Analytics'],
         responses: [
-            new OA\Response(response: 200, description: 'Page HTML stylisée prête pour impression / PDF')
+            new OA\Response(response: 200, description: 'Fichier PDF généré')
         ]
     )]
     public function exportActivitiesPdf(Request $request)
     {
-        $query = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
-            ->with(['delegue', 'contact.account', 'account', 'products', 'sampleMovements.product'])
-            ->when($request->delegate_id ?? $request->user_id, fn($q, $v) => $q->where('user_id', $v))
-            ->when($request->country ?? $request->pays, fn ($query, $country) => \App\Support\CountryFilter::apply($query, $country))
-            ->when($request->statut, fn($q, $v) => $q->where('statut', $v))
-            ->when($request->date_debut, fn($q, $v) => $q->whereDate('date_activite', '>=', $v))
-            ->when($request->date_fin, fn($q, $v) => $q->whereDate('date_activite', '<=', $v));
-
-        \App\Support\CountryFilter::apply($query);
-        $sortBy = $request->input('sort_by');
-        if ($sortBy === 'delegue' || $sortBy === 'delegue_asc') {
-            $activities = $query->limit(500)->get()->sortBy(fn($a) => $a->delegue?->name ?? '');
-        } elseif ($sortBy === 'country' || $sortBy === 'country_asc') {
-            $activities = $query->limit(500)->get()->sortBy(fn($a) => $a->contact?->pays ?? $a->account?->pays ?? $a->delegue?->country ?? '');
-        } else {
-            $activities = $query->orderByDesc('date_activite')->limit(500)->get();
-        }
-
-        $rowsHtml = '';
-        foreach ($activities as $act) {
-            $contactName = htmlspecialchars($act->contact ? trim("{$act->contact->titre} {$act->contact->prenom} {$act->contact->nom}") : ($act->contact_name ?? '—'));
-            $etablissement = htmlspecialchars($act->account?->nom ?? $act->contact?->account?->nom ?? $act->establishment ?? '—');
-            $delegue = htmlspecialchars($act->delegue?->name ?? '—');
-            $pays = htmlspecialchars($act->contact?->pays ?? $act->account?->pays ?? $act->delegue?->country ?? $act->delegue?->pays ?? '—');
-            $date = $act->date_activite ? \Illuminate\Support\Carbon::parse($act->date_activite)->format('d/m/Y') : '—';
-            $notes = htmlspecialchars(mb_strimwidth((string)($act->canViewReport() ? ($act->report_content ?? $act->notes ?? '—') : '—'), 0, 150, '...'));
-            $prods = htmlspecialchars($act->products->pluck('nom')->join(', '));
-            $statut = htmlspecialchars($act->statut ?? '—');
-
-            $rowsHtml .= "<tr>
-                <td><strong>{$date}</strong><br><small>{$act->heure_debut}</small></td>
-                <td>{$delegue}</td>
-                <td>{$pays}</td>
-                <td><strong>{$contactName}</strong><br><small>{$etablissement}</small></td>
-                <td><span class='badge'>{$statut}</span></td>
-                <td>{$prods}</td>
-                <td style='font-size:11px; color:#475569;'>{$notes}</td>
-            </tr>";
-        }
-
-        $printDate = date('d/m/Y H:i');
-        $totalCount = $activities->count();
-
-        $html = "<!DOCTYPE html>
-        <html lang='fr'>
-        <head>
-            <meta charset='UTF-8'>
-            <title>État des Visites & Rapports - SKYNITY CRM</title>
-            <style>
-                body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b; padding: 24px; margin: 0; background: #fff; }
-                .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0050cb; padding-bottom: 12px; margin-bottom: 20px; }
-                .title { font-size: 20px; font-weight: bold; color: #0050cb; margin: 0; }
-                .meta { font-size: 12px; color: #64748b; }
-                table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
-                th { background-color: #f1f5f9; color: #334155; font-weight: bold; text-align: left; padding: 8px 10px; border-bottom: 1px solid #cbd5e1; }
-                td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
-                tr:nth-child(even) { background-color: #f8fafc; }
-                .badge { display: inline-block; padding: 2px 6px; font-size: 10px; font-weight: bold; border-radius: 4px; background: #e0f2fe; color: #0369a1; text-transform: uppercase; }
-                .actions { margin-bottom: 20px; }
-                .btn-print { background: #0050cb; color: #fff; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; }
-                @media print { .actions { display: none; } body { padding: 0; } }
-            </style>
-        </head>
-        <body>
-            <div class='actions'>
-                <button class='btn-print' onclick='window.print()'>🖨️ Imprimer / Enregistrer en PDF</button>
-            </div>
-            <div class='header'>
-                <div>
-                    <h1 class='title'>SKYNITY CRM — État des Visites & Comptes-Rendus</h1>
-                    <div class='meta'>Total : {$totalCount} visite(s) répertoriée(s)</div>
-                </div>
-                <div class='meta' style='text-align: right;'>
-                    Édité le : {$printDate}<br>
-                    Confidentiel Médical
-                </div>
-            </div>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Date & Heure</th>
-                        <th>Délégué</th>
-                        <th>Pays</th>
-                        <th>Prescripteur & Établissement</th>
-                        <th>Statut</th>
-                        <th>Produits</th>
-                        <th>Compte-Rendu</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {$rowsHtml}
-                </tbody>
-            </table>
-        </body>
-        </html>";
-
-        return response($html, 200, ['Content-Type' => 'text/html; charset=UTF-8']);
+        $request->validate(['format' => 'sometimes|in:xlsx,pdf']);
+        $data = app(\App\Services\BusinessReportExports::class)->activities($request, 'pdf');
+        return app(\App\Services\ReportDocument::class)->download($request, $data);
     }
 }

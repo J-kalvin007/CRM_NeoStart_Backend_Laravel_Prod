@@ -251,19 +251,21 @@ class DuoTrioCanevasEvaluationTest extends TestCase
 
         $resDuoExcel = $this->get('/api/v1/export/duos');
         $resDuoExcel->assertStatus(200)
-            ->assertHeader('Content-Type', 'text/csv; charset=UTF-8');
+            ->assertHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
 
         $resDuoPdf = $this->get('/api/v1/export/duos/pdf');
-        $resDuoPdf->assertStatus(200);
+        $resDuoPdf->assertStatus(200)->assertHeader('Content-Type', 'application/pdf');
+        $this->assertStringStartsWith('%PDF-', $resDuoPdf->getContent());
 
         Sanctum::actingAs($this->dv);
 
         $resTrioExcel = $this->get('/api/v1/export/trios');
         $resTrioExcel->assertStatus(200)
-            ->assertHeader('Content-Type', 'text/csv; charset=UTF-8');
+            ->assertHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
 
         $resTrioPdf = $this->get('/api/v1/export/trios/pdf');
-        $resTrioPdf->assertStatus(200);
+        $resTrioPdf->assertStatus(200)->assertHeader('Content-Type', 'application/pdf');
+        $this->assertStringStartsWith('%PDF-', $resTrioPdf->getContent());
     }
 
     /**
@@ -273,14 +275,15 @@ class DuoTrioCanevasEvaluationTest extends TestCase
     {
         Sanctum::actingAs($this->supervisor);
 
-        // Test export CSV sorted by delegate
-        $csvResponse = $this->get('/api/v1/export/activities?sort_by=delegue&order_by=asc');
-        $csvResponse->assertStatus(200)
-            ->assertHeader('Content-Type', 'text/csv; charset=UTF-8');
+        // Real XLSX sorted by delegate
+        $excelResponse = $this->get('/api/v1/export/activities?sort_by=delegue&order_by=asc');
+        $excelResponse->assertStatus(200)
+            ->assertHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
 
         // Test export PDF sorted by country
         $pdfResponse = $this->get('/api/v1/export/activities/pdf?sort_by=country&order_by=asc');
-        $pdfResponse->assertStatus(200);
+        $pdfResponse->assertStatus(200)->assertHeader('Content-Type', 'application/pdf');
+        $this->assertStringStartsWith('%PDF-', $pdfResponse->getContent());
     }
 
     public function test_duo_dashboard_returns_real_delegate_details_counts_and_zero_scores(): void
@@ -393,8 +396,15 @@ class DuoTrioCanevasEvaluationTest extends TestCase
                 ->assertJsonPath('delegates.0.delegate_country', 'Togo')
                 ->assertJsonPath('kpis.total_duos', 1);
         }
-        $this->get('/api/v1/export/duos?country=Togo')->assertOk()->assertSee('Togo');
-        $this->get('/api/v1/export/duos/pdf?country=Togo')->assertOk()->assertSee('Togo');
+        $download = $this->get('/api/v1/export/duos?country=Togo')->assertOk();
+        $path = tempnam(sys_get_temp_dir(), 'duo-export-');
+        file_put_contents($path, $download->getContent());
+        try {
+            $book = \PhpOffice\PhpSpreadsheet\IOFactory::load($path);
+            $this->assertStringContainsString('Togo', json_encode($book->getSheet(1)->toArray(), JSON_UNESCAPED_UNICODE));
+            $book->disconnectWorksheets();
+        } finally { unlink($path); }
+        $this->get('/api/v1/export/duos/pdf?country=Togo')->assertOk()->assertHeader('Content-Type', 'application/pdf');
 
         Sanctum::actingAs($this->dv);
         $this->getJson('/api/v1/coaching/trio-dashboard?country=Togo')

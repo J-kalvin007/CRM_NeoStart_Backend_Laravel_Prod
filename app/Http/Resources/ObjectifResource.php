@@ -18,6 +18,7 @@ class ObjectifResource extends JsonResource
             'id' => $this->id,
             'user_id' => $this->user_id,
             'user' => $this->whenLoaded('user', function () {
+                if (!$this->user) return null;
                 return [
                     'id' => $this->user->id,
                     'name' => $this->user->name,
@@ -29,8 +30,9 @@ class ObjectifResource extends JsonResource
                     ] : null,
                 ];
             }),
-            'country_id' => $this->user?->country_id,
-            'country_name' => $this->user?->country?->name,
+            'roles' => $this->user?->relationLoaded('roles') ? $this->user->roles->map(fn ($role) => ['id' => $role->id, 'name' => $role->name])->values() : [],
+            'country_id' => $this->country_id ?? $this->user?->country_id,
+            'country_name' => $this->country?->name ?? $this->user?->country?->name,
             'indicator_id' => $this->indicator_id,
             'indicator' => $this->whenLoaded('indicator'),
             'objectif_type_id' => $this->objectif_type_id,

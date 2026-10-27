@@ -788,143 +788,23 @@ class CoachingController extends Controller
     }
 
     /**
-     * Exporter l'état des DUOs en Excel (CSV UTF-8 BOM)
+     * Exporter l'état des DUOs en fichier Excel
      */
     public function exportDuoExcel(Request $request)
     {
-        $dash = $this->duoDashboard($request)->getData(true);
-        $sessions = $dash['sessions'] ?? [];
-
-        $csv = "\xEF\xBB\xBF";
-        $csv .= "Date,Délégé,Pays,Superviseur,Note /20,Respect Canevas %,Points Forts,Axes d'Amélioration,Commentaires Superviseur,Plan d'Action\n";
-
-        foreach ($sessions as $s) {
-            $date = !empty($s['date_duo']) ? date('d/m/Y', strtotime($s['date_duo'])) : '';
-            $delegue = $s['delegate']['name'] ?? $s['evaluated']['name'] ?? '—';
-            $pays = $s['delegate']['country']['name'] ?? '—';
-            $superviseur = $s['evaluator']['name'] ?? $s['supervisor']['name'] ?? '—';
-            $note = $s['note_sur_20'] !== null ? $s['note_sur_20'] . '/20' : ($s['taux_atteinte_pct'] ? $s['taux_atteinte_pct'] . '%' : '—');
-            $canevas = $s['respect_canevas_pct'] ? $s['respect_canevas_pct'] . '%' : '—';
-            $forts = str_replace(["\r", "\n", '"'], [' ', ' ', '""'], (string) ($s['points_forts'] ?? $s['strengths'] ?? ''));
-            $axes = str_replace(["\r", "\n", '"'], [' ', ' ', '""'], (string) ($s['axes_amelioration'] ?? $s['weaknesses'] ?? ''));
-            $comm = str_replace(["\r", "\n", '"'], [' ', ' ', '""'], (string) ($s['commentaires_superviseur'] ?? ''));
-            $plan = str_replace(["\r", "\n", '"'], [' ', ' ', '""'], (string) ($s['plan_action_recommande'] ?? $s['action_plan'] ?? ''));
-
-            $csv .= sprintf(
-                "\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\"\n",
-                $date, $delegue, $pays, $superviseur, $note, $canevas, $forts, $axes, $comm, $plan
-            );
-        }
-
-        return response($csv, 200, [
-            'Content-Type' => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="rapport_duos_' . date('Y-m-d') . '.csv"',
-        ]);
+        $dashboard = $this->duoDashboard($request)->getData(true);
+        $data = app(\App\Services\BusinessReportExports::class)->coaching($request, $dashboard, 'duo', 'xlsx');
+        return app(\App\Services\ReportDocument::class)->download($request, $data);
     }
 
     /**
-     * Exporter l'état des DUOs en PDF / HTML prêt pour impression
+     * Exporter l'état des DUOs en fichier PDF
      */
     public function exportDuoPdf(Request $request)
     {
-        $dash = $this->duoDashboard($request)->getData(true);
-        $kpis = $dash['kpis'] ?? [];
-        $sessions = $dash['sessions'] ?? [];
-
-        $rowsHtml = '';
-        foreach ($sessions as $s) {
-            $date = !empty($s['date_duo']) ? date('d/m/Y', strtotime($s['date_duo'])) : '—';
-            $delegue = htmlspecialchars($s['delegate']['name'] ?? $s['evaluated']['name'] ?? '—');
-            $pays = htmlspecialchars($s['delegate']['country']['name'] ?? '—');
-            $superviseur = htmlspecialchars($s['evaluator']['name'] ?? $s['supervisor']['name'] ?? '—');
-            $note = $s['note_sur_20'] !== null ? "<strong>{$s['note_sur_20']}/20</strong>" : ($s['taux_atteinte_pct'] ? "{$s['taux_atteinte_pct']}%" : '—');
-            $canevas = $s['respect_canevas_pct'] ? "{$s['respect_canevas_pct']}%" : '—';
-            $feedback = htmlspecialchars(mb_strimwidth((string)($s['commentaires_superviseur'] ?? ''), 0, 150, '...'));
-            $plan = htmlspecialchars(mb_strimwidth((string)($s['plan_action_recommande'] ?? $s['action_plan'] ?? ''), 0, 100, '...'));
-
-            $rowsHtml .= "<tr>
-                <td>{$date}</td>
-                <td><strong>{$delegue}</strong><br><small style='color:#64748b;'>{$pays}</small></td>
-                <td>{$superviseur}</td>
-                <td style='text-align:center;'><span class='badge-score'>{$note}</span></td>
-                <td style='text-align:center;'>{$canevas}</td>
-                <td style='font-size:11px; color:#334155;'>{$feedback}</td>
-                <td style='font-size:11px; color:#0050cb;'>{$plan}</td>
-            </tr>";
-        }
-
-        $printDate = date('d/m/Y H:i');
-        $avgScore = $kpis['avg_note_sur_20'] ?? '—';
-        $totalDuos = $kpis['total_duos'] ?? 0;
-
-        $html = "<!DOCTYPE html>
-        <html lang='fr'>
-        <head>
-            <meta charset='UTF-8'>
-            <title>Tableau de Bord DUO — SKYNITY CRM</title>
-            <style>
-                body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b; padding: 24px; margin: 0; background: #fff; }
-                .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0050cb; padding-bottom: 12px; margin-bottom: 16px; }
-                .title { font-size: 20px; font-weight: bold; color: #0050cb; margin: 0; }
-                .meta { font-size: 12px; color: #64748b; }
-                .kpis { display: flex; gap: 16px; margin-bottom: 20px; }
-                .kpi-card { flex: 1; padding: 12px 16px; border-radius: 8px; background: #f8fafc; border: 1px solid #e2e8f0; }
-                .kpi-title { font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: bold; }
-                .kpi-value { font-size: 20px; font-weight: bold; color: #0050cb; margin-top: 4px; }
-                table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
-                th { background-color: #f1f5f9; color: #334155; font-weight: bold; text-align: left; padding: 8px 10px; border-bottom: 1px solid #cbd5e1; }
-                td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
-                tr:nth-child(even) { background-color: #f8fafc; }
-                .badge-score { display: inline-block; padding: 3px 8px; font-size: 12px; font-weight: bold; border-radius: 6px; background: #ecfdf5; color: #059669; }
-                .actions { margin-bottom: 16px; }
-                .btn-print { background: #0050cb; color: #fff; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; }
-                @media print { .actions { display: none; } body { padding: 0; } }
-            </style>
-        </head>
-        <body>
-            <div class='actions'>
-                <button class='btn-print' onclick='window.print()'>🖨️ Imprimer / Enregistrer en PDF</button>
-            </div>
-            <div class='header'>
-                <div>
-                    <h1 class='title'>SKYNITY CRM — Tableau de Bord des Visites en DUO</h1>
-                    <div class='meta'>Suivi du Canevas de Visite & Évaluations des Délégués</div>
-                </div>
-                <div class='meta' style='text-align: right;'>
-                    Édité le : {$printDate}<br>
-                    Direction Médicale & Commerciale
-                </div>
-            </div>
-            <div class='kpis'>
-                <div class='kpi-card'>
-                    <div class='kpi-title'>Total DUOs Réalisés</div>
-                    <div class='kpi-value'>{$totalDuos}</div>
-                </div>
-                <div class='kpi-card'>
-                    <div class='kpi-title'>Note Moyenne de l'Équipe</div>
-                    <div class='kpi-value'>{$avgScore} / 20</div>
-                </div>
-            </div>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Délégué & Pays</th>
-                        <th>Superviseur</th>
-                        <th style='text-align:center;'>Note /20</th>
-                        <th style='text-align:center;'>Canevas %</th>
-                        <th>Commentaires & Points Clés</th>
-                        <th>Plan d'Action Recommandé</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {$rowsHtml}
-                </tbody>
-            </table>
-        </body>
-        </html>";
-
-        return response($html, 200, ['Content-Type' => 'text/html; charset=UTF-8']);
+        $dashboard = $this->duoDashboard($request)->getData(true);
+        $data = app(\App\Services\BusinessReportExports::class)->coaching($request, $dashboard, 'duo', 'pdf');
+        return app(\App\Services\ReportDocument::class)->download($request, $data);
     }
 
     /**
@@ -932,31 +812,9 @@ class CoachingController extends Controller
      */
     public function exportTrioExcel(Request $request)
     {
-        $dash = $this->trioDashboard($request)->getData(true);
-        $sessions = $dash['sessions'] ?? [];
-
-        $csv = "\xEF\xBB\xBF";
-        $csv .= "Date,Superviseur,Pays,Directeur des Ventes (DV),Note /20,Posture Managériale,Feedback DV,Plan d'Action Superviseur\n";
-
-        foreach ($sessions as $s) {
-            $date = !empty($s['date_duo']) ? date('d/m/Y', strtotime($s['date_duo'])) : '';
-            $superviseur = $s['evaluated']['name'] ?? $s['delegate']['name'] ?? '—';
-            $pays = $s['evaluated']['country']['name'] ?? $s['delegate']['country']['name'] ?? '—';
-            $dv = $s['evaluator']['name'] ?? $s['supervisor']['name'] ?? '—';
-            $note = $s['note_sur_20'] !== null ? $s['note_sur_20'] . '/20' : ($s['taux_atteinte_pct'] ? $s['taux_atteinte_pct'] . '%' : '—');
-            $comm = str_replace(["\r", "\n", '"'], [' ', ' ', '""'], (string) ($s['commentaires_superviseur'] ?? ''));
-            $plan = str_replace(["\r", "\n", '"'], [' ', ' ', '""'], (string) ($s['plan_action_recommande'] ?? $s['action_plan'] ?? ''));
-
-            $csv .= sprintf(
-                "\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\"\n",
-                $date, $superviseur, $pays, $dv, $note, '', $comm, $plan
-            );
-        }
-
-        return response($csv, 200, [
-            'Content-Type' => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="rapport_trios_' . date('Y-m-d') . '.csv"',
-        ]);
+        $dashboard = $this->trioDashboard($request)->getData(true);
+        $data = app(\App\Services\BusinessReportExports::class)->coaching($request, $dashboard, 'trio', 'xlsx');
+        return app(\App\Services\ReportDocument::class)->download($request, $data);
     }
 
     /**
@@ -964,101 +822,9 @@ class CoachingController extends Controller
      */
     public function exportTrioPdf(Request $request)
     {
-        $dash = $this->trioDashboard($request)->getData(true);
-        $kpis = $dash['kpis'] ?? [];
-        $sessions = $dash['sessions'] ?? [];
-
-        $rowsHtml = '';
-        foreach ($sessions as $s) {
-            $date = !empty($s['date_duo']) ? date('d/m/Y', strtotime($s['date_duo'])) : '—';
-            $superviseur = htmlspecialchars($s['evaluated']['name'] ?? $s['delegate']['name'] ?? '—');
-            $pays = htmlspecialchars($s['evaluated']['country']['name'] ?? $s['delegate']['country']['name'] ?? '—');
-            $dv = htmlspecialchars($s['evaluator']['name'] ?? $s['supervisor']['name'] ?? '—');
-            $note = $s['note_sur_20'] !== null ? "<strong>{$s['note_sur_20']}/20</strong>" : ($s['taux_atteinte_pct'] ? "{$s['taux_atteinte_pct']}%" : '—');
-            $feedback = htmlspecialchars(mb_strimwidth((string)($s['commentaires_superviseur'] ?? ''), 0, 150, '...'));
-            $plan = htmlspecialchars(mb_strimwidth((string)($s['plan_action_recommande'] ?? $s['action_plan'] ?? ''), 0, 100, '...'));
-
-            $rowsHtml .= "<tr>
-                <td>{$date}</td>
-                <td><strong>{$superviseur}</strong><br><small style='color:#64748b;'>{$pays}</small></td>
-                <td>{$dv}</td>
-                <td style='text-align:center;'><span class='badge-score'>{$note}</span></td>
-                <td style='font-size:11px; color:#334155;'>{$feedback}</td>
-                <td style='font-size:11px; color:#0050cb;'>{$plan}</td>
-            </tr>";
-        }
-
-        $printDate = date('d/m/Y H:i');
-        $avgScore = $kpis['avg_note_sur_20'] ?? '—';
-        $totalTrios = $kpis['total_trios'] ?? 0;
-
-        $html = "<!DOCTYPE html>
-        <html lang='fr'>
-        <head>
-            <meta charset='UTF-8'>
-            <title>Tableau de Bord TRIO — SKYNITY CRM</title>
-            <style>
-                body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b; padding: 24px; margin: 0; background: #fff; }
-                .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0050cb; padding-bottom: 12px; margin-bottom: 16px; }
-                .title { font-size: 20px; font-weight: bold; color: #0050cb; margin: 0; }
-                .meta { font-size: 12px; color: #64748b; }
-                .kpis { display: flex; gap: 16px; margin-bottom: 20px; }
-                .kpi-card { flex: 1; padding: 12px 16px; border-radius: 8px; background: #f8fafc; border: 1px solid #e2e8f0; }
-                .kpi-title { font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: bold; }
-                .kpi-value { font-size: 20px; font-weight: bold; color: #0050cb; margin-top: 4px; }
-                table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
-                th { background-color: #f1f5f9; color: #334155; font-weight: bold; text-align: left; padding: 8px 10px; border-bottom: 1px solid #cbd5e1; }
-                td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
-                tr:nth-child(even) { background-color: #f8fafc; }
-                .badge-score { display: inline-block; padding: 3px 8px; font-size: 12px; font-weight: bold; border-radius: 6px; background: #ecfdf5; color: #059669; }
-                .actions { margin-bottom: 16px; }
-                .btn-print { background: #0050cb; color: #fff; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; }
-                @media print { .actions { display: none; } body { padding: 0; } }
-            </style>
-        </head>
-        <body>
-            <div class='actions'>
-                <button class='btn-print' onclick='window.print()'>🖨️ Imprimer / Enregistrer en PDF</button>
-            </div>
-            <div class='header'>
-                <div>
-                    <h1 class='title'>SKYNITY CRM — Tableau de Bord des Visites en TRIO</h1>
-                    <div class='meta'>Évaluation des Superviseurs par la Direction des Ventes (DV)</div>
-                </div>
-                <div class='meta' style='text-align: right;'>
-                    Édité le : {$printDate}<br>
-                    Direction Commerciale
-                </div>
-            </div>
-            <div class='kpis'>
-                <div class='kpi-card'>
-                    <div class='kpi-title'>Total TRIOs Réalisés</div>
-                    <div class='kpi-value'>{$totalTrios}</div>
-                </div>
-                <div class='kpi-card'>
-                    <div class='kpi-title'>Note Moyenne Superviseurs</div>
-                    <div class='kpi-value'>{$avgScore} / 20</div>
-                </div>
-            </div>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Superviseur & Pays</th>
-                        <th>Directeur des Ventes</th>
-                        <th style='text-align:center;'>Note /20</th>
-                        <th>Feedback DV</th>
-                        <th>Plan d'Action Superviseur</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {$rowsHtml}
-                </tbody>
-            </table>
-        </body>
-        </html>";
-
-        return response($html, 200, ['Content-Type' => 'text/html; charset=UTF-8']);
+        $dashboard = $this->trioDashboard($request)->getData(true);
+        $data = app(\App\Services\BusinessReportExports::class)->coaching($request, $dashboard, 'trio', 'pdf');
+        return app(\App\Services\ReportDocument::class)->download($request, $data);
     }
 }
 
