@@ -140,6 +140,7 @@ class ValidationController extends Controller
         if (in_array($type, ['visit', 'activity_report'])) {
             $activity = \App\Models\Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($id);
             $this->ensureManaged($activity->user_id);
+            if ($type === 'activity_report') abort_unless($activity->hasPublishedReport(), 422, 'Ce compte-rendu n’a pas encore été soumis par son auteur.');
             abort_if($activity->isCalendarActivity(), 422, 'Traitez cette activité avec son planning hebdomadaire.');
             // Visite planifiée : validation du créneau ; compte-rendu : validation du rapport,
             // la visite reste « réalisée » (son statut n'est pas écrasé)
@@ -380,6 +381,7 @@ class ValidationController extends Controller
         if (in_array($type, ['visit', 'activity_report'])) {
             $activity = \App\Models\Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($id);
             $this->ensureManaged($activity->user_id);
+            if ($type === 'activity_report') abort_unless($activity->hasPublishedReport(), 422, 'Ce compte-rendu n’a pas encore été soumis par son auteur.');
             abort_if($activity->isCalendarActivity(), 422, 'Traitez cette activité avec son planning hebdomadaire.');
             // Compte-rendu rejeté : la visite reste réalisée, le délégué corrige son rapport ;
             // visite planifiée refusée : le créneau est refusé

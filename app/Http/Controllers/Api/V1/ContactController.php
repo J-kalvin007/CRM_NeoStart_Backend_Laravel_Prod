@@ -42,8 +42,8 @@ class ContactController extends Controller
             ->with([
                 // L'account doit être chargé sans le DynamicPerimeterScope car un établissement
                 // peut appartenir à un autre utilisateur (ex: admin) que le délégué qui consulte.
-                'account'  => fn($q) => $q->withoutGlobalScopes(),
-                'accounts' => fn($q) => $q->withoutGlobalScopes(),
+                'account'  => fn($q) => $q->withoutGlobalScopes([\App\Models\Scopes\DynamicPerimeterScope::class, \Illuminate\Database\Eloquent\SoftDeletingScope::class]),
+                'accounts' => fn($q) => $q->withoutGlobalScopes([\App\Models\Scopes\DynamicPerimeterScope::class, \Illuminate\Database\Eloquent\SoftDeletingScope::class]),
                 'categories', 'speciality', 'contactType', 'potential', 'influence', 'segmentation', 'delegue',
             ])
             ->when($request->specialite ?? $request->speciality, function($q, $v) {
@@ -314,8 +314,8 @@ class ContactController extends Controller
     public function show(string $id)
     {
         $contact = Contact::with([
-                'account'    => fn($q) => $q->withoutGlobalScopes(),
-                'accounts'   => fn($q) => $q->withoutGlobalScopes(),
+                'account'    => fn($q) => $q->withoutGlobalScopes([\App\Models\Scopes\DynamicPerimeterScope::class, \Illuminate\Database\Eloquent\SoftDeletingScope::class]),
+                'accounts'   => fn($q) => $q->withoutGlobalScopes([\App\Models\Scopes\DynamicPerimeterScope::class, \Illuminate\Database\Eloquent\SoftDeletingScope::class]),
                 'categories',
                 'delegue',
                 'speciality',
@@ -355,11 +355,7 @@ class ContactController extends Controller
                   ->orWhereHas('contacts', fn($sub) => $sub->where('contacts.id', $contact->id));
             })
             ->whereNotIn(\Illuminate\Support\Facades\DB::raw('LOWER(statut)'), ['brouillon', 'draft'])
-            ->where(function ($q) {
-                $q->whereIn('statut', ['realisee', 'effectuee', 'terminee'])
-                  ->orWhereNotNull('report_content')
-                  ->orWhereIn('report_status', ['submitted', 'validated', 'soumis', 'valide', 'rejected', 'rejete']);
-            })
+            ->where(fn ($reports) => $reports->where('activities.user_id', auth()->id())->orWhere(fn ($published) => $published->publishedReports()))
             ->with([
                 'delegue' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class),
                 'contact' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account', 'speciality', 'potential', 'influence']),
@@ -421,11 +417,11 @@ class ContactController extends Controller
 
         $lastVisitData = null;
         if ($lastVisit) {
-            $reportText = $lastVisit->report_content 
-                ?? $lastVisit->notes 
+            $reportText = $lastVisit->canViewReport() ? ($lastVisit->report_content
+                ?? $lastVisit->notes
                 ?? data_get($lastVisit->meta, 'report_summary')
                 ?? data_get($lastVisit->meta, 'feedback')
-                ?? $lastVisit->description;
+                ?? $lastVisit->description) : null;
 
             $lastVisitData = [
                 'id' => (string) $lastVisit->id,
@@ -435,8 +431,8 @@ class ContactController extends Controller
                 'statut' => $lastVisit->statut,
                 'delegue_name' => $lastVisit->delegue?->name ?? 'Délégué',
                 'report_summary' => is_string($reportText) ? $reportText : (is_array($reportText) ? json_encode($reportText, JSON_UNESCAPED_UNICODE) : ''),
-                'products' => $lastVisit->products->map(fn($p) => ['id' => $p->id, 'nom' => $p->nom ?? $p->name])->values(),
-                'samples_count' => $lastVisit->sampleMovements->count(),
+                'products' => $lastVisit->canViewReport() ? $lastVisit->products->map(fn($p) => ['id' => $p->id, 'nom' => $p->nom ?? $p->name])->values() : [],
+                'samples_count' => $lastVisit->canViewReport() ? $lastVisit->sampleMovements->count() : 0,
             ];
         }
 

@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class UserLocation extends Model
 {
-    use HasUuids;
+    use HasUuids, \App\Models\Traits\FiltersSelectedCountry;
 
     protected $fillable = ['user_id', 'lat', 'lng', 'accuracy', 'speed', 'battery', 'recorded_at'];
 

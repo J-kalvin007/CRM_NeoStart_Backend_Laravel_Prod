@@ -47,8 +47,8 @@ class ActivityController extends Controller
         $query = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
             ->with([
                 'delegue' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class),
-                'contact' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account' => fn ($account) => $account->withoutGlobalScopes(), 'accounts' => fn ($account) => $account->withoutGlobalScopes(), 'speciality', 'potential', 'influence']),
-                'contacts' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account' => fn ($account) => $account->withoutGlobalScopes(), 'accounts' => fn ($account) => $account->withoutGlobalScopes(), 'speciality', 'potential', 'influence']),
+                'contact' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account' => fn ($account) => $account->withoutGlobalScopes([\App\Models\Scopes\DynamicPerimeterScope::class, \Illuminate\Database\Eloquent\SoftDeletingScope::class]), 'accounts' => fn ($account) => $account->withoutGlobalScopes([\App\Models\Scopes\DynamicPerimeterScope::class, \Illuminate\Database\Eloquent\SoftDeletingScope::class]), 'speciality', 'potential', 'influence']),
+                'contacts' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account' => fn ($account) => $account->withoutGlobalScopes([\App\Models\Scopes\DynamicPerimeterScope::class, \Illuminate\Database\Eloquent\SoftDeletingScope::class]), 'accounts' => fn ($account) => $account->withoutGlobalScopes([\App\Models\Scopes\DynamicPerimeterScope::class, \Illuminate\Database\Eloquent\SoftDeletingScope::class]), 'speciality', 'potential', 'influence']),
                 'account' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class),
                 'accompanyingUser' => fn($q) => $q->withoutGlobalScopes(),
                 'duoActivityType',
@@ -136,11 +136,7 @@ class ActivityController extends Controller
 
         if ($request->boolean('reports_only')) {
             $query->visits();
-            if ($isGlobal || $isManager) {
-                $query->publishedReports();
-            } else {
-                $query->where(fn ($reports) => $reports->where('activities.user_id', $user->id)->orWhere(fn ($shared) => $shared->publishedReports()));
-            }
+            $query->where(fn ($reports) => $reports->where('activities.user_id', $user->id)->orWhere(fn ($shared) => $shared->publishedReports()));
         }
         \App\Support\CountryFilter::apply($query);
         $perPage = max(1, min(500, (int) $request->query('per_page', 200)));
@@ -361,7 +357,7 @@ class ActivityController extends Controller
 
         return new ActivityResource($activity->load([
             'delegue', 
-            'contact' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account' => fn ($account) => $account->withoutGlobalScopes(), 'accounts' => fn ($account) => $account->withoutGlobalScopes(), 'speciality', 'potential', 'influence']),
+            'contact' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account' => fn ($account) => $account->withoutGlobalScopes([\App\Models\Scopes\DynamicPerimeterScope::class, \Illuminate\Database\Eloquent\SoftDeletingScope::class]), 'accounts' => fn ($account) => $account->withoutGlobalScopes([\App\Models\Scopes\DynamicPerimeterScope::class, \Illuminate\Database\Eloquent\SoftDeletingScope::class]), 'speciality', 'potential', 'influence']),
             'account' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class), 
             'products' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class), 
             'sampleMovements'
@@ -386,8 +382,8 @@ class ActivityController extends Controller
         $activity = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
             ->with([
                 'delegue',
-                'contact' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account' => fn ($account) => $account->withoutGlobalScopes(), 'accounts' => fn ($account) => $account->withoutGlobalScopes(), 'speciality', 'potential', 'influence']),
-                'contacts' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account' => fn ($account) => $account->withoutGlobalScopes(), 'accounts' => fn ($account) => $account->withoutGlobalScopes(), 'speciality', 'potential', 'influence']),
+                'contact' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account' => fn ($account) => $account->withoutGlobalScopes([\App\Models\Scopes\DynamicPerimeterScope::class, \Illuminate\Database\Eloquent\SoftDeletingScope::class]), 'accounts' => fn ($account) => $account->withoutGlobalScopes([\App\Models\Scopes\DynamicPerimeterScope::class, \Illuminate\Database\Eloquent\SoftDeletingScope::class]), 'speciality', 'potential', 'influence']),
+                'contacts' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account' => fn ($account) => $account->withoutGlobalScopes([\App\Models\Scopes\DynamicPerimeterScope::class, \Illuminate\Database\Eloquent\SoftDeletingScope::class]), 'accounts' => fn ($account) => $account->withoutGlobalScopes([\App\Models\Scopes\DynamicPerimeterScope::class, \Illuminate\Database\Eloquent\SoftDeletingScope::class]), 'speciality', 'potential', 'influence']),
                 'account' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class),
                 'tourPlan',
                 'duoActivityType',
@@ -500,6 +496,13 @@ class ActivityController extends Controller
 
         if (!$canDecide && $targetStatus !== null && $targetStatus !== $activity->statut && in_array($targetStatus, $decisionStatuts, true) && !$dateChanged) {
             return response()->json(['message' => 'La validation ou le refus d\'une visite revient à votre responsable.'], 403);
+        }
+        if ((string) $activity->user_id !== (string) auth()->id()
+            && (array_key_exists('report_content', $validatedData) || in_array($validatedData['report_status'] ?? null, ['draft', 'submitted'], true))) {
+            abort(403, 'Seul l’auteur peut rédiger ou soumettre son compte-rendu.');
+        }
+        if (in_array($validatedData['report_status'] ?? null, ['validated', 'rejected'], true)) {
+            abort_unless($activity->hasPublishedReport(), 422, 'Ce compte-rendu n’a pas encore été soumis par son auteur.');
         }
         if (!$canDecide && in_array($validatedData['report_status'] ?? null, ['validated', 'rejected'], true)) {
             return response()->json(['message' => 'La validation d\'un compte-rendu revient à votre responsable.'], 403);
@@ -738,7 +741,7 @@ class ActivityController extends Controller
 
         return new ActivityResource($activity->load([
             'delegue', 
-            'contact' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account' => fn ($account) => $account->withoutGlobalScopes(), 'accounts' => fn ($account) => $account->withoutGlobalScopes(), 'speciality', 'potential', 'influence']),
+            'contact' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->with(['account' => fn ($account) => $account->withoutGlobalScopes([\App\Models\Scopes\DynamicPerimeterScope::class, \Illuminate\Database\Eloquent\SoftDeletingScope::class]), 'accounts' => fn ($account) => $account->withoutGlobalScopes([\App\Models\Scopes\DynamicPerimeterScope::class, \Illuminate\Database\Eloquent\SoftDeletingScope::class]), 'speciality', 'potential', 'influence']),
             'account' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class), 
             'products' => fn($q) => $q->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class),
             'sampleMovements' => fn($q) => $q->where('movement_type', 'distribution')->with('product'),
@@ -826,6 +829,7 @@ class ActivityController extends Controller
 
         // Visite déjà réalisée : la décision porte sur son compte-rendu, la visite reste réalisée
         if (in_array($activity->statut, ['realisee', 'effectuee', 'terminee'], true)) {
+            abort_unless($activity->hasPublishedReport(), 422, 'Ce compte-rendu n’a pas encore été soumis par son auteur.');
             $approved = $st === 'validee' || $st === 'validated';
             $activity->update([
                 'report_status' => $approved ? 'validated' : 'rejected',

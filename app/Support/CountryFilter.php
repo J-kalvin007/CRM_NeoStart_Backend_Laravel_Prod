@@ -9,20 +9,32 @@ use Illuminate\Support\Facades\Schema;
 /** A selected country narrows an already authorized query; it never grants access. */
 class CountryFilter
 {
-    public static function apply(Builder $query, ?string $value = null): Builder
+    public static function selectedValue(): ?string
     {
-        $value ??= request()->header('X-Country-Id') ?? request()->query('country_id');
-        if (!$value || in_array($value, ['group', 'default'], true)) {
-            return $query;
-        }
+        return request()->header('X-Country-Id') ?? request()->query('country_id') ?? request()->query('country') ?? request()->query('pays');
+    }
 
+    public static function resolveCountryId(?string $value = null): ?string
+    {
+        $value ??= self::selectedValue();
+        if (!$value || in_array($value, ['group', 'default'], true)) return null;
         $cache = request()->attributes->get('crm.filter_countries', []);
         if (!array_key_exists($value, $cache)) {
             $cache[$value] = Country::query()->where(fn ($country) => $country
                 ->where('id', $value)->orWhere('name', $value)->orWhere('iso_code', $value))->value('id');
             request()->attributes->set('crm.filter_countries', $cache);
         }
-        $countryId = $cache[$value];
+        return $cache[$value];
+    }
+
+    public static function apply(Builder $query, ?string $value = null): Builder
+    {
+        $value ??= self::selectedValue();
+        if (!$value || in_array($value, ['group', 'default'], true)) {
+            return $query;
+        }
+
+        $countryId = self::resolveCountryId($value);
         if (!$countryId) {
             return $query->whereRaw('1 = 0');
         }
@@ -47,6 +59,16 @@ class CountryFilter
                             ->where('users.country_id', $countryId))));
             }
             return $query->where($table . '.country_id', $countryId);
+        }
+        // Legacy KOL rows have no country or owner: never assign them to a selected country.
+        if ($table === 'kols') {
+            return $query->whereRaw('1 = 0');
+        }
+        if ($table === 'digital_supports') {
+            return $query->whereHas('product', fn ($product) => self::apply($product, $value));
+        }
+        if ($table === 'kol_profiles') {
+            return $query->whereHas('contact', fn ($contact) => self::apply($contact, $value));
         }
         if (method_exists($model, 'user')) {
             return $query->whereHas('user', fn ($user) => $user

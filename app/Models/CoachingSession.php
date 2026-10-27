@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class CoachingSession extends Model
 {
+    use \App\Models\Traits\FiltersSelectedCountry;
+
     use HasFactory, HasUuids, SoftDeletes;
 
     protected $fillable = [

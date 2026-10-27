@@ -10,6 +10,8 @@ use App\Models\Traits\HasActivityLogs;
 
 class Campaign extends Model
 {
+    use \App\Models\Traits\FiltersSelectedCountry;
+
     use HasFactory, HasUuids, SoftDeletes, HasActivityLogs;
 
     protected $fillable = [

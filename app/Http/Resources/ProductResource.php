@@ -9,15 +9,17 @@ class ProductResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $selected = \App\Support\CountryFilter::selectedValue();
+        $hasSelection = $selected && !in_array($selected, ['group', 'default'], true);
+        $countryId = $hasSelection ? \App\Support\CountryFilter::resolveCountryId($selected) : null;
         $countryPivot = null;
         if ($this->relationLoaded('countries') && $this->countries->isNotEmpty()) {
-            $countryId = $request->input('country_id') ?? $request->header('X-Country-Id') ?? auth()->user()?->country_id;
-            $countryPivot = ($countryId ? $this->countries->firstWhere('id', $countryId) : null) ?? $this->countries->first();
+            $countryPivot = $hasSelection ? $this->countries->firstWhere('id', $countryId) : $this->countries->first();
         }
 
         return [
             'id'             => $this->id,
-            'countries'      => $this->whenLoaded('countries', fn() => $this->countries->map(function ($c) {
+            'countries'      => $this->whenLoaded('countries', fn() => $this->countries->when($hasSelection, fn ($countries) => $countries->where('id', $countryId))->values()->map(function ($c) {
                 return [
                     'id' => $c->id,
                     'country_id' => $c->id,

@@ -9,7 +9,7 @@ class ActivityResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        return [
+        $data = [
             'id'             => $this->id,
             'user_id'        => $this->user_id,
             'delegate_id'    => $this->user_id,
@@ -139,5 +139,6 @@ class ActivityResource extends JsonResource
             'updated_at'     => $this->updated_at,
             'deleted_at'     => $this->deleted_at,
         ];
+        return $this->resource->filterReportPayload($data);
     }
 }

@@ -10,6 +10,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class SampleMovement extends Model
 {
+    use \App\Models\Traits\FiltersSelectedCountry;
+
     use HasFactory, HasUuids;
     use HasActivityLogs;
 

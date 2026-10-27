@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 
 class PharmacovigilanceReport extends Model
 {
+    use \App\Models\Traits\FiltersSelectedCountry;
+
     use HasFactory, HasUuids;
 
     protected $fillable = [

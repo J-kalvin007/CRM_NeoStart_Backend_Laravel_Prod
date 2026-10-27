@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class SampleRequest extends Model
 {
+    use \App\Models\Traits\FiltersSelectedCountry;
+
     use HasFactory, HasUuids;
 
     protected $fillable = [

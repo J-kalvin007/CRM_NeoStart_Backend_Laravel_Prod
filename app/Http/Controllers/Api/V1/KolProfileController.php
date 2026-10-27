@@ -67,19 +67,6 @@ class KolProfileController extends Controller {
             ];
         });
 
-        if ($kols->isEmpty()) {
-            return response()->json(["data" => [
-                [
-                    "id" => "1",
-                    "name" => "Pr. Awa Ndoye",
-                    "specialty" => "Cardiologie",
-                    "institution" => "Hôpital Principal",
-                    "influence_level" => "International",
-                    "engagement_score" => 92
-                ]
-            ]]);
-        }
-
         return response()->json(["data" => $kols]);
     }
 }

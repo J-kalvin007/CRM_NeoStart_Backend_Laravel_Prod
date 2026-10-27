@@ -252,6 +252,8 @@ class ActivityReportController extends Controller
             "Ce compte-rendu n'appartient pas à un délégué de votre équipe."
         );
 
+        abort_unless($activity->hasPublishedReport(), 422, 'Ce compte-rendu n’a pas encore été soumis par son auteur.');
+
         $status = $request->input('status') ?? ($request->input('action') === 'validate' || $request->input('action') === 'validated' ? 'validated' : ($request->input('action') === 'reject' || $request->input('action') === 'rejected' ? 'rejected' : null));
         $request->merge(['status' => $status]);
 

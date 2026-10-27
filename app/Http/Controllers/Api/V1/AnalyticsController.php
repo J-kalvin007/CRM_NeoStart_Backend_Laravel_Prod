@@ -509,6 +509,7 @@ class AnalyticsController extends Controller
     public function objectionsStats(Request $request)
     {
         $stats = DB::table('activity_objections')
+            ->whereIn('activity_objections.activity_id', Activity::query()->select('activities.id'))
             ->join('objections', 'activity_objections.objection_id', '=', 'objections.id')
             ->select(
                 'objections.title',
@@ -629,9 +630,9 @@ class AnalyticsController extends Controller
             $specialite = $act->contact?->specialite ?? data_get($act->contact?->meta, 'specialite') ?? '—';
             $etablissement = $act->account?->nom ?? $act->contact?->account?->nom ?? $act->establishment ?? '—';
             $pays = $act->contact?->pays ?? $act->account?->pays ?? $act->delegue?->country ?? $act->delegue?->pays ?? '—';
-            $prods = $act->products->pluck('nom')->join('; ');
-            $samples = $act->sampleMovements->map(fn($sm) => ($sm->product?->nom ?? 'Produit') . ' (x' . ($sm->quantity ?? 1) . ')')->join('; ');
-            $report = str_replace(["\r", "\n", '"'], [' ', ' ', '""'], (string) ($act->report_content ?? $act->notes ?? ''));
+            $prods = $act->canViewReport() ? $act->products->pluck('nom')->join('; ') : '';
+            $samples = $act->canViewReport() ? $act->sampleMovements->map(fn($sm) => ($sm->product?->nom ?? 'Produit') . ' (x' . ($sm->quantity ?? 1) . ')')->join('; ') : '';
+            $report = str_replace(["\r", "\n", '"'], [' ', ' ', '""'], (string) ($act->canViewReport() ? ($act->report_content ?? $act->notes ?? '') : ''));
 
             $csv .= sprintf(
                 "\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\"\n",
@@ -693,7 +694,7 @@ class AnalyticsController extends Controller
             $delegue = htmlspecialchars($act->delegue?->name ?? '—');
             $pays = htmlspecialchars($act->contact?->pays ?? $act->account?->pays ?? $act->delegue?->country ?? $act->delegue?->pays ?? '—');
             $date = $act->date_activite ? \Illuminate\Support\Carbon::parse($act->date_activite)->format('d/m/Y') : '—';
-            $notes = htmlspecialchars(mb_strimwidth((string)($act->report_content ?? $act->notes ?? '—'), 0, 150, '...'));
+            $notes = htmlspecialchars(mb_strimwidth((string)($act->canViewReport() ? ($act->report_content ?? $act->notes ?? '—') : '—'), 0, 150, '...'));
             $prods = htmlspecialchars($act->products->pluck('nom')->join(', '));
             $statut = htmlspecialchars($act->statut ?? '—');
 

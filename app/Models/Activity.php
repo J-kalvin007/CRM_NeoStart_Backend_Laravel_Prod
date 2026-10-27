@@ -19,14 +19,42 @@ class Activity extends Model
 
     public const PUBLISHED_REPORT_STATUSES = ['submitted', 'soumis', 'validated', 'valide', 'rejected', 'rejete', 'modified'];
 
+    public function hasPublishedReport(): bool
+    {
+        return in_array(strtolower(trim((string) $this->report_status)), self::PUBLISHED_REPORT_STATUSES, true);
+    }
+
+    public function canViewReport(): bool
+    {
+        return $this->hasPublishedReport() || (auth()->check() && (string) auth()->id() === (string) $this->user_id);
+    }
+
     public function getReportContentAttribute($value): ?string
     {
-        // A scheduled/completed visit can be visible while its report is still private.
-        if (auth()->check() && (string) auth()->id() !== (string) $this->user_id
-            && !in_array(strtolower(trim((string) $this->report_status)), self::PUBLISHED_REPORT_STATUSES, true)) {
-            return null;
+        return $this->canViewReport() ? $value : null;
+    }
+
+    /** Apply the same privacy contract to resources, nested relations, sync and raw model JSON. */
+    public function filterReportPayload(array $data): array
+    {
+        $data['report_visible'] = $this->canViewReport();
+        $hasDraft = trim((string) $this->getRawOriginal('report_content')) !== ''
+            || !empty($this->meta['resultat']) || !empty($this->meta['prochaine_action']) || !empty($this->meta['pharmacy_inventory'])
+            || in_array($this->statut, ['realisee', 'effectuee', 'terminee', 'cloturee', 'soumis_definitif'], true);
+        if ($this->isCalendarActivity() || $data['report_visible'] || !$hasDraft) return $data;
+        foreach (['report_content', 'notes', 'signature', 'signature_base64', 'prochain_rdv', 'niveau_interet',
+            'motif', 'resultat', 'actions', 'pharmacy_inventory', 'activity_result_id', 'meta'] as $field) {
+            if (array_key_exists($field, $data)) $data[$field] = null;
         }
-        return $value;
+        foreach (['products', 'objections', 'samples', 'sample_movements', 'sampleMovements', 'documents'] as $field) {
+            if (array_key_exists($field, $data)) $data[$field] = [];
+        }
+        return $data;
+    }
+
+    public function toArray(): array
+    {
+        return $this->filterReportPayload(parent::toArray());
     }
 
     public function scopePublishedReports($query)

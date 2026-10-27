@@ -7,12 +7,14 @@ use App\Services\PerimeterService;
 
 trait HasPerimeter
 {
+    use FiltersSelectedCountry;
+
     /**
      * The "booted" method of the model.
      *
      * @return void
      */
-    protected static function booted()
+    protected static function bootHasPerimeter()
     {
         static::addGlobalScope(new DynamicPerimeterScope);
     }

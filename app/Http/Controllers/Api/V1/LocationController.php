@@ -84,12 +84,15 @@ class LocationController extends Controller
 
         $date = Carbon::parse($request->query('date', now()->toDateString()));
 
+        $delegate = User::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
+            ->findOrFail($id, ['id', 'name', 'last_lat', 'last_lng', 'last_location_at']);
+
         $points = UserLocation::where('user_id', $id)
             ->whereBetween('recorded_at', [$date->copy()->startOfDay(), $date->copy()->endOfDay()])
             ->orderBy('recorded_at')
             ->get(['lat', 'lng', 'accuracy', 'speed', 'battery', 'recorded_at']);
 
-        $delegate = User::withoutGlobalScopes()->find($id, ['id', 'name', 'last_lat', 'last_lng', 'last_location_at']);
+
 
         return response()->json([
             'delegate' => $delegate,

@@ -102,6 +102,7 @@ class Phase8ReportsSamplesTest extends TestCase
             'gps_debut_lat' => 5.3450,
             'gps_debut_lng' => -3.9820,
             'statut'        => 'realisee',
+            'report_status' => 'submitted',
             'activity_type' => 'visite',
             'notes'         => 'Compte rendu soumis.',
         ]);

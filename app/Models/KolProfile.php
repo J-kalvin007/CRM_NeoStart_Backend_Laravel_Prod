@@ -9,6 +9,8 @@ use App\Models\Traits\HasActivityLogs;
 
 class KolProfile extends Model
 {
+    use \App\Models\Traits\FiltersSelectedCountry;
+
     use HasFactory, HasUuids, HasActivityLogs;
 
     protected $fillable = [
