@@ -502,7 +502,7 @@ class ActivityController extends Controller
             abort(403, 'Seul l’auteur peut rédiger ou soumettre son compte-rendu.');
         }
         if (in_array($validatedData['report_status'] ?? null, ['validated', 'rejected'], true)) {
-            abort_unless($activity->hasPublishedReport(), 422, 'Ce compte-rendu n’a pas encore été soumis par son auteur.');
+            abort(422, 'Les comptes rendus sont uniquement enregistrés en brouillon ou soumis, sans validation ni rejet.');
         }
         if (!$canDecide && in_array($validatedData['report_status'] ?? null, ['validated', 'rejected'], true)) {
             return response()->json(['message' => 'La validation d\'un compte-rendu revient à votre responsable.'], 403);
@@ -828,31 +828,8 @@ class ActivityController extends Controller
         }
 
         // Visite déjà réalisée : la décision porte sur son compte-rendu, la visite reste réalisée
-        if (in_array($activity->statut, ['realisee', 'effectuee', 'terminee'], true)) {
-            abort_unless($activity->hasPublishedReport(), 422, 'Ce compte-rendu n’a pas encore été soumis par son auteur.');
-            $approved = $st === 'validee' || $st === 'validated';
-            $activity->update([
-                'report_status' => $approved ? 'validated' : 'rejected',
-                'rejection_reason' => $approved ? null : $rejectionReason,
-                'is_locked' => $approved,
-                'validated_by_id' => auth()->id(),
-                'validation_date' => now(),
-            ]);
-            if ($activity->user) {
-                NotificationController::sendNotification(
-                    $activity->user,
-                    $approved ? 'Compte-rendu validé' : 'Compte-rendu rejeté',
-                    $approved ? 'Votre compte-rendu a été validé.' : "Votre compte-rendu a été rejeté. Motif : {$rejectionReason}",
-                    'report_validation',
-                    'delegate',
-                    ['activity_id' => (string) $activity->id]
-                );
-            }
-            return response()->json([
-                'message' => $approved ? 'Compte-rendu validé.' : 'Compte-rendu rejeté.',
-                'data' => new ActivityResource($activity->load(['delegue', 'contact', 'account', 'products'])),
-            ]);
-        }
+        abort_if(in_array($activity->statut, ['realisee', 'effectuee', 'terminee'], true), 422, 'Les comptes rendus sont uniquement enregistrés en brouillon ou soumis, sans validation ni rejet.');
+
 
         $notes = $activity->notes;
         if (in_array($st, ['rejetee', 'refusee']) && $rejectionReason) {

@@ -5,9 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Activity;
-use App\Services\NotificationService;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\Auth;
 use OpenApi\Attributes as OA;
 
 use App\Http\Controllers\Api\V1\NotificationController;
@@ -59,7 +57,6 @@ class ActivityReportController extends Controller
 
         abort_unless((string) $activity->user_id === (string) auth()->id(), 403, 'Seul le délégué de cette visite peut rédiger son compte-rendu.');
         abort_if($activity->isCalendarActivity(), 422, 'Cette activité ne nécessite pas de compte-rendu de visite.');
-        abort_if($activity->report_status === 'validated', 422, 'Ce compte-rendu a déjà été validé par votre responsable.');
 
         // RÈGLE : Si on tente de soumettre le rapport d'aujourd'hui mais qu'il existe des rapports non soumis des jours précédents
         if ($validated['report_status'] === 'submitted') {
@@ -77,7 +74,7 @@ class ActivityReportController extends Controller
                     ->whereIn('statut', ['en_cours', 'realisee'])
                     ->where(function ($q) {
                         $q->whereNull('report_status')
-                          ->orWhereIn('report_status', ['draft', 'rejected']);
+                          ->orWhereIn('report_status', ['draft', 'brouillon']);
                     })
                     ->count();
 
@@ -245,46 +242,6 @@ class ActivityReportController extends Controller
     )]
     public function validateReport(Request $request, Activity $activity)
     {
-        $user = $request->user();
-        abort_unless(
-            $user->can('scope:global') || $user->hasAnyRole(['superadmin', 'super-admin', 'admin']) || $user->manages($activity->user_id),
-            403,
-            "Ce compte-rendu n'appartient pas à un délégué de votre équipe."
-        );
-
-        abort_unless($activity->hasPublishedReport(), 422, 'Ce compte-rendu n’a pas encore été soumis par son auteur.');
-
-        $status = $request->input('status') ?? ($request->input('action') === 'validate' || $request->input('action') === 'validated' ? 'validated' : ($request->input('action') === 'reject' || $request->input('action') === 'rejected' ? 'rejected' : null));
-        $request->merge(['status' => $status]);
-
-        $validated = $request->validate([
-            'status' => 'required|in:validated,rejected',
-            'rejection_reason' => 'required_if:status,rejected|nullable|string'
-        ]);
-
-        $activity->update([
-            'report_status' => $validated['status'],
-            'rejection_reason' => $validated['rejection_reason'] ?? null,
-            'validated_by_id' => Auth::id(),
-            'validation_date' => Carbon::now()
-        ]);
-
-        // Notification au délégué & manager
-        $title = $validated['status'] === 'validated' ? 'Compte-rendu validé' : 'Compte-rendu rejeté';
-        $message = "Votre compte-rendu a été {$validated['status']}.";
-        if ($validated['status'] === 'rejected') {
-            $message .= " Motif : " . $validated['rejection_reason'];
-        }
-
-        NotificationController::sendNotification(
-            $activity->user_id ?? $activity->user,
-            $title,
-            $message,
-            'report_validation',
-            'delegate',
-            ['activity_id' => (string) $activity->id]
-        );
-
-        return response()->json($activity);
+        abort(422, 'Les comptes rendus sont uniquement enregistrés en brouillon ou soumis, sans validation ni rejet.');
     }
 }

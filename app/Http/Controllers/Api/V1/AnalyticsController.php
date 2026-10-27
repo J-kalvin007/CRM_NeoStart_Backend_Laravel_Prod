@@ -468,23 +468,8 @@ class AnalyticsController extends Controller
             ];
         })->values();
 
-        // 4. pending_reports
-        // Visites en attente de validation depuis plus de 24h
-        // Assuming status = 'terminee' or 'en_attente_validation' but not 'validee'
-        $pendingReportsActivities = Activity::with('delegue')
-            ->whereIn('user_id', $teamUserIds)
-            ->where('report_status', 'submitted')
-            ->where('updated_at', '<=', now()->subHours(24))
-            ->get();
-            
-        $pendingReports = $pendingReportsActivities->map(function($a) {
-            return [
-                'delegate_id' => $a->user_id,
-                'delegate_name' => $a->delegue->name ?? 'Inconnu',
-                'activity_id' => $a->id,
-                'waiting_since' => $a->updated_at->format('Y-m-d H:i:s'),
-            ];
-        })->values();
+        // Kept as an empty compatibility key: submitted reports require no decision.
+        $pendingReports = collect();
 
         return response()->json([
             'late_delegates' => $lateDelegates,

@@ -11,7 +11,7 @@ use Laravel\Sanctum\Sanctum;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
 
-/** Statuts du circuit visite → compte-rendu → validation tels que lus par le web et le mobile. */
+/** Circuit visite → brouillon privé → compte-rendu soumis, sans décision sur le rapport. */
 class VisitWorkflowStatusTest extends TestCase
 {
     use RefreshDatabase;
@@ -45,30 +45,30 @@ class VisitWorkflowStatusTest extends TestCase
         ], $attrs));
     }
 
-    public function test_report_rejection_keeps_visit_realised_and_reopens_it(): void
+    public function test_report_rejection_is_disabled_and_keeps_the_submission(): void
     {
         $activity = $this->visit(['statut' => 'realisee', 'report_status' => 'submitted', 'is_locked' => true, 'gps_debut_lat' => 5.3, 'gps_debut_lng' => -3.9]);
         Sanctum::actingAs($this->supervisor);
 
-        $this->postJson("/api/v1/validations/activity_report/{$activity->id}/reject", ['rejection_reason' => 'Produits manquants'])->assertOk();
+        $this->postJson("/api/v1/validations/activity_report/{$activity->id}/reject", ['rejection_reason' => 'Produits manquants'])->assertUnprocessable();
 
         $activity->refresh();
         $this->assertSame('realisee', $activity->statut);
-        $this->assertSame('rejected', $activity->report_status);
-        $this->assertSame('Produits manquants', $activity->rejection_reason);
-        $this->assertFalse((bool) $activity->is_locked);
+        $this->assertSame('submitted', $activity->report_status);
+        $this->assertNull($activity->rejection_reason);
+        $this->assertTrue((bool) $activity->is_locked);
     }
 
-    public function test_report_approval_keeps_visit_realised(): void
+    public function test_report_approval_is_disabled_and_keeps_the_submission(): void
     {
         $activity = $this->visit(['statut' => 'realisee', 'report_status' => 'submitted']);
         Sanctum::actingAs($this->supervisor);
 
-        $this->postJson("/api/v1/validations/activity_report/{$activity->id}/approve")->assertOk();
+        $this->postJson("/api/v1/validations/activity_report/{$activity->id}/approve")->assertUnprocessable();
 
         $activity->refresh();
         $this->assertSame('realisee', $activity->statut);
-        $this->assertSame('validated', $activity->report_status);
+        $this->assertSame('submitted', $activity->report_status);
     }
 
     public function test_planned_visit_approval_does_not_validate_a_report(): void
@@ -101,6 +101,20 @@ class VisitWorkflowStatusTest extends TestCase
             ->assertOk()
             ->assertJsonPath('report_status', 'submitted');
 
+        $this->assertNull($activity->fresh()->rejection_reason);
+    }
+
+    public function test_submitted_reports_are_consultable_but_never_enter_the_validation_hub(): void
+    {
+        $activity = $this->visit(['statut' => 'realisee', 'report_status' => 'submitted', 'report_content' => 'Compte rendu définitif']);
+        Sanctum::actingAs($this->supervisor);
+        $this->getJson('/api/v1/validations/pending')->assertOk()->assertJsonCount(0, 'data');
+        $this->getJson('/api/v1/activities?reports_only=1')->assertOk()->assertJsonPath('data.0.report_status', 'submitted');
+        foreach (['validated', 'rejected'] as $status) {
+            $this->postJson('/api/v1/activities/'.$activity->id.'/report/validate', ['status' => $status, 'rejection_reason' => 'Sans effet'])->assertUnprocessable();
+            $this->putJson('/api/v1/activities/'.$activity->id, ['report_status' => $status])->assertUnprocessable();
+        }
+        $this->assertSame('submitted', $activity->fresh()->report_status);
         $this->assertNull($activity->fresh()->rejection_reason);
     }
 }

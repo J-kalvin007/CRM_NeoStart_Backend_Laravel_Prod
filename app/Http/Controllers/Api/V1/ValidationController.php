@@ -93,20 +93,9 @@ class ValidationController extends Controller
                     'contact' => trim(($activity->contact?->prenom ?? '') . ' ' . ($activity->contact?->nom ?? '')),
                 ])->values(),
             ]);
-        $pendingReports = \App\Models\Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
-            ->visits()->with(['delegue', 'contact'])->tap($inTeam)->where('report_status', 'submitted')->get()
-            ->map(fn ($activity) => [
-                'id' => (string) $activity->id, 'type' => 'activity_report',
-                'nom' => $activity->contact?->nom ?? $activity->activity_type_name,
-                'prenom' => $activity->contact?->prenom,
-                'created_by' => $activity->delegue?->name, 'created_at' => $activity->updated_at,
-                'date_activite' => $activity->date_activite, 'report_content' => $activity->report_content,
-            ]);
-
         $pending = $pendingContacts
             ->concat($pendingAccounts)
             ->concat($pendingTourPlans)
-            ->concat($pendingReports)
             ->sortByDesc('created_at')
             ->values();
 
@@ -130,6 +119,7 @@ class ValidationController extends Controller
     )]
     public function approve(Request $request, string $type, string $id)
     {
+        abort_if($type === 'activity_report', 422, 'Les comptes rendus sont uniquement enregistrés en brouillon ou soumis, sans validation ni rejet.');
         $user = auth()->user();
         if ($user && $user->hasAnyRole(['delegue', 'delegue_medical', 'delegate', 'Délégué', 'Délégué Médical'])) {
             return response()->json([
@@ -137,17 +127,14 @@ class ValidationController extends Controller
             ], 403);
         }
 
-        if (in_array($type, ['visit', 'activity_report'])) {
+        if ($type === 'visit') {
             $activity = \App\Models\Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($id);
             $this->ensureManaged($activity->user_id);
-            if ($type === 'activity_report') abort_unless($activity->hasPublishedReport(), 422, 'Ce compte-rendu n’a pas encore été soumis par son auteur.');
+            abort_if(in_array($activity->statut, ['realisee', 'effectuee', 'terminee'], true), 422, 'La visite est déjà réalisée. Son compte-rendu ne nécessite aucune décision.');
             abort_if($activity->isCalendarActivity(), 422, 'Traitez cette activité avec son planning hebdomadaire.');
-            // Visite planifiée : validation du créneau ; compte-rendu : validation du rapport,
-            // la visite reste « réalisée » (son statut n'est pas écrasé)
+            // La décision concerne uniquement une visite encore planifiée.
             $activity->update(array_merge(
-                $type === 'activity_report'
-                    ? ['report_status' => 'validated']
-                    : ['statut' => 'validee'],
+                ['statut' => 'validee'],
                 ['rejection_reason' => null, 'validated_by_id' => auth()->id(), 'validation_date' => now()]
             ));
 
@@ -172,8 +159,8 @@ class ValidationController extends Controller
             if ($recipient) {
                 NotificationController::sendNotification(
                     $recipient,
-                    'Visite / Compte-rendu validé',
-                    "Votre " . ($type === 'activity_report' ? 'compte-rendu de visite' : 'visite planifiée') . " a été validé(e) par votre responsable.",
+                    'Visite planifiée validée',
+                    "Votre " . 'visite planifiée' . " a été validé(e) par votre responsable.",
                     'validation',
                     'delegate',
                     ['id' => (string) $activity->id, 'type' => $type]
@@ -369,6 +356,7 @@ class ValidationController extends Controller
     )]
     public function reject(Request $request, string $type, string $id)
     {
+        abort_if($type === 'activity_report', 422, 'Les comptes rendus sont uniquement enregistrés en brouillon ou soumis, sans validation ni rejet.');
         $user = auth()->user();
         if ($user && $user->hasAnyRole(['delegue', 'delegue_medical', 'delegate', 'Délégué', 'Délégué Médical'])) {
             return response()->json([
@@ -378,17 +366,15 @@ class ValidationController extends Controller
 
         $reason = $request->input('rejection_reason') ?? $request->input('motif') ?? $request->input('reason');
 
-        if (in_array($type, ['visit', 'activity_report'])) {
+        if ($type === 'visit') {
             $activity = \App\Models\Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($id);
             $this->ensureManaged($activity->user_id);
-            if ($type === 'activity_report') abort_unless($activity->hasPublishedReport(), 422, 'Ce compte-rendu n’a pas encore été soumis par son auteur.');
+            abort_if(in_array($activity->statut, ['realisee', 'effectuee', 'terminee'], true), 422, 'La visite est déjà réalisée. Son compte-rendu ne nécessite aucune décision.');
             abort_if($activity->isCalendarActivity(), 422, 'Traitez cette activité avec son planning hebdomadaire.');
             // Compte-rendu rejeté : la visite reste réalisée, le délégué corrige son rapport ;
             // visite planifiée refusée : le créneau est refusé
             $activity->update(array_merge(
-                $type === 'activity_report'
-                    ? ['report_status' => 'rejected', 'is_locked' => false]
-                    : ['statut' => 'refusee'],
+                ['statut' => 'refusee'],
                 ['rejection_reason' => $reason, 'validated_by_id' => auth()->id(), 'validation_date' => now()]
             ));
 
@@ -396,8 +382,8 @@ class ValidationController extends Controller
             if ($recipient) {
                 NotificationController::sendNotification(
                     $recipient,
-                    'Visite / Compte-rendu refusé',
-                    "Votre " . ($type === 'activity_report' ? 'compte-rendu de visite' : 'visite planifiée') . " a été refusé(e)." . ($reason ? " Motif : {$reason}" : ""),
+                    'Visite planifiée refusée',
+                    "Votre " . 'visite planifiée' . " a été refusé(e)." . ($reason ? " Motif : {$reason}" : ""),
                     'validation',
                     'delegate',
                     ['id' => (string) $activity->id, 'type' => $type]

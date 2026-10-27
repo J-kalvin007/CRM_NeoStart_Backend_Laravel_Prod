@@ -340,8 +340,6 @@ class SupervisorDashboardController extends Controller
             + SampleRequest::whereIn('user_id', $userIds)->where('status', 'pending')->count()
             + Activity::withoutGlobalScopes()->whereNull('deleted_at')->whereIn('user_id', $userIds)
                 ->whereIn('activity_type', self::LEAVE_TYPES)->where('statut', 'en_attente')->count()
-            + Activity::withoutGlobalScopes()->whereNull('deleted_at')->whereIn('user_id', $userIds)
-                ->where('report_status', 'submitted')->count()
             + Contact::withoutGlobalScopes()->whereNull('deleted_at')->whereIn('user_id', $userIds)
                 ->where(fn ($q) => $q->whereIn('statut_validation', ['en_attente', 'pending'])
                     ->orWhereIn('statut', ['en_attente', 'en_attente_validation', 'inactif', 'pending']))->count()

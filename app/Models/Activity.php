@@ -38,6 +38,7 @@ class Activity extends Model
     public function filterReportPayload(array $data): array
     {
         $data['report_visible'] = $this->canViewReport();
+        if ($this->hasPublishedReport()) $data['report_status'] = 'submitted';
         $hasDraft = trim((string) $this->getRawOriginal('report_content')) !== ''
             || !empty($this->meta['resultat']) || !empty($this->meta['prochaine_action']) || !empty($this->meta['pharmacy_inventory'])
             || in_array($this->statut, ['realisee', 'effectuee', 'terminee', 'cloturee', 'soumis_definitif'], true);
