@@ -21,6 +21,7 @@ class LeaveController extends Controller
 
         $query = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
             ->calendar(['conge', 'permission'])
+            ->where(fn ($q) => $q->whereNotIn('statut', ['brouillon', 'draft'])->orWhere('user_id', $user->id))
             ->with(['delegue', 'validatedBy'])
             ->when($request->user_id, fn($q, $v) => $q->where('user_id', $v))
             ->when($request->statut ?? $request->status, fn($q, $v) => $q->where('statut', $v))

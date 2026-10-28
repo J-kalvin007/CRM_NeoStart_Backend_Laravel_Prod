@@ -67,6 +67,7 @@ class DelegateOverview
                 'date_fin' => $plan->date_fin?->toDateString(), 'statut' => $plan->statut,
                 'description' => $plan->description, 'commentaire_validation' => $plan->commentaire_validation]);
         $calendar = Activity::withoutGlobalScope(DynamicPerimeterScope::class)->where('user_id', $person->id)->calendar()
+            ->when((string) auth()->id() !== (string) $person->id, fn ($query) => $query->whereNotIn('statut', ['brouillon', 'draft']))
             ->whereDate('date_activite', '<=', $end)->whereRaw('COALESCE(date_fin, date_activite) >= ?', [$start])
             ->with('activityType')->orderBy('date_activite')->get()->map(fn ($activity) => [
                 'id' => $activity->id, 'user_name' => $person->name, 'type_label' => $activity->activity_type_name,

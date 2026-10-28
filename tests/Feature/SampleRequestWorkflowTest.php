@@ -42,6 +42,20 @@ class SampleRequestWorkflowTest extends TestCase
         $this->product = Product::create(['nom' => 'Produit test', 'code' => 'SAMPLE-01', 'prix' => 100]);
     }
 
+    public function test_exhausted_entrusted_stock_remains_visible_without_adding_catalogue_products(): void
+    {
+        $this->product->update(['statut' => 'inactif']);
+        Product::create(['nom' => 'Catalogue sans dotation', 'code' => 'NO-ALLOCATION']);
+        foreach (['reception', 'distribution'] as $type) {
+            SampleMovement::create(['user_id' => $this->delegate->id, 'product_id' => $this->product->id,
+                'movement_type' => $type, 'quantity' => 8, 'stock_apres' => $type === 'reception' ? 8 : 0]);
+        }
+        Sanctum::actingAs($this->delegate);
+        $this->getJson('/api/v1/my-stock')->assertOk()->assertJsonCount(1)
+            ->assertJsonPath('0.quantity_available', 0)->assertJsonPath('0.quantity_received', 8)
+            ->assertJsonPath('0.quantity_distributed', 8)->assertJsonPath('0.lots', []);
+    }
+
     public function test_delegate_submits_sample_request_to_direct_supervisor(): void
     {
         Mail::fake();
@@ -105,6 +119,15 @@ class SampleRequestWorkflowTest extends TestCase
             'quantity' => 8,
             'stock_apres' => 8,
         ]);
+        // Le même solde remis depuis le web est utilisé par l'écran stock mobile.
+        Sanctum::actingAs($this->delegate);
+        $this->getJson('/api/v1/my-stock')->assertOk()->assertJsonCount(1)
+            ->assertJsonPath('0.product_id', $this->product->id)
+            ->assertJsonPath('0.quantity_received', 8)
+            ->assertJsonPath('0.quantity_available', 8)
+            ->assertJsonPath('0.quantity_distributed', 0);
+        Sanctum::actingAs($this->supervisor);
+        $this->getJson('/api/v1/my-stock')->assertOk()->assertExactJson([]);
         $this->assertDatabaseHas('notifications', ['notifiable_id' => $this->delegate->id]);
         Mail::assertSent(SkynityNotificationMail::class, fn ($mail) => $mail->hasTo($this->delegate->email));
     }

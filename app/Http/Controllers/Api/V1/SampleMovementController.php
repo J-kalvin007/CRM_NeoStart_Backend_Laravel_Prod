@@ -83,25 +83,10 @@ class SampleMovementController extends Controller
             ->where('user_id', $user->id)
             ->get();
 
-
-
-        // Récupérer les IDs des produits du pays du délégué
-        $assignedProductIds = [];
-        if ($user->country_id) {
-            $assignedProductIds = \App\Models\Product::where('statut', 'actif')
-                ->whereHas('countries', function ($q) use ($user) {
-                    $q->where('countries.id', $user->country_id);
-                })
-                ->pluck('id')
-                ->toArray();
-        }
-
-        $stock = $movements->groupBy('product_id')->map(function ($items, $productId) use ($assignedProductIds) {
+        // L'inventaire dépend des dotations du délégué, pas du catalogue commercial actif.
+        $stock = $movements->groupBy('product_id')->map(function ($items, $productId) {
             $product = $items->first()->product;
-
-            // Filtrer : ne montrer que les produits assignés aux unités du délégué
-            // ou s'il n'y a pas d'assignation, tous les produits
-            if (!empty($assignedProductIds) && !in_array($productId, $assignedProductIds)) {
+            if (!$product) {
                 return null;
             }
 
@@ -112,12 +97,7 @@ class SampleMovementController extends Controller
 
             $available = max(0, $in - $out);
 
-            // Filtrer : ne montrer que les produits avec quantité disponible > 0
-            if ($available <= 0) {
-                return null;
-            }
-
-            $alertThreshold = $product ? (int) $product->stock_alerte : 10;
+            $alertThreshold = (int) $product->stock_alerte;
 
             // Découpage par lots disponibles
             $lots = $items->whereNotNull('lot_number')
@@ -143,6 +123,8 @@ class SampleMovementController extends Controller
                     'nom'          => $product->nom ?? 'Produit inconnu',
                     'code'         => $product->code ?? null,
                     'stock_alerte' => $alertThreshold,
+                    'gamme'        => $product->gamme,
+                    'image_url'    => $product->image_url,
                 ],
                 'quantity_available'   => $available,
                 'quantity_received'    => $in,

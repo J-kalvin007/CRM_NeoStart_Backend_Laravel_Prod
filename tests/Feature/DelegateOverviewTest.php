@@ -63,6 +63,7 @@ class DelegateOverviewTest extends TestCase
             'start_time'=>'2026-10-27 09:05:00','end_time'=>'2026-10-27 09:35:00']);
         $this->visit($user,['statut'=>'validee','date_activite'=>'2026-10-28']);
         $this->visit($user,['activity_type'=>'conge','date_fin'=>'2026-10-29']);
+        $this->visit($user,['activity_type'=>'permission','statut'=>'brouillon','notes'=>'PRIVATE LEAVE DRAFT']);
         $objective = Objectif::create(['user_id'=>$user->id,'date_debut'=>'2026-10-01','date_fin'=>'2026-10-31',
             'valeur_cible'=>10,'valeur_realisee'=>5,'statut'=>'actif']);
         TourPlan::create(['user_id'=>$user->id,'nom'=>'Semaine terrain','date_debut'=>'2026-10-26','date_fin'=>'2026-11-01','statut'=>'valide']);
@@ -74,7 +75,7 @@ class DelegateOverviewTest extends TestCase
             ->assertJsonPath('performance.timed_visits',1)->assertJsonPath('performance.on_time_visits',0)
             ->assertJsonPath('position.lat',6.1)->assertJsonPath('objectives.0.id',$objective->id)
             ->assertJsonCount(1,'weekly_plans')->assertJsonCount(1,'calendar');
-        $response->assertDontSee('SECRET MOBILE DRAFT')->assertJsonMissingPath('visits.0.report_content');
+        $response->assertDontSee('SECRET MOBILE DRAFT')->assertDontSee('PRIVATE LEAVE DRAFT')->assertJsonMissingPath('visits.0.report_content');
         $this->assertSame(str_repeat('Texte complet. ',80),$response->json('reports.0.report_content'));
         $this->getJson('/api/v1/delegates/'.$user->id.'/overview?period=custom&start_date=2026-09-01&end_date=2026-09-30')
             ->assertOk()->assertJsonCount(0,'visits')->assertJsonCount(0,'reports')->assertJsonCount(0,'objectives');

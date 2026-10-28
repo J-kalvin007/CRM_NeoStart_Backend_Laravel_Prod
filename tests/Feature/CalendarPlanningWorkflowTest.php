@@ -24,6 +24,23 @@ class CalendarPlanningWorkflowTest extends TestCase
         ], $extra);
     }
 
+    public function test_leave_drafts_are_private_until_weekly_planning_submission(): void
+    {
+        $manager = User::factory()->create();
+        \App\Models\Role::firstOrCreate(['name' => 'superadmin', 'guard_name' => 'web']);
+        $manager->assignRole('superadmin');
+        $owner = User::factory()->create(['manager_id' => $manager->id]);
+        $draft = Activity::create($this->event('permission', ['user_id' => $owner->id, 'statut' => 'brouillon']));
+        Sanctum::actingAs($owner);
+        $this->getJson('/api/v1/leaves')->assertOk()->assertJsonPath('data.0.id', $draft->id);
+        Sanctum::actingAs($manager);
+        $this->getJson('/api/v1/leaves')->assertOk()->assertJsonCount(0, 'data');
+        $this->getJson('/api/v1/leaves?status=brouillon')->assertOk()->assertJsonCount(0, 'data');
+        $draft->update(['statut' => 'en_attente']);
+        $this->getJson('/api/v1/leaves')->assertOk()->assertJsonPath('data.0.id', $draft->id)
+            ->assertJsonPath('data.0.status', 'en_attente');
+    }
+
     public function test_every_calendar_kind_is_submitted_and_approved_with_its_week(): void
     {
         Mail::fake();
