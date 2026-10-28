@@ -394,24 +394,17 @@ class EndToEndBusinessWorkflowsTest extends TestCase
      */
     public function test_workflow_11_offline_first_fifo_sync_push(): void
     {
+        $date = now()->addDay()->toDateString();
         $response = $this->actingAs($this->delegate)->postJson('/api/v1/sync/push', [
-            'changes' => [
-                [
-                    'table' => 'activities',
-                    'action' => 'create',
-                    'local_id' => 'loc-act-001',
-                    'data' => [
-                        'title' => 'Visite Offline CHU',
-                        'type_activite' => 'visite_medicale',
-                        'statut' => 'effectuee',
-                        'date_activite' => now()->toDateString(),
-                    ]
-                ]
-            ]
+            'queue' => [[
+                'endpoint' => 'activities', 'method' => 'POST',
+                'payload' => ['activity_type' => 'reunion', 'date_activite' => $date, 'date_fin' => $date,
+                    'heure_debut' => '09:00', 'heure_fin' => '10:00', 'notes' => 'Réunion hors ligne'],
+            ]],
         ]);
-
-        $response->assertStatus(200)
-                 ->assertJsonStructure(['status']);
+        $response->assertOk()->assertJsonPath('processed_items', 1)->assertJsonCount(0, 'errors');
+        $this->assertDatabaseHas('activities', ['user_id' => $this->delegate->id,
+            'notes' => 'Réunion hors ligne']);
     }
 
     /**

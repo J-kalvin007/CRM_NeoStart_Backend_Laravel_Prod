@@ -235,9 +235,10 @@ class UserController extends Controller
         }
 
         // Si le mot de passe a été modifié, envoyer email et notification
+        if ($passwordChanged || $user->status === false) $user->tokens()->delete();
         if ($passwordChanged) {
-            // Envoyer l'email avec le nouveau mot de passe
-            Mail::to($user->email)->send(new \App\Mail\PasswordChangedMail($user, $newPassword));
+            // Confirmer le changement sans exposer le mot de passe.
+            Mail::to($user->email)->send(new \App\Mail\PasswordChangedMail($user));
 
             // Envoyer une notification in-app
             $user->notify(new \App\Notifications\SystemNotification(

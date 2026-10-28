@@ -59,7 +59,7 @@ class PharmacovigilanceReportController extends Controller
             'contact_id' => 'required|exists:contacts,id',
             'product_id' => 'required|exists:products,id',
             'patient_initials' => 'required|string',
-            'patient_age' => 'nullable|integer',
+            'patient_age' => 'nullable|integer|min:0',
             'patient_gender' => 'nullable|in:M,F,Autre',
             'adverse_event_description' => 'required|string',
             'severity' => 'required|string|in:non_grave,moderee,grave,deces',

@@ -91,16 +91,25 @@ class DocumentViewerService
         mkdir($outDir, 0775, true);
 
         $entries = [];
+        $expandedBytes = 0;
+        if ($zip->numFiles > 2000) { $zip->close(); return null; }
         for ($i = 0; $i < $zip->numFiles; $i++) {
             $name = $zip->getNameIndex($i);
             // Protection contre les chemins sortant du dossier d'extraction
-            if ($name === false || str_contains($name, '..') || str_starts_with($name, '/') || str_starts_with($name, '__MACOSX')) {
+            if ($name === false || str_contains($name, '..') || str_starts_with($name, '/') || str_starts_with($name, '__MACOSX') || str_contains($name, '\\')
+                || preg_match('#(^|/)\.#', $name) || preg_match('/\.(php[0-9]*|phtml|phar|cgi|pl|py|sh|asp|aspx|jsp|exe|dll)$/i', $name)) {
                 continue;
             }
+            $stat = $zip->statIndex($i);
+            $expandedBytes += (int) ($stat['size'] ?? 0);
+            if ($expandedBytes > 100 * 1024 * 1024) { $zip->close(); Storage::disk('public')->deleteDirectory($base); return null; }
+            $opsys = $attributes = 0;
+            if ($zip->getExternalAttributesIndex($i, $opsys, $attributes) && (($attributes >> 16) & 0170000) === 0120000) continue;
             $entries[] = $name;
         }
-        $zip->extractTo($outDir, $entries);
+        $extracted = $entries && $zip->extractTo($outDir, $entries);
         $zip->close();
+        if (!$extracted) { Storage::disk('public')->deleteDirectory($base); return null; }
 
         // Page d'entrée : index.html le moins profond
         $candidates = array_filter($entries, fn ($n) => strtolower(basename($n)) === 'index.html' || strtolower(basename($n)) === 'index.htm');

@@ -24,6 +24,9 @@ class DocumentViewerTest extends TestCase
         $zip->open($path, \ZipArchive::CREATE);
         $zip->addFromString('deck/index.html', '<html><body>Diapo</body></html>');
         $zip->addFromString('../evil.txt', 'x');
+        $zip->addFromString('deck/execute.php', '<?php echo 1;');
+        $zip->addFromString('deck/.htaccess', 'AddType application/x-httpd-php .html');
+        $zip->addFromString('deck/asset.js', 'window.slide = 1;');
         $zip->close();
 
         return new UploadedFile($path, 'deck.zip', 'application/zip', null, true);
@@ -56,6 +59,9 @@ class DocumentViewerTest extends TestCase
 
         $doc = Document::withoutGlobalScopes()->first();
         Storage::disk('public')->assertExists($doc->viewer_path);
+        Storage::disk('public')->assertExists('docs/viewer/'.$doc->id.'/deck/asset.js');
+        Storage::disk('public')->assertMissing('docs/viewer/'.$doc->id.'/deck/execute.php');
+        Storage::disk('public')->assertMissing('docs/viewer/'.$doc->id.'/deck/.htaccess');
         $this->assertFalse(Storage::disk('public')->exists('docs/viewer/evil.txt'));
     }
 

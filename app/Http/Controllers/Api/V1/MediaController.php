@@ -37,14 +37,14 @@ class MediaController extends Controller
     public function upload(Request $request)
     {
         $request->validate([
-            'file' => 'required|file|max:10240', // 10MB max
+            'file' => 'required|file|mimes:jpg,jpeg,png,webp,pdf,mp4,webm,ppt,pptx,doc,docx,xls,xlsx|max:10240', // 10MB max
             'folder' => 'nullable|string|in:signatures,avatars,documents,reports'
         ]);
 
         $folder = $request->input('folder', 'general');
         $file = $request->file('file');
         
-        $filename = Str::uuid() . '.' . $file->getClientOriginalExtension();
+        $filename = Str::uuid() . '.' . $file->extension();
         $path = $file->storeAs("uploads/{$folder}", $filename, 'public');
 
         return response()->json([

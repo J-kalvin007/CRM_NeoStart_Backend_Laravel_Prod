@@ -82,7 +82,7 @@ class DocumentController extends Controller
 
     public function store(Request $request, DocumentViewerService $viewers)
     {
-        if (Auth::user() && Auth::user()->hasRole(['delegue', 'delegue_medical'])) {
+        if (Auth::user() && Auth::user()->hasAnyRole(\App\Services\DelegateLocations::DELEGATE_ROLES)) {
             return response()->json(['message' => 'Action non autorisée pour votre rôle.'], 403);
         }
         $data = $request->validate([
@@ -91,7 +91,7 @@ class DocumentController extends Controller
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
             'type' => 'required|in:pdf,video,presentation,image,other',
-            'file' => 'nullable|file', // Actual file upload
+            'file' => 'nullable|file|max:51200|mimes:pdf,ppt,pptx,pps,ppsx,pot,potx,odp,key,zip,jpg,jpeg,png,webp,gif,mp4,webm', // Actual file upload
             'file_path' => 'nullable|string', // Fallback
             'version' => 'nullable|string|max:50',
             'expiration_date' => 'nullable|date|after:today',
@@ -119,7 +119,7 @@ class DocumentController extends Controller
 
     public function update(Request $request, Document $document, DocumentViewerService $viewers)
     {
-        if (Auth::user() && Auth::user()->hasRole(['delegue', 'delegue_medical'])) {
+        if (Auth::user() && Auth::user()->hasAnyRole(\App\Services\DelegateLocations::DELEGATE_ROLES)) {
             return response()->json(['message' => 'Action non autorisée pour votre rôle.'], 403);
         }
         $data = $request->validate([
@@ -130,7 +130,7 @@ class DocumentController extends Controller
             'type' => 'sometimes|in:pdf,video,presentation,image,other',
             'documentable_id' => 'sometimes|uuid',
             'documentable_type' => 'sometimes|string',
-            'file' => 'sometimes|nullable|file',
+            'file' => 'sometimes|nullable|file|max:51200|mimes:pdf,ppt,pptx,pps,ppsx,pot,potx,odp,key,zip,jpg,jpeg,png,webp,gif,mp4,webm',
             'speciality_id' => 'sometimes|nullable|uuid',
             'role_id' => 'sometimes|nullable|integer',
             'status' => 'sometimes|nullable|in:draft,review,approved,expired',
@@ -153,7 +153,7 @@ class DocumentController extends Controller
 
     public function destroy(Document $document)
     {
-        if (Auth::user() && Auth::user()->hasRole(['delegue', 'delegue_medical'])) {
+        if (Auth::user() && Auth::user()->hasAnyRole(\App\Services\DelegateLocations::DELEGATE_ROLES)) {
             return response()->json(['message' => 'Action non autorisée pour votre rôle.'], 403);
         }
         $document->delete();

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mot de passe modifié - Vos nouveaux identifiants</title>
+    <title>Modification de votre mot de passe</title>
 </head>
 <body style="margin: 0; padding: 0; background-color: #f4f6f9; font-family: 'Segoe UI', Arial, sans-serif; color: #333;">
 
@@ -15,7 +15,7 @@
                  Votre mot de passe a été modifié
             </h1>
             <p style="margin: 8px 0 0 0; color: #6b7280; font-size: 14px;">
-                Voici vos nouveaux identifiants de connexion
+                Confirmation de modification
             </p>
         </div>
 
@@ -26,27 +26,20 @@
                 Bonjour <strong>{{ $user->name }}</strong>,
             </p>
             <p style="font-size: 14px; color: #555; line-height: 1.7; margin: 0 0 24px 0;">
-                Votre mot de passe a été modifié par un administrateur. Vous trouverez ci-dessous vos nouveaux identifiants pour accéder à la plateforme.
+                Le mot de passe de votre compte a été modifié. Si vous n’êtes pas à l’origine de ce changement, contactez votre administrateur.
             </p>
 
             {{-- Credentials box --}}
             <div style="background-color: #f0f4ff; border: 1px solid #c7d7fd; border-radius: 8px; padding: 20px 24px; margin-bottom: 28px;">
                 <p style="margin: 0 0 10px 0; font-size: 13px; font-weight: 600; color: #1e40af; text-transform: uppercase; letter-spacing: 0.5px;">
-                    Vos identifiants de connexion
+                    Votre compte
                 </p>
                 <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
                     <tr>
                         <td style="padding: 6px 0; color: #6b7280; width: 150px;">Adresse email :</td>
                         <td style="padding: 6px 0; font-weight: 600; color: #111827;">{{ $user->email }}</td>
                     </tr>
-                    <tr>
-                        <td style="padding: 6px 0; color: #6b7280;">Nouveau mot de passe :</td>
-                        <td style="padding: 6px 0;">
-                            <span style="background-color: #1d4ed8; color: #ffffff; padding: 3px 10px; border-radius: 4px; font-family: 'Courier New', monospace; font-size: 15px; font-weight: 700; letter-spacing: 1px;">
-                                {{ $newPassword }}
-                            </span>
-                        </td>
-                    </tr>
+
                 </table>
             </div>
 

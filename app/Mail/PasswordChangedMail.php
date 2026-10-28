@@ -14,8 +14,7 @@ class PasswordChangedMail extends Mailable
     use Queueable, SerializesModels;
 
     public function __construct(
-        public User $user,
-        public string $newPassword
+        public User $user
     ) {}
 
     public function envelope(): Envelope
@@ -28,10 +27,7 @@ class PasswordChangedMail extends Mailable
     public function content(): Content
     {
         return new Content(
-            view: 'emails.password_changed',
-            with: [
-                'newPassword' => $this->newPassword,
-            ]
+            view: 'emails.password_changed'
         );
     }
 }

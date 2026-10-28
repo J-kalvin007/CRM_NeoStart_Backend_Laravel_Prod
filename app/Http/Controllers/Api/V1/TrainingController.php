@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Training;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use OpenApi\Attributes as OA;
 
 class TrainingController extends Controller
@@ -20,25 +21,28 @@ class TrainingController extends Controller
     )]
     public function index(Request $request)
     {
-        $query = Training::query();
+        $request->validate(['per_page' => 'sometimes|integer|min:1|max:500']);
+        $query = Training::forLearner($request->user()->id);
 
         if ($search = $request->input('search')) {
             $query->where(function($q) use ($search) {
-                $q->where('title', 'like', "%{$search}%")
-                  ->orWhere('description', 'like', "%{$search}%")
-                  ->orWhere('category', 'like', "%{$search}%");
+                $q->where('trainings.title', 'like', "%{$search}%")
+                  ->orWhere('trainings.description', 'like', "%{$search}%")
+                  ->orWhere('trainings.category', 'like', "%{$search}%");
             });
         }
 
         if ($category = $request->input('category')) {
             if ($category !== 'Toutes' && $category !== 'Tous') {
-                $query->where('category', $category);
+                $query->where('trainings.category', $category);
             }
         }
 
         if ($status = $request->input('status')) {
             if ($status !== 'Tous') {
-                $query->where('status', $status);
+                $normalized = match (strtolower($status)) { 'a_faire', 'not_started' => 'A_FAIRE', 'en_cours', 'in_progress' => 'EN_COURS', 'termine', 'completed' => 'TERMINE', default => null };
+                if ($normalized) $query->whereRaw("COALESCE(learner_progress.status, 'A_FAIRE') = ?", [$normalized]);
+                else $query->where('trainings.status', $status);
             }
         }
 
@@ -72,9 +76,9 @@ class TrainingController extends Controller
             new OA\Response(response: 404, description: 'Formation non trouvée'),
         ]
     )]
-    public function show(string $id)
+    public function show(Request $request, string $id)
     {
-        $training = Training::findOrFail($id);
+        $training = Training::forLearner($request->user()->id)->where('trainings.id', $id)->firstOrFail();
         return response()->json($training);
     }
 
@@ -110,11 +114,13 @@ class TrainingController extends Controller
             'status' => 'sometimes|string|max:50',
         ]);
 
-        $training->progress = $data['progress'];
-        if (array_key_exists('status', $data)) {
-            $training->status = $data['status'];
-        }
-        $training->save();
+        $progress = (float) $data['progress'];
+        $status = $progress >= 100 ? 'TERMINE' : ($progress > 0 ? 'EN_COURS' : 'A_FAIRE');
+        DB::table('training_user_progress')->upsert([[
+            'training_id' => $training->id, 'user_id' => $request->user()->id,
+            'progress' => $progress, 'status' => $status, 'created_at' => now(), 'updated_at' => now(),
+        ]], ['training_id', 'user_id'], ['progress', 'status', 'updated_at']);
+        $training = Training::forLearner($request->user()->id)->where('trainings.id', $id)->firstOrFail();
 
         return response()->json($training);
     }

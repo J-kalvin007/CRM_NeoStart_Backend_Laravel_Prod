@@ -23,7 +23,6 @@ use App\Models\Opportunity;
 use App\Models\Order;
 use App\Models\Sale;
 use App\Models\Expense;
-use App\Models\Leave;
 use App\Models\Training;
 use App\Models\Conversation;
 use App\Models\Objectif;
@@ -46,15 +45,27 @@ class SyncController extends Controller
     )]
     public function pull(Request $request)
     {
-        $lastSync = $request->query('last_sync', '1970-01-01 00:00:00');
+        $request->validate(['last_sync' => 'nullable|date']);
+        $lastSync = $request->query('last_sync') ?: '1970-01-01 00:00:00';
         $user = Auth::user();
 
         // Fonction utilitaire pour récupérer les données modifiées (le DynamicPerimeterScope applique automatiquement le RBAC)
-        $getModified = function ($modelClass) use ($lastSync) {
-            if (in_array('Illuminate\Database\Eloquent\SoftDeletes', class_uses_recursive($modelClass))) {
-                return $modelClass::withTrashed()->where('updated_at', '>=', $lastSync)->get();
+        $getModified = function ($modelClass) use ($lastSync, $user) {
+            if ($modelClass === Training::class) {
+                return Training::forLearner($user->id)->where(fn ($q) => $q
+                    ->where('trainings.updated_at', '>=', $lastSync)->orWhere('learner_progress.updated_at', '>=', $lastSync))->get();
             }
-            return $modelClass::where('updated_at', '>=', $lastSync)->get();
+            $query = $modelClass::where('updated_at', '>=', $lastSync);
+            if (in_array('Illuminate\Database\Eloquent\SoftDeletes', class_uses_recursive($modelClass))) {
+                $query->withTrashed();
+            }
+            if ($modelClass === Activity::class) {
+                $query->where(fn ($q) => $q->whereNotIn('statut', ['brouillon', 'draft'])->orWhere('user_id', $user->id));
+            }
+            if ($modelClass === SampleMovement::class && !$user->isAdminOrDirection()) {
+                $query->whereIn('user_id', array_merge([$user->id], $user->teamMemberIds()));
+            }
+            return $query->get();
         };
 
         // Fonction utilitaire pour récupérer les données supprimées
@@ -82,7 +93,7 @@ class SyncController extends Controller
             'orders' => $getModified(Order::class),
             'sales' => $getModified(Sale::class),
             'expenses' => $getModified(Expense::class),
-            'leaves' => $getModified(Leave::class),
+            'leaves' => $getModified(Activity::class)->filter(fn ($activity) => in_array($activity->planning_kind, ['conge', 'permission'], true))->values(),
             'trainings' => $getModified(Training::class),
             'objectifs' => $getModified(Objectif::class),
         ];
@@ -129,7 +140,13 @@ class SyncController extends Controller
     )]
     public function push(Request $request)
     {
-        $queue = $request->input('queue', []);
+        $validated = $request->validate([
+            'queue' => 'required|array|max:100', 'queue.*' => 'required|array',
+            'queue.*.endpoint' => 'required|string|max:255', 'queue.*.method' => 'sometimes|in:POST,PUT,PATCH,DELETE,post,put,patch,delete',
+            'queue.*.payload' => 'sometimes|array',
+        ]);
+        $queue = $validated['queue'];
+        $actor = $request->user();
         
         $processed = 0;
         $failed = [];
@@ -139,6 +156,11 @@ class SyncController extends Controller
             foreach ($queue as $index => $item) {
                 $endpoint = $item['endpoint'] ?? null;
                 $method = strtoupper($item['method'] ?? 'POST');
+                $endpoint = preg_replace('#^/?(?:api/)?v1/#', '', ltrim($endpoint, '/'));
+                if (!preg_match('#^(activities|contacts|accounts|expenses|events|tasks|tour-plans|sample-movements|sample-requests|requests|leaves|trainings|orders|sales|opportunities|objectifs|clm-analytics|pharmacovigilance-reports)(?:/[a-zA-Z0-9_-]+)*$#', $endpoint)) {
+                    $failed[] = ['index' => $index, 'endpoint' => $endpoint, 'error' => 'Cette destination ne peut pas être rejouée hors ligne.'];
+                    continue;
+                }
                 $payload = $item['payload'] ?? [];
 
                 if (!$endpoint) {
@@ -189,10 +211,19 @@ class SyncController extends Controller
                     // Création d'une requête interne pour simuler l'appel API
                     $internalRequest = Request::create("/api/v1/{$endpoint}", $method, $payload);
                     $internalRequest->headers->set('Accept', 'application/json');
-                    $internalRequest->setUserResolver(fn() => Auth::user());
+                    $internalRequest->setUserResolver(fn() => $actor);
+                    foreach (['Authorization', 'X-Country-Id', 'X-Organizational-Unit-Id'] as $header) {
+                        if ($request->headers->has($header)) $internalRequest->headers->set($header, $request->header($header));
+                    }
 
                     // Dispatch via le routeur de l'application
-                    $response = app()->handle($internalRequest);
+                    try {
+                        $response = app()->handle($internalRequest);
+                    } finally {
+                        app()->instance('request', $request);
+                        \Illuminate\Support\Facades\Facade::clearResolvedInstance('request');
+                        Auth::setUser($actor);
+                    }
 
                     if ($response->getStatusCode() >= 400) {
                         throw new \Exception($response->getContent());

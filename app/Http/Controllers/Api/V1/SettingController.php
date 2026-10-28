@@ -20,7 +20,7 @@ class SettingController extends Controller
     )]
     public function index(Request $request)
     {
-        $query = Setting::query();
+        $query = Setting::whereIn('key', ['app_name', 'primary_color', 'logo_path', 'favicon_path', 'visits_per_day', 'working_days_per_week']);
         $settings = $query->get()->mapWithKeys(function ($item) {
             // Si c'est un lien de logo, on peut renvoyer l'URL complète
             if ($item->key === 'logo_path' && $item->value) {
@@ -60,7 +60,7 @@ class SettingController extends Controller
         $request->validate([
             'key' => 'required|string|max:100',
             'value' => 'nullable|string',
-            'file' => 'nullable|file|image|mimes:jpeg,png,jpg,svg|max:2048',
+            'file' => 'nullable|file|image|mimes:jpeg,png,jpg,webp|max:2048',
         ]);
 
         $value = $request->input('value');

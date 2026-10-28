@@ -57,16 +57,17 @@ Route::prefix('v1')->group(function () {
     Route::get('/branding', [AppBrandingController::class, 'show']);
 
     // ── Authentification ──────────────────────────────────────
-    Route::post('/login', [AuthController::class, 'login']);
-    Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
-    Route::post('/resend-otp', [AuthController::class, 'resendOtp']);
-    Route::post('/auth/change-password', [AuthController::class, 'forceChangePassword']);
-    Route::post('/password/email', [AuthController::class, 'sendResetLinkEmail']);
-    Route::post('/password/reset', [AuthController::class, 'resetPassword']);
+    Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
+    Route::post('/verify-otp', [AuthController::class, 'verifyOtp'])->middleware('throttle:10,1');
+    Route::post('/resend-otp', [AuthController::class, 'resendOtp'])->middleware('throttle:3,1');
+    Route::post('/auth/change-password', [AuthController::class, 'forceChangePassword'])->middleware('throttle:10,1');
+    Route::post('/password/email', [AuthController::class, 'sendResetLinkEmail'])->middleware('throttle:3,1');
+    Route::post('/password/verify', [AuthController::class, 'verifyResetToken'])->middleware('throttle:10,1');
+    Route::post('/password/reset', [AuthController::class, 'resetPassword'])->middleware('throttle:10,1');
 
     // ── Endpoints protégés ────────────────────────────────────
 
-    Route::middleware('auth:sanctum')->group(function () {
+    Route::middleware(['auth:sanctum', \App\Http\Middleware\EnsureActiveUser::class])->group(function () {
 
     Route::post('reports/document', \App\Http\Controllers\Api\V1\ReportDocumentController::class)->middleware('throttle:20,1');
 

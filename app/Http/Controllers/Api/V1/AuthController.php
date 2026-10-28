@@ -124,6 +124,8 @@ class AuthController extends Controller
             ]);
         }
 
+        abort_unless($user->status, 403, 'Votre compte est désactivé. Contactez votre administrateur.');
+
         // Vérification du changement de mot de passe obligatoire (première connexion)
         if ($user->force_password_change) {
             return response()->json([
@@ -188,6 +190,8 @@ class AuthController extends Controller
         ]);
 
         $user = User::findOrFail($request->user_id);
+
+        abort_unless($user->status, 403, 'Votre compte est désactivé.');
 
         if (!Hash::check($request->old_password, $user->password)) {
             throw ValidationException::withMessages([
@@ -271,6 +275,8 @@ class AuthController extends Controller
             return response()->json(['message' => 'Utilisateur introuvable.'], 404);
         }
 
+        abort_unless($user->status && !$user->force_password_change, 403, 'Connexion non autorisée pour ce compte.');
+
         // Récupération de l'OTP depuis le cache
         $cachedOtp = Cache::get('login_otp_' . $user->id);
 
@@ -327,6 +333,7 @@ class AuthController extends Controller
             return response()->json(['message' => 'Utilisateur introuvable.'], 404);
         }
 
+        abort_unless($user->status && $user->otp_enabled && Cache::has('login_otp_' . $user->id), 422, 'Aucune connexion en attente de vérification.');
         $otpCode = (string) random_int(100000, 999999);
         Cache::put('login_otp_' . $user->id, $otpCode, now()->addMinutes(10));
         
@@ -477,13 +484,15 @@ class AuthController extends Controller
         $request->validate(['email' => 'required|email']);
         
         $user = User::where('email', $request->email)->first();
-        if ($user) {
+        if ($user && $user->status) {
             $resetToken = Str::random(60);
             Cache::put('password_reset_' . $user->email, $resetToken, now()->addHours(1));
             try {
                 Mail::to($user->email)->send(new ResetPasswordMail($user, $resetToken));
             } catch (\Exception $e) {
-                \Log::warning("Failed to send reset email to {$user->email}: " . $e->getMessage());
+                Cache::forget('password_reset_' . $user->email);
+                report($e);
+                return response()->json(['message' => 'L’envoi du message a échoué. Réessayez plus tard.'], 503);
             }
         }
 
@@ -513,6 +522,14 @@ class AuthController extends Controller
             new OA\Response(response: 422, description: 'Données invalides ou jeton expiré')
         ]
     )]
+    public function verifyResetToken(Request $request)
+    {
+        $validated = $request->validate(['email' => 'required|email', 'token' => 'required|string']);
+        $token = Cache::get('password_reset_' . $validated['email']);
+        abort_unless(is_string($token) && hash_equals($token, $validated['token']), 422, 'Jeton de réinitialisation invalide ou expiré.');
+        return response()->json(['message' => 'Jeton valide.']);
+    }
+
     public function resetPassword(Request $request)
     {
         $request->validate([
@@ -536,6 +553,7 @@ class AuthController extends Controller
             'force_password_change' => false,
         ]);
 
+        $user->tokens()->delete();
         Cache::forget('password_reset_' . $request->email);
 
         try {
