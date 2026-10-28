@@ -47,11 +47,12 @@ class SampleMovementController extends Controller
             ->when($request->filled('date_from'), fn($q) => $q->whereDate('created_at', '>=', $request->date_from))
             ->when($request->filled('date_to'), fn($q) => $q->whereDate('created_at', '<=', $request->date_to));
 
-        // Si l'utilisateur est un délégué, il ne voit que ses propres mouvements sauf si permissions plus élevées
+        if (!$user->isAdminOrDirection()) {
+            $query->whereIn('user_id', array_merge([$user->id], $user->teamMemberIds()));
+        }
         if ($request->filled('user_id')) {
+            abort_unless($user->canEditRecordOf((string) $request->user_id), 403);
             $query->where('user_id', $request->user_id);
-        } elseif (!$user->hasAnyRole(['super-admin', 'admin-pays', 'dir-general', 'dir-commercial', 'manager'])) {
-            $query->where('user_id', $user->id);
         }
 
         $movements = $query->latest()->paginate($request->integer('per_page', 25));
@@ -186,6 +187,7 @@ class SampleMovementController extends Controller
             'inventaire'    => 'inventaire',
         ];
         $normalizedType = $typeMap[$type] ?? $type;
+        $request->merge(['movement_type' => $normalizedType]);
 
         $quantity = $request->input('quantity') ?? $request->input('quantite');
 
@@ -193,9 +195,9 @@ class SampleMovementController extends Controller
             'product_id'    => 'required|uuid|exists:products,id',
             'user_id'       => 'nullable|uuid|exists:users,id',
             'contact_id'    => 'nullable|uuid|exists:contacts,id',
-            'movement_type' => 'nullable|string|in:reception,attribution,distribution,retour,destruction,inventaire,entree,sortie,sortie_visite,perte',
-            'quantity'      => 'nullable|integer|min:1',
-            'quantite'      => 'nullable|integer|min:1',
+            'movement_type' => 'required|string|in:reception,attribution,distribution,retour,destruction,inventaire,entree,sortie,sortie_visite,perte',
+            'quantity'      => 'required_without:quantite|nullable|integer|min:1',
+            'quantite'      => 'required_without:quantity|nullable|integer|min:1',
             'lot_number'    => 'nullable|string|max:100',
             'numero_lot'    => 'nullable|string|max:100',
             'expiry_date'   => 'nullable|date',
@@ -208,6 +210,9 @@ class SampleMovementController extends Controller
         ]);
 
         $userId = $validated['user_id'] ?? $request->user()->id;
+        abort_unless($request->user()->canEditRecordOf((string) $userId), 403, 'Ce délégué ne fait pas partie de votre périmètre.');
+        User::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->findOrFail($userId);
+        $quantity = (int) $quantity;
         $lotNumber = $validated['lot_number'] ?? $request->input('numero_lot');
         $expiryDate = $validated['expiry_date'] ?? null;
         $remarques = $validated['remarques'] ?? $request->input('notes');
@@ -245,7 +250,7 @@ class SampleMovementController extends Controller
         }
 
         return DB::transaction(function () use ($validated, $userId, $normalizedType, $quantity, $lotNumber, $expiryDate, $remarques, $signatureUrl) {
-            $product = Product::findOrFail($validated['product_id']);
+            $product = Product::whereKey($validated['product_id'])->lockForUpdate()->firstOrFail();
 
             // Calcul du stock actuel pour cet utilisateur et ce produit
             $previousIn = SampleMovement::where('user_id', $userId)
@@ -268,6 +273,14 @@ class SampleMovementController extends Controller
                 abort(response()->json(['message' => "Stock insuffisant. Solde disponible : {$currentStock} boîtes"], 422));
             }
             
+            if (!$isPositive && $lotNumber !== null) {
+                $lotMovements = SampleMovement::where('user_id', $userId)
+                    ->where('product_id', $product->id)->where('lot_number', $lotNumber)->get();
+                $lotBalance = $lotMovements->whereIn('movement_type', ['reception', 'attribution', 'retour'])->sum('quantity')
+                    - $lotMovements->whereIn('movement_type', ['distribution', 'destruction'])->sum('quantity');
+                abort_if($quantity > $lotBalance, 422, 'Stock insuffisant pour le lot sélectionné.');
+            }
+
             $newStock = $isPositive ? ($currentStock + $quantity) : max(0, $currentStock - $quantity);
 
             $movement = SampleMovement::create([
@@ -285,14 +298,7 @@ class SampleMovementController extends Controller
                 'remarques'     => $remarques,
             ]);
 
-            // Mise à jour de stock_actuel sur le produit si entrée principale
-            if ($normalizedType === 'reception') {
-                $product->increment('stock_actuel', $quantity);
-            } elseif (in_array($normalizedType, ['distribution', 'destruction'])) {
-                if ($product->stock_actuel >= $quantity) {
-                    $product->decrement('stock_actuel', $quantity);
-                }
-            }
+            // Le stock central est indépendant des mouvements du stock déjà confié.
 
             if (!$isPositive && $newStock <= ($product->stock_alerte ?? 10)) {
                 $userObj = User::find($userId);
@@ -328,6 +334,7 @@ class SampleMovementController extends Controller
     public function show(string $id)
     {
         $movement = SampleMovement::with(['product', 'user', 'activity'])->findOrFail($id);
+        abort_unless(auth()->user()->canEditRecordOf($movement->user_id), 403);
         return new SampleMovementResource($movement);
     }
 
@@ -364,6 +371,7 @@ class SampleMovementController extends Controller
     public function update(Request $request, string $id)
     {
         $movement = SampleMovement::findOrFail($id);
+        abort_unless(auth()->user()->canEditRecordOf($movement->user_id), 403);
 
         $validated = $request->validate([
             'quantity'      => 'sometimes|integer|min:1',
@@ -376,24 +384,10 @@ class SampleMovementController extends Controller
         ]);
 
         return DB::transaction(function () use ($movement, $validated) {
-            $oldQuantity = $movement->quantity;
-            $oldType = $movement->movement_type;
-
+            Product::whereKey($movement->product_id)->lockForUpdate()->firstOrFail();
             $movement->update($validated);
-
-            // Ajustement si la quantité ou le type a changé
-            if (isset($validated['quantity']) || isset($validated['movement_type'])) {
-                $newQuantity = $movement->quantity;
-                $newType = $movement->movement_type;
-
-                // Si c'est une réception, on ajuste la différence sur le produit
-                if ($oldType === 'reception' && $newType === 'reception') {
-                    $diff = $newQuantity - $oldQuantity;
-                    if ($diff !== 0) {
-                        Product::where('id', $movement->product_id)->increment('stock_actuel', $diff);
-                    }
-                }
-            }
+            $balance = $this->assertStockBalances($movement->user_id, $movement->product_id);
+            $movement->update(['stock_apres' => $balance]);
 
             return new SampleMovementResource($movement->load(['product', 'user', 'activity']));
         });
@@ -417,23 +411,34 @@ class SampleMovementController extends Controller
     public function destroy(string $id)
     {
         $movement = SampleMovement::findOrFail($id);
+        abort_unless(auth()->user()->canEditRecordOf($movement->user_id), 403);
 
         DB::transaction(function () use ($movement) {
-            // Réajustement du stock produit si c'était une entrée/sortie directe
-            if ($movement->movement_type === 'reception') {
-                Product::where('id', $movement->product_id)
-                    ->where('stock_actuel', '>=', $movement->quantity)
-                    ->decrement('stock_actuel', $movement->quantity);
-            } elseif (in_array($movement->movement_type, ['distribution', 'destruction'])) {
-                Product::where('id', $movement->product_id)
-                    ->increment('stock_actuel', $movement->quantity);
-            }
-
+            Product::whereKey($movement->product_id)->lockForUpdate()->firstOrFail();
             $movement->delete();
+            $this->assertStockBalances($movement->user_id, $movement->product_id);
         });
 
         return response()->json([
             'message' => 'Mouvement de stock supprimé avec succès.',
         ], 200);
     }
+    /** Une correction ne peut pas consommer un lot inexistant ni retirer une réception déjà distribuée. */
+    private function assertStockBalances(string $userId, string $productId): int
+    {
+        $movements = SampleMovement::where('user_id', $userId)->where('product_id', $productId)->get();
+        $balance = 0;
+        foreach ($movements->groupBy('lot_number') as $items) {
+            $lotBalance = $items->whereIn('movement_type', ['reception', 'attribution', 'retour'])->sum('quantity')
+                - $items->whereIn('movement_type', ['distribution', 'destruction'])->sum('quantity');
+            if ($lotBalance < 0) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'quantity' => 'Cette correction rendrait le stock du lot négatif.',
+                ]);
+            }
+            $balance += $lotBalance;
+        }
+        return $balance;
+    }
+
 }

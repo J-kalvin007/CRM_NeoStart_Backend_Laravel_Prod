@@ -682,6 +682,8 @@ class ActivityController extends Controller
             }
 
             foreach ($samples as $index => $sample) {
+                // Même verrou que les remises directes : deux sorties ne consomment pas le même solde.
+                \App\Models\Product::whereKey($sample['product_id'])->lockForUpdate()->firstOrFail();
                 $sampleMovements = \App\Models\SampleMovement::where('user_id', $activity->user_id)
                     ->where('product_id', $sample['product_id'])
                     ->where('lot_number', $sample['lot_number'])
@@ -713,10 +715,6 @@ class ActivityController extends Controller
                     'remarques' => 'Remis au prescripteur pendant la visite ' . $activity->id,
                 ]);
 
-                $product = \App\Models\Product::find($sample['product_id']);
-                if ($product && $product->stock_actuel >= $quantity) {
-                    $product->decrement('stock_actuel', $quantity);
-                }
             }
 
             if ($activity->statut === 'realisee') {

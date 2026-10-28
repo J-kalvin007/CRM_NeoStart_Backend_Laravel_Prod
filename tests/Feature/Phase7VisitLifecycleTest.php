@@ -236,6 +236,9 @@ class Phase7VisitLifecycleTest extends TestCase
     public function test_finishing_visit_records_sample_distribution_and_reduces_delegate_stock(): void
     {
         $product = Product::create(['nom' => 'Produit échantillon', 'code' => 'SAMPLE-TEST', 'prix' => 100]);
+        $country = \App\Models\Country::create(['name' => 'Togo', 'iso_code' => 'TG']);
+        $this->delegate->update(['country_id' => $country->id]);
+        $product->countries()->attach($country->id, ['stock_actuel' => 80]);
         $activity = Activity::create([
             'user_id' => $this->delegate->id,
             'contact_id' => $this->contact->id,
@@ -268,6 +271,7 @@ class Phase7VisitLifecycleTest extends TestCase
             ]],
         ]);
 
+        $this->assertSame(80, (int) $product->fresh()->countries->first()->pivot->stock_actuel);
         $response->assertOk()
             ->assertJsonPath('data.statut', 'realisee')
             ->assertJsonPath('data.sample_movements.0.quantity', 3)

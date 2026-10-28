@@ -42,6 +42,73 @@ class SampleRequestWorkflowTest extends TestCase
         $this->product = Product::create(['nom' => 'Produit test', 'code' => 'SAMPLE-01', 'prix' => 100]);
     }
 
+    public function test_distribution_cannot_borrow_from_another_lot_or_modify_central_stock(): void
+    {
+        $country = \App\Models\Country::create(['name' => 'Togo', 'iso_code' => 'TG']);
+        $this->delegate->update(['country_id' => $country->id]);
+        $this->product->countries()->attach($country->id, ['stock_actuel' => 80]);
+        $contact = \App\Models\Contact::create(['nom' => 'Prescripteur', 'prenom' => 'Test', 'user_id' => $this->delegate->id]);
+        foreach (['LOT-A' => 2, 'LOT-B' => 8] as $lot => $quantity) {
+            SampleMovement::create(['user_id' => $this->delegate->id, 'product_id' => $this->product->id,
+                'movement_type' => 'reception', 'lot_number' => $lot, 'quantity' => $quantity, 'stock_apres' => $quantity]);
+        }
+        Sanctum::actingAs($this->delegate);
+        $payload = ['product_id' => $this->product->id, 'contact_id' => $contact->id,
+            'movement_type' => 'distribution', 'lot_number' => 'LOT-A', 'quantity' => 3];
+        $this->postJson('/api/v1/sample-movements', $payload)->assertUnprocessable();
+        $this->assertDatabaseCount('sample_movements', 2);
+        $this->postJson('/api/v1/sample-movements', array_merge($payload, ['quantity' => 2]))->assertCreated();
+        $this->getJson('/api/v1/my-stock')->assertOk()->assertJsonPath('0.quantity_available', 8)
+            ->assertJsonPath('0.lots.0.lot_number', 'LOT-B')->assertJsonPath('0.lots.0.available', 8);
+        $this->assertSame(80, (int) $this->product->fresh()->countries->first()->pivot->stock_actuel);
+    }
+
+    public function test_stock_write_requires_a_quantity_and_cannot_target_an_unmanaged_delegate(): void
+    {
+        Sanctum::actingAs($this->delegate);
+        $this->postJson('/api/v1/sample-movements', ['product_id' => $this->product->id,
+            'movement_type' => 'reception'])->assertUnprocessable();
+        $other = User::factory()->create();
+        $this->postJson('/api/v1/sample-movements', ['product_id' => $this->product->id,
+            'movement_type' => 'reception', 'quantity' => 5, 'user_id' => $other->id])->assertForbidden();
+        $this->assertDatabaseCount('sample_movements', 0);
+    }
+
+    public function test_stock_corrections_are_atomic_and_cannot_remove_distributed_receipts(): void
+    {
+        Sanctum::actingAs($this->delegate);
+        $receipt = SampleMovement::create(['user_id' => $this->delegate->id, 'product_id' => $this->product->id,
+            'movement_type' => 'reception', 'quantity' => 10, 'lot_number' => 'L', 'stock_apres' => 10]);
+        $out = SampleMovement::create(['user_id' => $this->delegate->id, 'product_id' => $this->product->id,
+            'movement_type' => 'distribution', 'quantity' => 6, 'lot_number' => 'L', 'stock_apres' => 4]);
+        $this->putJson('/api/v1/sample-movements/'.$receipt->id, ['quantity' => 5])->assertUnprocessable();
+        $this->assertSame(10, $receipt->fresh()->quantity);
+        $this->deleteJson('/api/v1/sample-movements/'.$receipt->id)->assertUnprocessable();
+        $this->assertDatabaseHas('sample_movements', ['id' => $receipt->id]);
+        $this->putJson('/api/v1/sample-movements/'.$receipt->id, ['quantity' => 12])->assertOk();
+        $this->getJson('/api/v1/my-stock')->assertOk()->assertJsonPath('0.quantity_available', 6);
+        $this->deleteJson('/api/v1/sample-movements/'.$out->id)->assertOk();
+        $this->getJson('/api/v1/my-stock')->assertOk()->assertJsonPath('0.quantity_available', 12);
+    }
+
+    public function test_delegate_cannot_read_or_change_another_delegates_movements(): void
+    {
+        $other = User::factory()->create();
+        $movement = SampleMovement::create(['user_id' => $other->id, 'product_id' => $this->product->id,
+            'movement_type' => 'reception', 'quantity' => 10, 'stock_apres' => 10]);
+        Sanctum::actingAs($this->delegate);
+        $this->getJson('/api/v1/sample-movements?user_id='.$other->id)->assertForbidden();
+        $this->getJson('/api/v1/sample-movements/'.$movement->id)->assertForbidden();
+        $this->putJson('/api/v1/sample-movements/'.$movement->id, ['quantity' => 1])->assertForbidden();
+        $this->deleteJson('/api/v1/sample-movements/'.$movement->id)->assertForbidden();
+        $this->assertSame(10, $movement->fresh()->quantity);
+        Sanctum::actingAs($this->supervisor);
+        $own = SampleMovement::create(['user_id' => $this->delegate->id, 'product_id' => $this->product->id,
+            'movement_type' => 'reception', 'quantity' => 3, 'stock_apres' => 3]);
+        $this->getJson('/api/v1/sample-movements?user_id='.$this->delegate->id)->assertOk()
+            ->assertJsonPath('data.0.id', $own->id);
+    }
+
     public function test_exhausted_entrusted_stock_remains_visible_without_adding_catalogue_products(): void
     {
         $this->product->update(['statut' => 'inactif']);
