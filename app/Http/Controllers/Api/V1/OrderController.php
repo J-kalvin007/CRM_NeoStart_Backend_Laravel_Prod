@@ -15,15 +15,15 @@ class OrderController extends Controller
             return [
                 'id' => $order->id,
                 'reference' => $order->order_number,
-                'clientNom' => $order->account ? $order->account->nom : 'Client Officine',
-                'clientType' => $order->account ? ($order->account->type ?? 'pharmacie') : 'pharmacie',
-                'produitsCount' => 1,
+                'clientNom' => $order->account?->nom,
+                'clientType' => $order->account?->type,
+                'produitsCount' => null,
                 'montantTotal' => (float) $order->total_amount,
                 'devise' => 'FCFA',
                 'statut' => $order->status, // draft, pending, confirmed, cancelled, invoiced
                 'dateCommande' => $order->order_date,
-                'grossisteRelais' => $order->grossiste_relais ?? 'Grossiste Répartiteur',
-                'remiseAppliquee' => (float) ($order->discount_rate ?? 0)
+                'grossisteRelais' => $order->grossiste_relais,
+                'remiseAppliquee' => $order->discount_rate === null ? null : (float) $order->discount_rate
             ];
         });
 
@@ -42,36 +42,22 @@ class OrderController extends Controller
 
     public function store(Request $request)
     {
-        // Frontend sends: clientNom, clientType, grossisteRelais, produitsCount, montantTotal, devise, remiseAppliquee
-        // We map it to backend structure. We find or create an account for simplicity.
-        
-        $account = \App\Models\Account::firstOrCreate(
-            ['nom' => $request->clientNom ?? 'Client Officine'],
-            ['user_id' => Auth::id()]
-        );
-
-        $order = Order::create([
-            'account_id' => $account->id,
-            'user_id' => Auth::id(),
-            'subsidiary_id' => Auth::user()->subsidiary_id ?? null,
-            'order_number' => 'CMD-2026-' . rand(1000, 9999),
-            'total_amount' => $request->montantTotal ?? 150000,
-            'status' => 'pending',
-            'order_date' => now()->toDateString()
+        $data = $request->validate([
+            'clientNom' => 'required|string|max:255',
+            'montantTotal' => 'required|numeric|min:0',
+            'clientType' => 'nullable|in:pharmacie,hopital,grossiste',
         ]);
-
+        $account = \App\Models\Account::firstOrCreate(['nom' => $data['clientNom']], ['user_id' => Auth::id(), 'country_id' => \App\Support\CountryFilter::resolveCountryId() ?? Auth::user()->country_id]);
+        $order = Order::create([
+            'account_id' => $account->id, 'user_id' => Auth::id(),
+            'order_number' => 'CMD-'.now()->year.'-'.\Illuminate\Support\Str::ulid(),
+            'total_amount' => $data['montantTotal'], 'status' => 'pending', 'order_date' => now()->toDateString(),
+        ]);
         return response()->json([
-            'id' => $order->id,
-            'reference' => $order->order_number,
-            'clientNom' => $account->nom,
-            'clientType' => 'pharmacie', // default or use meta
-            'produitsCount' => $request->produitsCount ?? 10,
-            'montantTotal' => $order->total_amount,
-            'devise' => 'FCFA',
-            'statut' => 'soumise',
-            'dateCommande' => $order->order_date,
-            'grossisteRelais' => $request->grossisteRelais ?? 'CAMEG Togo',
-            'remiseAppliquee' => $request->remiseAppliquee ?? 5
+            'id' => $order->id, 'reference' => $order->order_number, 'clientNom' => $account->nom,
+            'clientType' => $account->type, 'produitsCount' => null, 'montantTotal' => (float) $order->total_amount,
+            'devise' => 'FCFA', 'statut' => 'soumise', 'dateCommande' => $order->order_date,
+            'grossisteRelais' => null, 'remiseAppliquee' => null,
         ], 201);
     }
 

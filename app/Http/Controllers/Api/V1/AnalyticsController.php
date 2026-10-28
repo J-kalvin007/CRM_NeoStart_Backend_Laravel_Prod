@@ -115,82 +115,31 @@ class AnalyticsController extends Controller
     )]
     public function teamPerformance(Request $request)
     {
-        $user = auth()->user();
-        $period = $request->get('period', 'monthly');
-
-        // Objectif de visites paramétrable (settings), par défaut 12/jour sur 5 jours ouvrés
-        $visitsPerDay = (int) (DB::table('settings')->where('key', 'visits_per_day')->value('value') ?: 12);
-        $daysPerWeek = (int) (DB::table('settings')->where('key', 'working_days_per_week')->value('value') ?: 5);
-        $weeklyTarget = $visitsPerDay * $daysPerWeek;
-
-        // Période + objectif : semaine = 60, mois = 4 semaines (240), trimestre = 12 semaines, année = 48 semaines
-        $now = now();
-        [$start, $end, $target, $label] = match ($period) {
-            'weekly'    => [$now->copy()->startOfWeek(), $now->copy()->endOfWeek(), $weeklyTarget, 'Cette semaine'],
-            'quarterly' => [$now->copy()->startOfQuarter(), $now->copy()->endOfQuarter(), $weeklyTarget * 12, 'Ce trimestre'],
-            'yearly'    => [$now->copy()->startOfYear(), $now->copy()->endOfYear(), $weeklyTarget * 48, 'Cette année'],
-            default     => [$now->copy()->startOfMonth(), $now->copy()->endOfMonth(), $weeklyTarget * 4, 'Ce mois'],
-        };
-
-        // L'équipe = les collaborateurs encadrés (récursif via manager_id)
-        $teamQuery = $user->teamMembers()->orderBy('name');
-        \App\Support\CountryFilter::apply($teamQuery);
-        $teamUsers = $teamQuery->get();
-
-        $completedStatuses = \App\Services\VisitExecution::COMPLETED;
-        $excludedStatuses = ['annulee', 'refusee', 'brouillon'];
-
-        $data = $teamUsers->map(function ($delegue) use ($start, $end, $target, $completedStatuses, $excludedStatuses, $period, $label) {
-            $base = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->visits()
-                ->where('user_id', $delegue->id)
-                ->whereNull('deleted_at')
-                ->whereBetween('date_activite', [$start->toDateString(), $end->toDateString()]);
-
-            $planned = (clone $base)->whereNotIn('statut', $excludedStatuses)->count();
-            $completed = (clone $base)->whereIn('statut', $completedStatuses)->count();
-            $inProgress = (clone $base)->where('statut', 'en_cours')->count();
-            $noShow = (clone $base)->whereIn('statut', ['manquee', 'annulee'])->count();
-
-            $revenue = Order::where('user_id', $delegue->id)
-                ->whereIn('status', ['confirmed', 'invoiced', 'validee', 'livree'])
-                ->whereBetween('created_at', [$start, $end])
-                ->sum('total_amount');
-
-            return [
-                'delegate' => [
-                    'id'     => (string) $delegue->id,
-                    'name'   => $delegue->name,
-                    'sector' => null,
-                ],
-                'visit_count'        => $planned,
-                'completed_visits'   => $completed,
-                'in_progress_visits' => $inProgress,
-                'no_show_count'      => $noShow,
-                'target_visits'      => $target,
-                'objective_rate'     => (int) round($completed / max(1, $target) * 100),
-                'revenue'            => (float) $revenue,
-                'period'             => $period,
-                'period_label'       => $label,
-            ];
+        $overview = app(\App\Services\PerformanceOverview::class)->forRequest($request);
+        $period = $overview['meta']['period'];
+        $start = $overview['meta']['start_date'];
+        $end = $overview['meta']['end_date'];
+        $data = collect($overview['data'])->map(function ($row) use ($start, $end, $period) {
+            $revenue = Order::where('user_id', $row['id'])->whereIn('status', ['confirmed', 'invoiced', 'validee', 'livree'])
+                ->whereBetween('created_at', [$start.' 00:00:00', $end.' 23:59:59'])->sum('total_amount');
+            return array_merge($row, [
+                'delegate' => ['id' => (string) $row['id'], 'name' => $row['name'], 'sector' => null],
+                'visit_count' => $row['planned_visits'],
+                'target_visits' => $row['planned_visits'],
+                'objective_rate' => $row['attainment_rate'],
+                'no_show_count' => $row['missed_visits'],
+                'revenue' => (float) $revenue, 'period' => $period,
+                'period_label' => $start.' — '.$end,
+            ]);
         })->sortByDesc('completed_visits')->values()->map(function ($item, $index) {
             $item['rank'] = $index + 1;
             return $item;
         });
-
-        return response()->json([
-            'data' => $data,
-            'meta' => [
-                'period'          => $period,
-                'period_label'    => $label,
-                'start'           => $start->toDateString(),
-                'end'             => $end->toDateString(),
-                'visits_per_day'  => $visitsPerDay,
-                'target_visits'   => $target,
-                'team_target'     => $target * $data->count(),
-                'team_completed'  => $data->sum('completed_visits'),
-                'team_planned'    => $data->sum('visit_count'),
-            ],
-        ]);
+        return response()->json(['data' => $data, 'meta' => array_merge($overview['meta'], [
+            'start' => $start, 'end' => $end, 'target_basis' => 'actual_planning',
+            'target_visits' => $data->sum('planned_visits'), 'team_target' => $data->sum('planned_visits'),
+            'team_completed' => $data->sum('completed_visits'), 'team_planned' => $data->sum('planned_visits'),
+        ])]);
     }
 
     #[OA\Get(
@@ -248,6 +197,10 @@ class AnalyticsController extends Controller
     )]
     public function edetailingSummary(Request $request)
     {
+        $dates = $request->validate([
+            'start_date' => 'nullable|date_format:Y-m-d|required_with:end_date',
+            'end_date' => 'nullable|date_format:Y-m-d|after_or_equal:start_date|required_with:start_date',
+        ]);
         $user = auth()->user();
         
         $query = ClmPresentationAnalytic::with('document');
@@ -260,6 +213,7 @@ class AnalyticsController extends Controller
         }
 
         \App\Support\CountryFilter::apply($query);
+        if (!empty($dates['start_date'])) $query->whereBetween('presented_at', [$dates['start_date'].' 00:00:00', $dates['end_date'].' 23:59:59']);
         $analyticsData = $query->get();
 
         $totalSessions = $analyticsData->count();

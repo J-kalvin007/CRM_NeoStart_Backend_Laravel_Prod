@@ -274,11 +274,6 @@ class AuthController extends Controller
         // Récupération de l'OTP depuis le cache
         $cachedOtp = Cache::get('login_otp_' . $user->id);
 
-        if (config('app.debug') || app()->environment('local')) {
-            if ($request->otp_code === '123456' || $request->otp_code === '000000') {
-                $cachedOtp = $request->otp_code;
-            }
-        }
 
         if (!$cachedOtp || $cachedOtp !== $request->otp_code) {
             return response()->json(['message' => 'Code de vérification invalide ou expiré.'], 401);
@@ -338,7 +333,9 @@ class AuthController extends Controller
         try {
             Mail::to($user->email)->send(new LoginOtpMail($user, $otpCode));
         } catch (\Exception $e) {
-            // Log warning on mail failure, but continue
+            Cache::forget('login_otp_' . $user->id);
+            report($e);
+            return response()->json(['message' => 'L’envoi du code a échoué. Réessayez plus tard.'], 503);
         }
 
         return response()->json([
@@ -366,6 +363,18 @@ class AuthController extends Controller
     /**
      * Enregistrer le token FCM de l'appareil mobile
      */
+    public function updateProfile(Request $request)
+    {
+        $user = $request->user();
+        $data = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => ['required', 'email', 'max:255', \Illuminate\Validation\Rule::unique('users', 'email')->ignore($user->id)],
+            'phone' => 'nullable|string|max:50',
+        ]);
+        $user->update($data);
+        return response()->json($user->fresh()->load(['roles', 'permissions', 'country', 'manager']));
+    }
+
     public function updateFcmToken(Request $request)
     {
         $request->validate([

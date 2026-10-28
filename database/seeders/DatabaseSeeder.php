@@ -2,11 +2,8 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
-use App\Models\Country;
 use App\Models\Role;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\Hash;
 
 class DatabaseSeeder extends Seeder
 {
@@ -53,26 +50,6 @@ class DatabaseSeeder extends Seeder
             $role->syncPermissions($perms);
         }
 
-        // 2. Create sample Hierarchy
-        $country = Country::firstOrCreate(['iso_code' => 'TGO'], [
-            'name' => 'Togo',
-            'currency' => 'XOF',
-            'language' => 'fr',
-            'timezone' => 'Africa/Lome',
-            'status' => true
-        ]);
-
-        // 3. Create Super Admin
-        $admin = User::firstOrCreate(['email' => 'admin@crm.local'], [
-            'name' => 'Super Administrateur',
-            'password' => Hash::make('password'),
-            'status' => true
-        ]);
-
-        if (!$admin->hasRole('super-admin')) {
-            $admin->assignRole('super-admin');
-        }
-
         $seeders = [
             SpecialitySeeder::class,
             SegmentationSeeder::class,
@@ -93,25 +70,6 @@ class DatabaseSeeder extends Seeder
             DuoActivityTypesSeeder::class,
             DuoActivityTypeSeeder::class,
             TrioActivityTypeSeeder::class,
-            UserSeeder::class,
-        ]);
-
-        if (\App\Models\Account::count() === 0) $seeders[] = AccountSeeder::class;
-        if (\App\Models\Contact::count() === 0) $seeders[] = ContactSeeder::class;
-        if (\App\Models\Product::count() === 0) $seeders[] = ProductSeeder::class;
-        if (\App\Models\Activity::count() === 0) $seeders[] = ActivitySeeder::class;
-
-        $seeders = array_merge($seeders, [
-            StockSeeder::class,
-            EventSeeder::class,
-            ExpenseSeeder::class,
-            CampaignSeeder::class,
-            NotificationSeeder::class,
-            DocumentSeeder::class,
-            DigitalSupportSeeder::class,
-            PharmacovigilanceSeeder::class,
-            ConversationMessageSeeder::class,
-            OrderSeeder::class,
         ]);
 
         $this->call($seeders);

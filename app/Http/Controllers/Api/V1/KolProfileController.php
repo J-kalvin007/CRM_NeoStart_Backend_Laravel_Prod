@@ -41,9 +41,9 @@ class KolProfileController extends Controller {
                     "id" => (string)$kol->id,
                     "name" => $kol->contact ? $kol->contact->nom . ' ' . $kol->contact->prenom : 'Dr. Inconnu',
                     "specialty" => $kol->expertise ?? ($kol->contact ? $kol->contact->specialite : 'Non renseignée'),
-                    "institution" => $kol->influence_institution ?? "Hôpital Principal",
-                    "influence_level" => $kol->influence_institution ?? "Non spécifié",
-                    "engagement_score" => $kol->engagement == 'élevé' ? 95 : 50
+                    "institution" => $kol->influence_institution ?? null,
+                    "influence_level" => $kol->meta['influence_level'] ?? null,
+                    "engagement_score" => is_numeric($kol->meta['engagement_score'] ?? null) ? (float) $kol->meta['engagement_score'] : null
                 ];
             });
 
@@ -61,9 +61,9 @@ class KolProfileController extends Controller {
                 "id" => (string)$kol->id,
                 "name" => $kol->contact ? $kol->contact->nom . ' ' . $kol->contact->prenom : 'Dr. Inconnu',
                 "specialty" => $kol->expertise ?? ($kol->contact ? $kol->contact->specialite : 'Non renseignée'),
-                "institution" => $kol->influence_institution ?? "Hôpital Principal",
-                "influence_level" => $kol->influence_institution ?? "Non spécifié",
-                "engagement_score" => $kol->engagement == 'élevé' ? 95 : 50
+                "institution" => $kol->influence_institution ?? null,
+                "influence_level" => $kol->meta['influence_level'] ?? null,
+                "engagement_score" => is_numeric($kol->meta['engagement_score'] ?? null) ? (float) $kol->meta['engagement_score'] : null
             ];
         });
 

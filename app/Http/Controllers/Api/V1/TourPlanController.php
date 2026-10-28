@@ -250,7 +250,7 @@ class TourPlanController extends Controller
 
     #[OA\Post(
         path: '/api/v1/tour-plans/optimize',
-        summary: 'Optimiser l\'ordre d\'une tournée par IA/GPS (Mock)',
+        summary: 'Ordonner une tournée selon les coordonnées GPS enregistrées',
         security: [['bearerAuth' => []]],
         tags: ['Tour Plans'],
         requestBody: new OA\RequestBody(
@@ -272,12 +272,28 @@ class TourPlanController extends Controller
     {
         $validated = $request->validate([
             'tour_plan_id' => 'required|exists:tour_plans,id',
-            'current_lat'  => 'required|numeric',
-            'current_lng'  => 'required|numeric',
+            'current_lat'  => 'required|numeric|between:-90,90',
+            'current_lng'  => 'required|numeric|between:-180,180',
         ]);
 
         $tourPlan = TourPlan::with(['activities.contact', 'activities.account'])->findOrFail($validated['tour_plan_id']);
         $activities = $tourPlan->activities;
+        $coordinates = [];
+        foreach ($activities as $activity) {
+            foreach ([$activity->account, $activity->contact] as $target) {
+                $lat = $target?->gps_lat; $lng = $target?->gps_lng;
+                if (is_numeric($lat) && is_numeric($lng) && abs((float) $lat) <= 90 && abs((float) $lng) <= 180) {
+                    $coordinates[$activity->id] = [(float) $lat, (float) $lng];
+                    break;
+                }
+            }
+            if (!isset($coordinates[$activity->id])) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'tour_plan_id' => 'Une étape ne possède pas de coordonnées GPS. Renseignez sa position avant d’ordonner la tournée.',
+                ]);
+            }
+        }
+
 
         $currentLat = (float) $validated['current_lat'];
         $currentLng = (float) $validated['current_lng'];
@@ -292,8 +308,8 @@ class TourPlanController extends Controller
             $minDistance = INF;
 
             foreach ($unvisited as $index => $act) {
-                $destLat = (float) ($act->account->gps_lat ?? $act->contact->gps_lat ?? $currentLat);
-                $destLng = (float) ($act->account->gps_lng ?? $act->contact->gps_lng ?? $currentLng);
+                $destLat = $coordinates[$act->id][0];
+                $destLng = $coordinates[$act->id][1];
 
                 $dist = $this->haversineGreatCircleDistance($currentLat, $currentLng, $destLat, $destLng);
                 if ($dist < $minDistance) {
@@ -307,8 +323,7 @@ class TourPlanController extends Controller
                 $ordered->push($selected);
 
                 $totalDistanceKm += ($minDistance === INF ? 0 : $minDistance);
-                $currentLat = (float) ($selected->account->gps_lat ?? $currentLat);
-                $currentLng = (float) ($selected->account->gps_lng ?? $currentLng);
+                [$currentLat, $currentLng] = $coordinates[$selected->id];
             } else {
                 break;
             }

@@ -89,6 +89,7 @@ Route::prefix('v1')->group(function () {
 
         // Session & Préférences utilisateur
         Route::get('/me', [AuthController::class, 'me']);
+        Route::patch('/me', [AuthController::class, 'updateProfile']);
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::post('/auth/toggle-otp', [AuthController::class, 'toggleOtp']);
 
