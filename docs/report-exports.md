@@ -56,3 +56,19 @@ Le dossier regroupe les visites, les comptes rendus publiés complets, le planni
 Dans `/analytics`, les graphiques comparent les pays et suivent l'évolution des cohortes par date prévue. Les KPI distinguent réalisation du planning et atteinte des objectifs, puis détaillent comptes rendus, praticiens/établissements visités distincts, durée réelle moyenne et ponctualité. Les moyennes et taux sont pondérés par leurs dénominateurs ; aucune valeur n'est inventée sans observation. Les visites multi-praticiens conservent toutes leurs cibles pour le décompte distinct. La ponctualité utilise les horaires exacts, y compris pour les retards inférieurs à une minute. Les tableaux de données correspondants sont inclus dans les fichiers Excel et PDF.
 
 Les raccourcis du dashboard transmettent le statut et les bornes de la période choisie aux visites et aux comptes rendus. Les dates du raccourci restent visibles et peuvent être effacées depuis la page d'arrivée.
+
+## Contrôle du serveur et préparation des exports
+
+Après déploiement du backend, exécuter depuis son dossier :
+
+```sh
+sh bin/prepare-reports.sh
+```
+
+Ce script installe les dépendances verrouillées, vérifie les extensions PHP, vide les caches Laravel et exécute `php artisan reports:check`. Il ne lance aucune migration et n’insère aucune donnée métier. Le contrôle produit réellement les deux formats et vérifie leur signature. Il doit être exécuté avec le PHP utilisé par l’application et un accès en écriture au dossier `storage`.
+
+`composer install` contrôle aussi la présence des classes Dompdf et PhpSpreadsheet après la génération de l’autoloader. Si un moteur manque malgré tout sur une installation incomplète, l’API retourne une erreur 503 explicite plutôt qu’une exception « classe introuvable ». Les exports PDF utilisent un cache de polices sous `storage/framework/cache/dompdf`, sans écriture dans `vendor`.
+
+La mémoire du rendu est configurable avec `REPORT_EXPORT_MEMORY_LIMIT` (512M par défaut). Le renderer relève uniquement une limite existante inférieure ; il ne réduit pas une limite supérieure ou illimitée. Les limites de taille et de cellules des requêtes restent appliquées. Le navigateur vérifie le type et la signature du fichier avant de proposer son téléchargement ; une page d’erreur HTML ou JSON n’est pas enregistrée comme un PDF ou un Excel.
+
+Le test `PlanningTaskExportWorkflowTest` crée par API une activité de calendrier, un planning et une tâche dans la base de test. Il relit les ressources, exporte les données obtenues et ouvre réellement le classeur pour vérifier les valeurs. Il ne crée aucune donnée dans la base de production.

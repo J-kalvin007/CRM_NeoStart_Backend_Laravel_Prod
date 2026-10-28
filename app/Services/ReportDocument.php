@@ -11,6 +11,8 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class ReportDocument
 {
+    public function __construct(private \App\Support\ReportDependencies $dependencies) {}
+
     public function download(\Illuminate\Http\Request $request, array $data)
     {
         $data['author'] = $request->user()->name;
@@ -29,6 +31,10 @@ class ReportDocument
 
     public function generate(array $data): string
     {
+        $this->dependencies->ensure($data['format']);
+        $current = ini_parse_quantity(ini_get('memory_limit'));
+        $required = ini_parse_quantity((string) config('reports.memory_limit', '512M'));
+        if ($current !== -1 && $required > $current) ini_set('memory_limit', (string) $required);
         return $data['format'] === 'pdf' ? $this->pdf($data) : $this->xlsx($data);
     }
 
@@ -86,7 +92,12 @@ class ReportDocument
 
     private function pdf(array $data): string
     {
+        $fontCache = config('reports.font_cache', storage_path('framework/cache/dompdf'));
+        if ((!is_dir($fontCache) && !@mkdir($fontCache, 0775, true)) || !is_writable($fontCache)) {
+            throw new \Symfony\Component\HttpKernel\Exception\HttpException(503, 'Le serveur ne peut pas écrire le cache des polices PDF. L’administrateur doit rétablir les droits du dossier storage.');
+        }
         $options = new Options;
+        $options->set('fontCache', $fontCache);
         $options->set('isRemoteEnabled', false);
         $options->set('isPhpEnabled', false);
         $options->set('isJavascriptEnabled', false);
