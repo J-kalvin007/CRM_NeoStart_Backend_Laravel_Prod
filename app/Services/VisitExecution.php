@@ -39,6 +39,7 @@ class VisitExecution
             'planned_start' => $plannedStart?->toISOString(), 'planned_end' => $plannedEnd?->toISOString(),
             'actual_start' => $visit->start_time?->toISOString(), 'actual_end' => $visit->end_time?->toISOString(),
             'start_delay_minutes' => $plannedStart && $visit->start_time ? (int)$plannedStart->diffInMinutes($visit->start_time, false) : null,
+            'started_on_time' => $plannedStart && $visit->start_time ? $visit->start_time->lte($plannedStart) : null,
             'state' => $state, 'counted' => $excluded === null,
             'state_label' => $excluded ?? match ($state) {
                 'completed' => 'Réalisée', 'in_progress' => 'En cours', 'missed' => 'Manquée',

@@ -8,7 +8,7 @@ use Illuminate\Http\Request;
 
 class PerformanceOverview
 {
-    public function forRequest(Request $request): array
+    public function forRequest(Request $request, ?array $userIds = null): array
     {
         $filters = $request->validate([
             'period' => 'sometimes|in:weekly,monthly,quarterly,yearly,custom',
@@ -33,6 +33,7 @@ class PerformanceOverview
         // Keep selected-country isolation, replacing only the legacy perimeter with explicit ownership.
         $people = User::withoutGlobalScope(DynamicPerimeterScope::class)
             ->when(!$global, fn ($q) => $q->whereIn('id', array_merge([$viewer->id], $viewer->teamMemberIds())))
+            ->when($userIds !== null, fn ($q) => $q->whereIn('id', $userIds))
             ->with(['roles', 'country'])->orderBy('name')->get();
         $roles = $people->flatMap(fn ($person) => $person->roles)->unique('id')->sortBy('name')->values()
             ->map(fn ($role) => ['id' => $role->id, 'name' => $role->name]);
@@ -49,16 +50,22 @@ class PerformanceOverview
         $peopleById = $people->keyBy('id');
         $planning = Activity::withoutGlobalScope(DynamicPerimeterScope::class)->visits()
             ->whereIn('user_id', $ids)->whereBetween('date_activite', [$start->toDateString(), $end->toDateString()])
-            ->with(['contact:id,prenom,nom', 'account:id,nom'])
+            ->with(['contact:id,prenom,nom,account_id', 'contact.account:id,nom', 'contacts' => fn ($q) => $q->select('contacts.id', 'contacts.prenom', 'contacts.nom'), 'account:id,nom'])
             ->orderBy('date_activite')->orderBy('heure_debut')
             ->get(['id', 'user_id', 'contact_id', 'account_id', 'activity_type_id', 'activity_type', 'statut',
-                'date_activite', 'date_fin', 'heure_debut', 'heure_fin', 'start_time', 'end_time'])
+                'date_activite', 'date_fin', 'heure_debut', 'heure_fin', 'start_time', 'end_time', 'report_status'])
             ->map(function ($visit) use ($peopleById) {
                 $person = $peopleById->get($visit->user_id);
-                return array_merge(VisitExecution::describe($visit, now()), [
+                $execution = VisitExecution::describe($visit, now());
+                $duration = $visit->start_time && $visit->end_time && $visit->end_time->gte($visit->start_time)
+                    ? round($visit->start_time->diffInMinutes($visit->end_time), 1) : null;
+                return array_merge($execution, [
                     'name' => $person->name, 'country_name' => $person->country?->name,
-                    'practitioner' => $visit->contact ? trim($visit->contact->prenom.' '.$visit->contact->nom) : null,
-                    'facility' => $visit->account?->nom,
+                    'practitioner' => collect([$visit->contact])->merge($visit->contacts)->filter()->map(fn ($contact) => trim($contact->prenom.' '.$contact->nom))->filter()->unique()->join(', ') ?: null,
+                    'contact_ids' => $visit->contacts->pluck('id')->push($visit->contact_id)->filter()->unique()->values(),
+                    'facility' => $visit->account?->nom ?? $visit->contact?->account?->nom, 'contact_id' => $visit->contact_id, 'account_id' => $visit->account_id ?? $visit->contact?->account_id,
+                    'report_submitted' => $execution['state'] === 'completed' && $visit->hasPublishedReport(),
+                    'actual_duration_minutes' => $execution['state'] === 'completed' ? $duration : null,
                 ]);
             });
         $visits = $planning->groupBy('user_id');
@@ -66,7 +73,12 @@ class PerformanceOverview
             $assigned = $objectives->get($person->id, collect());
             $measurable = $assigned->filter(fn ($o) => $o->valeur_cible > 0);
             $rates = $measurable->map(fn ($o) => $o->valeur_realisee / $o->valeur_cible * 100);
-            $execution = VisitExecution::summarize($visits->get($person->id, collect()));
+            $personVisits = $visits->get($person->id, collect());
+            $execution = VisitExecution::summarize($personVisits);
+            $completed = $personVisits->where('state', 'completed');
+            $durations = $completed->pluck('actual_duration_minutes')->filter(fn ($value) => $value !== null);
+            $timed = $completed->filter(fn ($visit) => $visit['start_delay_minutes'] !== null);
+            $submitted = $completed->where('report_submitted', true)->count();
             return array_merge($execution, [
                 'id' => $person->id, 'name' => $person->name,
                 'country_id' => $person->country_id, 'country_name' => $person->country?->name ?? 'Pays non renseigné',
@@ -75,9 +87,20 @@ class PerformanceOverview
                 'achieved_objectives' => $rates->filter(fn ($rate) => $rate >= 100)->count(),
                 'attainment_sum' => round($rates->sum(), 4),
                 'attainment_rate' => $rates->isEmpty() ? null : round($rates->avg(), 1),
+                'submitted_reports' => $submitted, 'pending_reports' => $completed->count() - $submitted,
+                'duration_sum_minutes' => $durations->sum(), 'duration_sample_count' => $durations->count(),
+                'on_time_visits' => $timed->filter(fn ($visit) => $visit['started_on_time'] === true)->count(),
+                'timed_visits' => $timed->count(),
             ]);
         })->values();
+        $countries = $people->filter(fn ($person) => $person->country)->map(fn ($person) => ['id' => $person->country_id, 'name' => $person->country->name])->unique('id')->values();
+        $selected = \App\Support\CountryFilter::resolveCountryId();
+        if ($global && !$selected && in_array(\App\Support\CountryFilter::selectedValue(), [null, '', 'group', 'default'], true)) {
+            $countries = \App\Models\Country::orderBy('name')->get(['id', 'name']);
+        } elseif ($selected && $countries->isEmpty()) {
+            $countries = \App\Models\Country::whereKey($selected)->get(['id', 'name']);
+        }
         return ['data' => $data, 'planning' => $planning->values(), 'meta' => ['period' => $period, 'start_date' => $start->toDateString(),
-            'end_date' => $end->toDateString(), 'roles' => $roles, 'users' => $options->values()]];
+            'end_date' => $end->toDateString(), 'country_options' => $countries, 'roles' => $roles, 'users' => $options->values()]];
     }
 }

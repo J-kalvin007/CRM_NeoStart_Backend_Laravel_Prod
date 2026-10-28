@@ -12,10 +12,11 @@ class DelegateLocations
 {
     public const DELEGATE_ROLES = ['delegue-medical', 'delegue_medical', 'delegue', 'delegate', 'Délégué', 'Délégué Médical'];
 
-    public function forViewer(User $viewer): Collection
+    public function forViewer(User $viewer, ?string $userId = null): Collection
     {
         $isGlobal = $viewer->can('scope:global') || $viewer->hasAnyRole(['superadmin', 'super-admin', 'admin']);
         $query = User::withoutGlobalScope(DynamicPerimeterScope::class)
+            ->when($userId !== null, fn ($users) => $users->whereKey($userId))
             ->whereHas('roles', fn ($roles) => $roles->whereIn('name', self::DELEGATE_ROLES))
             ->when(!$isGlobal, fn ($users) => $users->whereIn('id', array_merge([$viewer->id], $viewer->teamMemberIds())))
             ->with([

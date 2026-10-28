@@ -70,6 +70,9 @@ Route::prefix('v1')->group(function () {
 
     Route::post('reports/document', \App\Http\Controllers\Api\V1\ReportDocumentController::class)->middleware('throttle:20,1');
 
+    Route::get('delegates', [\App\Http\Controllers\Api\V1\DelegateOverviewController::class, 'index']);
+    Route::get('delegates/{id}/overview', [\App\Http\Controllers\Api\V1\DelegateOverviewController::class, 'show']);
+
     Route::get('planning-options', \App\Http\Controllers\Api\V1\PlanningOptionsController::class);
 
     // Sync
