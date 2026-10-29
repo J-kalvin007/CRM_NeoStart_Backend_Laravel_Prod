@@ -39,7 +39,7 @@ L'intégration paie fournit les codes d'absence dans les exports ; aucun transfe
 
 ## Vérifications exécutées
 
-- Suite backend complète : 231 tests réussis, 1406 assertions. Après l'ajustement du routage du groupe RH et l'ajout de la vérification du pic territorial, les 14 tests RH ciblés passent également (141 assertions).
+- Suite backend complète, après vérification complémentaire : 238 tests réussis, 1457 assertions, incluant les 14 tests RH et cinq nouveaux parcours de comptes rendus, stock et reprise hors ligne.
 - Les tests passent par les endpoints HTTP et une base temporaire migrée : soumission, hiérarchie séquentielle et fonctionnelle, groupe final, permission explicite, solde revérifié, débit unique, refus, annulation, non-contournement par les opérations groupées, confidentialité des documents, pays, synchronisation et calendrier historique/RH. Les e-mails et fichiers utilisent les transports de test ; cela ne certifie pas la livraison SMTP sur un serveur réel.
 - Web : 21 fichiers de tests réussis, contrôle TypeScript et compilation Nuxt de production réussis. Les contrats vérifient les justificatifs requis et la conservation du véritable circuit d'approbation dans les exports.
 - Mobile : 17 contrôles de contrat exécutés (congés/cache, messages, stocks/catalogue et formulaires patients). Analyse de `lib` et `tool` sans erreur ni avertissement ; 14 remarques préexistantes concernent les noms de constantes et les boutons radio.
