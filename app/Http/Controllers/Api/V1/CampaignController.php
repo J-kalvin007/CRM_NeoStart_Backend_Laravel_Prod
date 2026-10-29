@@ -49,6 +49,13 @@ class CampaignController extends Controller
     )]
     public function store(Request $request)
     {
+        if (!$request->filled('country_id')) {
+            $resolved = \App\Support\CountryFilter::resolveCountryId() ?? auth()->user()?->country_id;
+            if ($resolved) {
+                $request->merge(['country_id' => $resolved]);
+            }
+        }
+
         $validated = $request->validate([
             'country_id' => 'required|uuid|exists:countries,id',
             'nom' => 'required|string|max:255',
@@ -59,7 +66,7 @@ class CampaignController extends Controller
             'budget' => 'nullable|numeric',
             'objectifs' => 'nullable|array',
             'meta' => 'nullable|array',
-            'statut' => 'nullable|string|in:brouillon,validation,active,terminee,suspendue',
+            'statut' => 'nullable|string|in:brouillon,validation,active,terminee,suspendue,creation,deploiement,cloture',
             'product_ids' => 'nullable|array',
             'product_ids.*' => 'uuid|exists:products,id',
         ]);
@@ -126,7 +133,7 @@ class CampaignController extends Controller
             'budget' => 'nullable|numeric',
             'objectifs' => 'nullable|array',
             'meta' => 'nullable|array',
-            'statut' => 'sometimes|string|in:brouillon,validation,active,terminee,suspendue',
+            'statut' => 'sometimes|string|in:brouillon,validation,active,terminee,suspendue,creation,deploiement,cloture',
             'product_ids' => 'nullable|array',
             'product_ids.*' => 'uuid|exists:products,id',
         ]);
@@ -182,7 +189,7 @@ class CampaignController extends Controller
     {
         $campaign = Campaign::findOrFail($id);
         $validated = $request->validate([
-            'statut' => 'required|string|in:brouillon,validation,active,terminee,suspendue'
+            'statut' => 'required|string|in:brouillon,validation,active,terminee,suspendue,creation,deploiement,cloture'
         ]);
         $campaign->update($validated);
         return response()->json($campaign);
