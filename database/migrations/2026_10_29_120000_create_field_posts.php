@@ -10,6 +10,7 @@ return new class extends Migration
     {
         if (! Schema::hasTable('field_posts')) {
             Schema::create('field_posts', function (Blueprint $table) {
+                $table->engine = 'InnoDB';
                 $table->uuid('id')->primary();
                 $table->foreignUuid('country_id')->constrained('countries');
                 $table->string('name');
