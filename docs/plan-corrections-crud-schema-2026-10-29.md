@@ -136,3 +136,18 @@ Les cas de schéma absent et de reprise après interruption sont exécutés auto
 - Pas de validation navigateur connectée à votre MySQL : accès à cette base indisponible ici. Les parcours web sont exercés par les tests des composants/formulaires, les appels HTTP backend de test, TypeScript et la compilation ; la recette interactive ci-dessus reste à effectuer après migration.
 - La conversion du schéma a été exécutée automatiquement sur SQLite ; l’exécution MySQL de votre installation reste à confirmer avec les commandes précédentes. Aucun test natif Android/iOS supplémentaire n’est revendiqué.
 - Aucun push ni déploiement effectué dans cette intervention.
+
+
+## Intégration des changements distants du 29 octobre
+
+Les branches `origin/melchior` et `origin/main` ont reçu des corrections parallèles. Les conflits ont été intégrés avec conservation des contrôles de pays, des droits d’écriture, de la saisie après erreur et des transitions de campagne.
+
+- La normalisation des anciens statuts (`creation`, `deploiement`, `cloture`, etc.) se fait désormais à l’entrée de l’API, avant validation : la base et les réponses restent dans le vocabulaire commun. Une ancienne valeur ne contourne pas les transitions autorisées.
+- Un client qui fournit le pays concret dans `X-Country-Id` peut omettre ce pays dans le corps de création. En vue consolidée, le choix explicite reste obligatoire. Un pays de sélection inconnu ne déclenche pas de repli vers un autre pays.
+- La migration distante `2026_10_29_130000_change_statut_to_string_on_campaigns_table` est conservée pour les bases qui l’ont déjà enregistrée. Son annulation ne réintroduit plus un ENUM incompatible avec les données existantes. Sur une installation où seule la migration 140000 a déjà été exécutée, relancer `php artisan migrate --force` pour enregistrer également cette migration distante.
+- L’organisation du menu venant du distant est conservée, avec vérification de l’absence de doublons et priorité au tableau de bord.
+- Les alias de composants ajoutés par le distant sont conservés. Les chemins de scan Nuxt incorrects (`app/app/components`) sont retirés au profit du scan standard.
+- Le frontend ne prend pas `localhost` comme API par défaut de déploiement. Le développement local se configure avec `NUXT_PUBLIC_API_BASE=http://localhost:8000/api` et `NUXT_PUBLIC_STORAGE_BASE=http://localhost:8000/storage`. En production, vérifier les valeurs effectives du service déployé.
+- Les tests CRUD du distant utilisent maintenant un superviseur autorisé ; le refus d’écriture pour un collaborateur sans droit reste testé séparément.
+
+Après intégration : 23 tests backend ciblés réussis (574 assertions), 22 fichiers de tests web réussis et vérification TypeScript réussie. La suite backend complète de 247 tests indiquée plus haut correspond à la version avant cette fusion ; elle n’est pas présentée comme une nouvelle exécution complète après fusion.

@@ -19,6 +19,17 @@ class CampaignController extends Controller
             || $request->user()->hasAnyRole(['sales_manager', 'sales-manager', 'superviseur', 'supervisor']), 403);
     }
 
+    /** Accept old client labels while persisting the common status vocabulary. */
+    private function normalizeStatus(Request $request): void
+    {
+        $aliases = ['creation' => 'brouillon', 'deploiement' => 'active', 'execution' => 'active',
+            'suivi' => 'active', 'analyse' => 'active', 'cloture' => 'terminee'];
+        $status = $request->input('statut');
+        if (is_string($status) && isset($aliases[$status])) {
+            $request->merge(['statut' => $aliases[$status]]);
+        }
+    }
+
     #[OA\Get(
         path: '/api/v1/campaigns',
         summary: 'Lister les campagnes',
@@ -61,6 +72,18 @@ class CampaignController extends Controller
     public function store(Request $request)
     {
         $this->authorizeWrite($request);
+        $this->normalizeStatus($request);
+        if (! $request->filled('country_id')) {
+            $selection = CountryFilter::selectedValue();
+            // Compatibility for clients that submit the concrete selected country in a header.
+            // Consolidated mode still requires an explicit country in the form.
+            $resolved = $selection && ! in_array($selection, ['group', 'default'], true)
+                ? CountryFilter::resolveCountryId()
+                : (! $selection ? $request->user()->country_id : null);
+            if ($resolved) {
+                $request->merge(['country_id' => $resolved]);
+            }
+        }
         $validated = $request->validate([
             'country_id' => 'required|uuid|exists:countries,id',
             'nom' => 'required|string|max:255',
@@ -137,6 +160,7 @@ class CampaignController extends Controller
     public function update(Request $request, string $id)
     {
         $this->authorizeWrite($request);
+        $this->normalizeStatus($request);
         $campaign = Campaign::findOrFail($id);
 
         $validated = $request->validate([
@@ -211,6 +235,7 @@ class CampaignController extends Controller
     public function updateStatus(Request $request, string $id)
     {
         $this->authorizeWrite($request);
+        $this->normalizeStatus($request);
         $campaign = Campaign::findOrFail($id);
         $validated = $request->validate([
             'statut' => 'required|string|in:brouillon,validation,active,terminee,suspendue',

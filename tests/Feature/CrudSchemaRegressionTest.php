@@ -95,6 +95,26 @@ class CrudSchemaRegressionTest extends TestCase
         $this->putJson('/api/v1/campaigns/'.$foreign->id, ['nom' => 'Accès refusé'])->assertNotFound();
     }
 
+    public function test_merged_compatibility_keeps_canonical_statuses_and_requires_country_in_group_mode(): void
+    {
+        $body = $this->campaignBody();
+        unset($body['country_id']);
+        $this->withHeader('X-Country-Id', 'group')->postJson('/api/v1/campaigns', $body)
+            ->assertUnprocessable()->assertJsonValidationErrors('country_id');
+        $this->withHeader('X-Country-Id', 'unknown-country')->postJson('/api/v1/campaigns', $body)
+            ->assertUnprocessable()->assertJsonValidationErrors('country_id');
+        $body['statut'] = 'creation';
+        $id = $this->withHeader('X-Country-Id', $this->country->id)->postJson('/api/v1/campaigns', $body)
+            ->assertCreated()->assertJsonPath('statut', 'brouillon')->assertJsonPath('country_id', $this->country->id)->json('id');
+        $this->patchJson('/api/v1/campaigns/'.$id.'/status', ['statut' => 'deploiement'])
+            ->assertUnprocessable()->assertJsonValidationErrors('statut');
+        $this->patchJson('/api/v1/campaigns/'.$id.'/status', ['statut' => 'validation'])->assertOk();
+        $this->patchJson('/api/v1/campaigns/'.$id.'/status', ['statut' => 'deploiement'])->assertOk()->assertJsonPath('statut', 'active');
+        $this->putJson('/api/v1/campaigns/'.$id, ['statut' => 'cloture'])->assertOk()->assertJsonPath('statut', 'terminee');
+        $this->patchJson('/api/v1/campaigns/'.$id.'/status', ['statut' => 'creation'])
+            ->assertUnprocessable()->assertJsonValidationErrors('statut');
+    }
+
     public function test_missing_field_posts_returns_explicit_503_without_sql_even_in_debug_mode(): void
     {
         config(['app.debug' => true]);
