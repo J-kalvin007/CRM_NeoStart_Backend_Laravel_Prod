@@ -1,18 +1,29 @@
 {
   "resource": "/api/v1/leaves",
-  "workflow": "Brouillon puis soumission et décision avec le planning hebdomadaire",
-  "types": "Catalogue GET /api/v1/planning-options, codes conge et permission actifs",
+  "workflow": "Soumission directe, avis séquentiels manager_id et responsable fonctionnel, puis accord final du décideur habilité ou du groupe RH autorisé. Le planning hebdomadaire ne décide jamais une demande RH.",
+  "options": "GET /api/v1/leaves/options?year=YYYY : types, couleurs, barème du pays, soldes réels, intérimaires et capacités de l'utilisateur",
   "write_fields": {
-    "type": "Code du catalogue, stocké dans activities.activity_type et activity_type_id",
-    "start_date": "YYYY-MM-DD, activities.date_activite",
-    "end_date": "YYYY-MM-DD inclus, activities.date_fin",
-    "heure_debut": "HH:mm, activities.heure_debut",
-    "heure_fin": "HH:mm, activities.heure_fin",
-    "reason": "Motif, activities.notes"
+    "leave_type": "annual | sick | maternity | exceptional | other",
+    "permission_code": "Code du barème du pays, requis pour exceptional",
+    "start_date": "YYYY-MM-DD, date de début ; activités.date_activite",
+    "end_date": "YYYY-MM-DD inclus ; activités.date_fin",
+    "return_date": "YYYY-MM-DD strictement après end_date, inclus dans la période bloquée conformément au cahier des charges",
+    "reference_year": "Année du solde, au plus égale à l'année de début ; défaut : année de début",
+    "reason": "Motif obligatoire",
+    "interim_user_id": "UUID facultatif d'un autre collaborateur actif du même pays ; pas de transfert automatique de visites",
+    "attachments[]": "Multipart, maximum cinq fichiers PDF/JPEG/PNG/WebP de 10 Mo chacun ; certificat maladie obligatoire, autres obligations selon barème"
   },
-  "read_fields": ["id", "user_id", "employee_name", "type", "type_label", "planning_kind", "start_date", "end_date", "heure_debut", "heure_fin", "days", "days_count", "reason", "status", "rejection_reason", "tour_plan_id", "created_at"],
-  "duration": "days et days_count sont identiques, calculés côté serveur en jours calendaires inclusifs",
-  "responses": "GET: data contient une liste; POST et PUT: data contient la même ressource",
-  "editing": "PUT et DELETE réservés au propriétaire tant que statut=brouillon",
-  "visits": "GET /api/v1/activities?visits_only=1 exclut les congés, permissions, réunions et RCP; l'agenda conserve les indisponibilités"
+  "read_fields": ["id", "user_id", "employee_name", "type", "type_label", "planning_kind", "start_date", "end_date", "return_date", "days", "days_count", "reason", "status", "rejection_reason", "created_at", "workflow_managed", "leave_type", "permission_code", "reference_year", "absence_code", "interim_user_id", "interim_name", "grant_status", "submitted_at", "debited_at", "workflow", "documents", "can_decide", "can_cancel", "coverage_warning"],
+  "identifiers": "UUID utilisateurs et demandes conservés ; l'identifiant public reste celui de l'activité calendaire liée",
+  "statuses": {"status": "en_attente | validee | refusee | annulee", "grant_status": "pending | granted | rejected | cancelled", "workflow_status": "pending | completed | rejected | skipped"},
+  "duration": "days et days_count identiques, calculés côté serveur en jours calendaires inclusifs ; aucun quota par défaut inventé",
+  "decision": "POST /api/v1/leaves/{id}/decision : decision=approve|reject et motif obligatoire ; seuls le responsable de l'étape courante ou le groupe final habilité peuvent décider ; auto-approbation interdite",
+  "cancellation": "DELETE conserve l'historique RH et marque annulee ; seulement propriétaire, avant tout avis et avant dépassement de la date de début ; aucun débit avant accord final",
+  "privacy": "Les justificatifs restent sur le disque privé et ne sont téléchargeables que par propriétaire, évaluateur courant et RH habilités, dans le pays autorisé",
+  "balances": "GET/POST /api/v1/leaves/balances ; ajustements RH motivés et journalisés. POST /api/v1/leaves/carry-over transfère le reliquat annuel entre années sous verrou transactionnel.",
+  "policy": "GET/PUT /api/v1/leaves/policy?country_id=UUID ; barèmes et codes de paie configurés explicitement, sans prétendre imposer une législation nationale",
+  "calendar": "GET /api/v1/leaves/calendar?start=YYYY-MM-DD&end=YYYY-MM-DD ; FullCalendar, fin de fenêtre exclusive ; absences accordées RH et historiques approuvés",
+  "legacy": "Anciennes absences conservées, brouillons visibles uniquement par leur auteur. POST /api/v1/leaves/{id}/submit convertit explicitement un brouillon historique avec les champs RH requis. Les nouvelles créations via l'ancien contrat ou /activities sont refusées.",
+  "sync": "GET /api/v1/sync/pull sérialise le même contrat de lecture ; les avis intermédiaires touchent l'activité pour déclencher sa resynchronisation",
+  "visits": "Les absences restent exclues des visites médicales ; une absence RH accordée bloque toute nouvelle visite sur la période protégée, retour inclus"
 }

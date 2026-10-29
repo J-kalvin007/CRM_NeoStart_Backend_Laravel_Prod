@@ -221,10 +221,12 @@ class ActivityController extends Controller
             $targetUserId = $data['user_id'];
         }
 
+        User::withoutGlobalScopes()->whereKey($targetUserId)->lockForUpdate()->firstOrFail();
         $kind = \App\Services\PlanningOptions::kind(
             !empty($data['activity_type_id']) ? \App\Models\ActivityType::find($data['activity_type_id'])?->code : ($data['activity_type'] ?? null)
         );
 
+        abort_if(in_array($kind,['conge','permission'],true),422,'Créez cette absence depuis Congés & Permissions pour appliquer le circuit RH et le contrôle du solde.');
         // Vérification de chevauchement horaire (partiel, identique ou total)
         if (!empty($data['date_activite']) && !empty($data['heure_debut'])) {
             $hasOverlap = Activity::checkOverlap(
@@ -442,12 +444,18 @@ class ActivityController extends Controller
     private function updateInTransaction(UpdateActivityRequest $request, string $id)
     {
         $activity = Activity::findOrFail($id);
+        abort_if($activity->leaveRequest()->exists(),422,'Cette absence relève du circuit RH. Utilisez l’espace Congés et Permissions.');
 
         if ($activity->is_locked) {
             return response()->json(['message' => 'Cette activité est verrouillée et ne peut plus être modifiée.'], 403);
         }
 
+        User::withoutGlobalScopes()->whereKey($activity->user_id)->lockForUpdate()->firstOrFail();
         $validatedData = $request->validated();
+        if (isset($validatedData['activity_type']) || isset($validatedData['activity_type_id'])) {
+            $newKind=\App\Services\PlanningOptions::kind(!empty($validatedData['activity_type_id']) ? ActivityType::find($validatedData['activity_type_id'])?->code : $validatedData['activity_type']);
+            abort_if(in_array($newKind,['conge','permission'],true) && !in_array($activity->planning_kind,['conge','permission'],true),422,'Créez cette absence dans le circuit RH Congés & Permissions.');
+        }
         $targetStatus = $validatedData['statut'] ?? null;
         if ($activity->outside_weekly_plan && array_key_exists('user_id', $validatedData)) {
             abort_unless((string) $validatedData['user_id'] === (string) $activity->user_id, 422, 'Une visite hors planning ne peut pas changer de délégué.');
@@ -762,6 +770,7 @@ class ActivityController extends Controller
     public function destroy(string $id)
     {
         $activity = Activity::findOrFail($id);
+        abort_if($activity->leaveRequest()->exists(),422,'Cette absence relève du circuit RH. Utilisez l’espace Congés et Permissions.');
         $user = auth()->user();
         if (!$user) {
             return response()->json(['message' => 'Non authentifié'], 401);
@@ -892,6 +901,11 @@ class ActivityController extends Controller
             ->whereIn('id', $activityIds)
             ->get();
 
+        abort_unless($activities->count() === count(array_unique($activityIds)),404,'Une activité est absente du périmètre sélectionné.');
+        foreach ($activities as $activity) {
+            $this->ensureSupervises($activity->user_id);
+            abort_if(in_array($activity->statut,['realisee','effectuee','terminee'],true),422,'Les comptes rendus soumis ne sont ni validés ni rejetés.');
+        }
         abort_if($activities->contains(fn (Activity $activity) => $activity->isCalendarActivity()), 422, 'Traitez les activités de calendrier avec leur planning hebdomadaire.');
         if ($activities->contains(fn (Activity $activity) => $activity->isTrio())) {
             return response()->json(['message' => 'Les visites Trio doivent être traitées individuellement via leur circuit dédié.'], 422);
@@ -984,11 +998,17 @@ class ActivityController extends Controller
             ->whereIn('id', $request->activity_ids)
             ->get();
 
-        $deletedCount = 0;
+        abort_unless($activities->count() === count(array_unique($request->activity_ids)),404,'Une activité est absente du périmètre sélectionné.');
         foreach ($activities as $activity) {
-            $activity->delete();
-            $deletedCount++;
+            $actor=auth()->user();
+            abort_unless($actor->can('scope:global') || $actor->hasAnyRole(['superadmin','super-admin','admin']) || $activity->user_id === $actor->id || $actor->manages($activity->user_id),403);
+            abort_if($activity->leaveRequest()->exists(),422,'Cette absence relève du circuit RH.');
+            abort_if(!($actor->can('scope:global') || $actor->hasAnyRole(['superadmin','super-admin','admin'])) && ($activity->is_locked || in_array($activity->statut,['en_cours','realisee'],true)),422,'Une visite démarrée ou réalisée ne peut pas être supprimée.');
         }
+        $deletedCount=DB::transaction(function () use ($activities) {
+            foreach ($activities as $activity) $activity->delete();
+            return $activities->count();
+        });
 
         return response()->json([
             'message' => "{$deletedCount} visite(s) supprimée(s) avec succès.",

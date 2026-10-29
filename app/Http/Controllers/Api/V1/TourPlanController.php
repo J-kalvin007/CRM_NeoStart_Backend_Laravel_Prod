@@ -123,7 +123,7 @@ class TourPlanController extends Controller
         ]));
 
         // Visites soumises : celles choisies par le délégué (ou toutes celles de la semaine)
-        $toSubmit = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
+        $toSubmit = Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)->whereDoesntHave('leaveRequest')
             ->where('outside_weekly_plan', false)
             ->whereDate('date_activite', '<=', $plan->date_fin)
             ->whereRaw('COALESCE(date_fin, date_activite) >= ?', [$plan->date_debut])
@@ -237,7 +237,7 @@ class TourPlanController extends Controller
 
         // Les visites encore en attente redeviennent des brouillons, à resoumettre au besoin
         Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)
-            ->where('tour_plan_id', $tourPlan->id)
+            ->where('tour_plan_id', $tourPlan->id)->whereDoesntHave('leaveRequest')
             ->whereIn('statut', ['en_attente', 'refusee', 'rejetee'])
             ->update(['statut' => 'brouillon', 'rejection_reason' => null, 'validated_by_id' => null, 'validation_date' => null]);
         Activity::withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class)

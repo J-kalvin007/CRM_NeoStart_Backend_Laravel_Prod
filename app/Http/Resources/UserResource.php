@@ -18,7 +18,7 @@ class UserResource extends JsonResource
             'roles' => $this->whenLoaded('roles', function () {
                 return $this->roles->pluck('name');
             }),
-            'manager_id' => $this->manager_id,
+            'manager_id' => $this->manager_id, 'manager_fonctionnel_id' => $this->manager_fonctionnel_id,
             'manager' => new UserResource($this->whenLoaded('manager')),
             'country_id' => $this->country_id, 'field_post_id' => $this->field_post_id, 'field_post' => $this->whenLoaded('fieldPost'),
             'country' => $this->whenLoaded('country'),

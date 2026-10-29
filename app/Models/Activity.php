@@ -249,6 +249,8 @@ class Activity extends Model
         return $this->belongsTo(Account::class);
     }
 
+    public function leaveRequest() { return $this->hasOne(LeaveRequest::class); }
+
     public function products()
     {
         return $this->belongsToMany(Product::class, 'activity_product')
@@ -308,13 +310,20 @@ class Activity extends Model
         $end = $endTime || $endDate
             ? \Illuminate\Support\Carbon::parse(($endDate ?: $date) . ' ' . ($endTime ?: '23:59:59'))
             : ($unavailability ? $start->copy()->endOfDay() : $start->copy()->addMinutes($durationMinutes ?: 30));
+        $leaveOverlap = LeaveRequest::withoutGlobalScopes()->where('user_id', $userId)
+            ->whereIn('grant_status', $unavailability ? ['pending', 'granted'] : ['granted'])
+            ->whereDate('return_date', '>=', $date)
+            ->whereHas('activity', fn ($q) => $q->withoutGlobalScopes()->whereNull('deleted_at')->whereDate('date_activite', '<=', $end->toDateString())->when($excludeId, fn ($q) => $q->where('id', '!=', $excludeId)))->exists();
+        if ($leaveOverlap) {
+            return true;
+        }
         // Les visites peuvent partager un créneau. Une absence, elle, réserve sa période.
         $query = static::withoutGlobalScopes()->whereNull('deleted_at')->where('user_id', $userId)
             ->whereIn('statut', ['brouillon', 'en_attente', 'planifiee', 'validee', 'en_cours', 'realisee'])
             ->whereDate('date_activite', '<=', $end->toDateString())
             ->whereRaw('COALESCE(date_fin, date_activite) >= ?', [$date])
             ->when($excludeId, fn ($q) => $q->where('id', '!=', $excludeId));
-        if (!$unavailability) $query->calendar(['conge', 'permission']);
+        if (!$unavailability) $query->calendar(['conge', 'permission'])->whereDoesntHave('leaveRequest');
         return $query->get()->contains(function ($activity) use ($start, $end) {
             $activityStart = \Illuminate\Support\Carbon::parse($activity->date_activite->toDateString() . ' ' . ($activity->heure_debut ?: '00:00'));
             $activityEnd = \Illuminate\Support\Carbon::parse(($activity->date_fin ?? $activity->date_activite)->toDateString() . ' ' . ($activity->heure_fin ?: '23:59:59'));

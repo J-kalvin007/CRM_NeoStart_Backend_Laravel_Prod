@@ -47,6 +47,7 @@ class NotificationController extends Controller
                     ],
                     // Élément concerné, pour ouvrir la bonne page au clic
                     'target' => self::resolveTarget($data),
+                    'link' => (self::resolveTarget($data)['kind'] ?? null) === 'leave' ? '/conges?leave='.urlencode(self::resolveTarget($data)['id']) : null,
                     'title' => $data['title'] ?? 'Notification SKYNITY',
                     'message' => $data['message'] ?? '',
                     'body' => $data['message'] ?? '',
@@ -117,7 +118,7 @@ class NotificationController extends Controller
                 'visit' => 'activity', 'activity_report' => 'activity', 'sample' => 'sample_request',
                 'delegate_request' => 'request',
             ][$entity] ?? $entity;
-            if (in_array($kind, ['activity', 'tour_plan', 'expense', 'sample_request', 'request', 'contact', 'account', 'conversation'], true)) {
+            if (in_array($kind, ['activity', 'tour_plan', 'expense', 'sample_request', 'request', 'contact', 'account', 'conversation', 'leave'], true)) {
                 return ['kind' => $kind, 'id' => (string) $data['id']];
             }
         }

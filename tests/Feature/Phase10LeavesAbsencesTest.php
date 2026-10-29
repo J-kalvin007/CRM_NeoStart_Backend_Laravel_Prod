@@ -56,16 +56,8 @@ class Phase10LeavesAbsencesTest extends TestCase
             'reason'     => 'Congés annuels',
         ]);
 
-        $response->assertStatus(201)
-            ->assertJsonPath('data.statut', 'brouillon');
-
-        $this->assertNotNull(
-            Activity::where('user_id', $this->delegate->id)
-                ->where('activity_type', 'conge')
-                ->where('statut', 'brouillon')
-                ->whereDate('date_activite', '2026-11-10')
-                ->first()
-        );
+        $response->assertUnprocessable();
+        $this->assertDatabaseCount('activities',0);
     }
 
     /**
@@ -130,10 +122,8 @@ class Phase10LeavesAbsencesTest extends TestCase
         \Illuminate\Support\Facades\Mail::fake();
         Sanctum::actingAs($this->delegate);
         $start = now()->startOfWeek()->addWeek();
-        $id = $this->postJson('/api/v1/leaves', [
-            'type' => 'conge', 'start_date' => $start->toDateString(),
-            'end_date' => $start->copy()->addDays(4)->toDateString(), 'reason' => 'Congés annuels',
-        ])->assertCreated()->json('data.id');
+        $id = Activity::create(['user_id'=>$this->delegate->id,'activity_type'=>'conge','statut'=>'brouillon',
+            'date_activite'=>$start->toDateString(),'date_fin'=>$start->copy()->addDays(4)->toDateString(),'notes'=>'Congé historique'])->id;
         $plan = $this->postJson('/api/v1/tour-plans', ['nom' => 'Semaine de congés',
             'date_debut' => $start->toDateString(), 'date_fin' => $start->copy()->addDays(6)->toDateString(),
             'statut' => 'soumis',
@@ -168,8 +158,8 @@ class Phase10LeavesAbsencesTest extends TestCase
         $data = ['type' => 'permission', 'start_date' => now()->addDays(20)->toDateString(),
             'end_date' => now()->addDays(22)->toDateString(), 'heure_debut' => '09:30',
             'heure_fin' => '16:15', 'reason' => 'Rendez-vous personnel'];
-        $created = $this->postJson('/api/v1/leaves', $data)->assertCreated()
-            ->assertJsonPath('data.days', 3)->assertJsonPath('data.planning_kind', 'permission')->json('data');
+        $activity=Activity::create(['user_id'=>$this->delegate->id,'activity_type'=>'permission','statut'=>'brouillon','date_activite'=>$data['start_date'],'date_fin'=>$data['end_date'],'heure_debut'=>$data['heure_debut'],'heure_fin'=>$data['heure_fin'],'notes'=>$data['reason']]);
+        $created=json_decode(json_encode(app(\App\Services\LeaveWorkflow::class)->present($activity,$this->delegate)),true);
         $listed = $this->getJson('/api/v1/leaves')->assertOk()->json('data.0');
         $this->assertSame($created, $listed);
         $data['end_date'] = now()->addDays(23)->toDateString();

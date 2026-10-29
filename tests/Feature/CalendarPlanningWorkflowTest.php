@@ -50,8 +50,9 @@ class CalendarPlanningWorkflowTest extends TestCase
         foreach (['conge', 'permission', 'reunion', 'rcp'] as $kind) {
             $delegate = User::factory()->create(['manager_id' => $manager->id]);
             Sanctum::actingAs($delegate);
-            $id = $this->postJson('/api/v1/activities', $this->event($kind))->assertCreated()
-                ->assertJsonPath('data.statut', 'brouillon')->json('data.id');
+            $id = in_array($kind,['conge','permission'],true)
+                ? Activity::create($this->event($kind,['user_id'=>$delegate->id,'statut'=>'brouillon']))->id
+                : $this->postJson('/api/v1/activities', $this->event($kind))->assertCreated()->assertJsonPath('data.statut','brouillon')->json('data.id');
             $plan = $this->postJson('/api/v1/tour-plans', [
                 'nom' => 'Semaine', 'date_debut' => $this->event()['date_activite'],
                 'date_fin' => $this->event()['date_fin'], 'statut' => 'soumis', 'activity_ids' => [$id],
@@ -73,14 +74,12 @@ class CalendarPlanningWorkflowTest extends TestCase
         }
     }
 
-    public function test_leave_screen_creates_one_draft_period_and_edits_both_dates(): void
+    public function test_historical_leave_keeps_one_period_and_edits_both_dates(): void
     {
         Mail::fake();
         Sanctum::actingAs($delegate = User::factory()->create());
         $event = $this->event();
-        $id = $this->postJson('/api/v1/leaves', [
-            'type' => 'permission', 'start_date' => $event['date_activite'], 'end_date' => $event['date_fin'], 'reason' => 'Famille',
-        ])->assertCreated()->assertJsonPath('data.status', 'brouillon')->json('data.id');
+        $id=Activity::create($this->event('permission',['user_id'=>$delegate->id,'statut'=>'brouillon','notes'=>'Famille']))->id;
         $this->assertSame(1, Activity::where('user_id', $delegate->id)->count());
         $end = now()->startOfWeek()->addWeeks(2)->toDateString();
         $this->putJson("/api/v1/leaves/{$id}", ['date_fin' => $end])->assertOk();
@@ -91,7 +90,7 @@ class CalendarPlanningWorkflowTest extends TestCase
     {
         Mail::fake();
         Sanctum::actingAs($delegate = User::factory()->create());
-        $id = $this->postJson('/api/v1/activities', $this->event())->assertCreated()->json('data.id');
+        $id=Activity::create($this->event('conge',['user_id'=>$delegate->id,'statut'=>'brouillon']))->id;
         $this->putJson("/api/v1/activities/{$id}", ['statut' => 'en_attente'])->assertUnprocessable();
         $activity = Activity::find($id);
         $activity->update(['statut' => 'validee']);
@@ -119,9 +118,7 @@ class CalendarPlanningWorkflowTest extends TestCase
         $manager->assignRole('superviseur');
         Sanctum::actingAs($delegate = User::factory()->create(['manager_id' => $manager->id]));
         $event = $this->event();
-        $id = $this->postJson('/api/v1/activities', $this->event('conge', [
-            'date_activite' => now()->startOfWeek()->addWeek()->subDays(2)->toDateString(),
-        ]))->assertCreated()->json('data.id');
+        $id=Activity::create($this->event('conge',['user_id'=>$delegate->id,'statut'=>'brouillon','date_activite'=>now()->startOfWeek()->addWeek()->subDays(2)->toDateString()]))->id;
         $plan = $this->postJson('/api/v1/tour-plans', ['nom' => 'Semaine', 'date_debut' => $event['date_activite'],
             'date_fin' => $event['date_fin'], 'statut' => 'soumis', 'activity_ids' => [$id],
         ])->assertCreated()->json('data.id');
@@ -139,7 +136,7 @@ class CalendarPlanningWorkflowTest extends TestCase
         $manager->assignRole('superviseur');
         Sanctum::actingAs($delegate = User::factory()->create(['manager_id' => $manager->id]));
         $event = $this->event();
-        $id = $this->postJson('/api/v1/activities', $event)->assertCreated()->json('data.id');
+        $id = $this->postJson('/api/v1/activities', array_merge($event,['activity_type'=>'reunion']))->assertCreated()->json('data.id');
         $plan = $this->postJson('/api/v1/tour-plans', ['nom' => 'Semaine congés',
             'date_debut' => $event['date_activite'], 'date_fin' => $event['date_fin'], 'statut' => 'soumis',
         ])->assertCreated()->json('data.id');
@@ -170,14 +167,12 @@ class CalendarPlanningWorkflowTest extends TestCase
         $this->assertSame('brouillon', Activity::withoutGlobalScopes()->find($id)->statut);
     }
 
-    public function test_permission_reserves_only_its_interval_and_visits_can_still_share_other_slots(): void
+    public function test_historical_permission_reserves_only_its_interval_and_visits_can_still_share_other_slots(): void
     {
         Mail::fake();
         Sanctum::actingAs($delegate = User::factory()->create());
         $date = now()->startOfWeek()->addWeek()->toDateString();
-        $this->postJson('/api/v1/activities', $this->event('permission', [
-            'date_activite' => $date, 'date_fin' => $date, 'heure_debut' => '14:00', 'heure_fin' => '16:00',
-        ]))->assertCreated();
+        Activity::create($this->event('permission',['user_id'=>$delegate->id,'statut'=>'brouillon','date_activite'=>$date,'date_fin'=>$date,'heure_debut'=>'14:00','heure_fin'=>'16:00']));
         for ($i = 0; $i < 2; $i++) {
             $this->postJson('/api/v1/activities', ['activity_type' => 'visite',
                 'date_activite' => $date, 'heure_debut' => '09:00', 'heure_fin' => '10:00',

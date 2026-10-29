@@ -93,7 +93,7 @@ class SyncController extends Controller
             'orders' => $getModified(Order::class),
             'sales' => $getModified(Sale::class),
             'expenses' => $getModified(Expense::class),
-            'leaves' => $getModified(Activity::class)->filter(fn ($activity) => in_array($activity->planning_kind, ['conge', 'permission'], true))->values(),
+            'leaves' => $getModified(Activity::class)->filter(fn ($activity) => in_array($activity->planning_kind, ['conge', 'permission'], true))->map(fn($activity)=>app(\App\Services\LeaveWorkflow::class)->present($activity,$user))->values(),
             'trainings' => $getModified(Training::class),
             'objectifs' => $getModified(Objectif::class),
         ];

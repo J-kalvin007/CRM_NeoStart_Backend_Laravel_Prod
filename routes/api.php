@@ -38,6 +38,7 @@ use App\Http\Controllers\Api\V1\KolController;
 use App\Http\Controllers\Api\V1\KolProfileController;
 use App\Http\Controllers\Api\V1\LaboratoryController;
 use App\Http\Controllers\Api\V1\LeaveController;
+use App\Http\Controllers\Api\V1\LeaveWorkflowController;
 use App\Http\Controllers\Api\V1\LocationController;
 use App\Http\Controllers\Api\V1\MediaController;
 use App\Http\Controllers\Api\V1\NotificationController;
@@ -385,6 +386,19 @@ Route::prefix('v1')->group(function () {
         Route::get('indicators', [IndicatorController::class, 'index']);
 
         // ── Congés (Leaves) ────────────────────────────────────
+        Route::get('leaves/employees', [LeaveWorkflowController::class, 'employees']);
+        Route::put('leaves/employee-settings', [LeaveWorkflowController::class, 'employeeSettings']);
+        Route::get('leaves/options', [LeaveWorkflowController::class, 'options']);
+        Route::get('leaves/calendar', [LeaveWorkflowController::class, 'calendar']);
+        Route::get('leaves/balances', [LeaveWorkflowController::class, 'balances']);
+        Route::post('leaves/balances', [LeaveWorkflowController::class, 'adjustBalance']);
+        Route::post('leaves/carry-over', [LeaveWorkflowController::class, 'carryOver']);
+        Route::get('leaves/policy', [LeaveWorkflowController::class, 'getPolicy']);
+        Route::put('leaves/policy', [LeaveWorkflowController::class, 'policy']);
+        Route::post('leaves/{id}/submit', [LeaveWorkflowController::class, 'submit']);
+        Route::post('leaves/{id}/decision', [LeaveWorkflowController::class, 'decide']);
+        Route::get('leaves/{id}/documents/{document}', [LeaveWorkflowController::class, 'document']);
+        Route::get('leaves/{id}', [LeaveWorkflowController::class, 'show']);
         Route::get('leaves', [LeaveController::class, 'index']);
         Route::post('leaves', [LeaveController::class, 'store']);
         Route::put('leaves/{id}', [LeaveController::class, 'update']);

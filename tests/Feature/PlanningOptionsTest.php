@@ -54,7 +54,8 @@ class PlanningOptionsTest extends TestCase
         $payload = ['activity_type_id' => $type->id, 'activity_type' => $type->name, 'date_activite' => '2026-11-02', 'heure_debut' => '08:00'];
         $this->postJson('/api/v1/activities', $payload)->assertUnprocessable()->assertJsonValidationErrors('date_fin');
         $this->postJson('/api/v1/activities', $payload + ['date_fin' => '2026-11-04', 'heure_fin' => '18:00'])
-            ->assertCreated()->assertJsonPath('data.activity_type', 'Absence annuelle')->assertJsonPath('data.planning_kind', 'conge');
+            ->assertUnprocessable();
+        \App\Models\Activity::create(array_merge($payload,['user_id'=>auth()->id(),'statut'=>'brouillon','date_fin'=>'2026-11-04','heure_fin'=>'18:00']));
         $this->getJson('/api/v1/leaves')->assertOk()->assertJsonPath('data.0.type', 'conge')->assertJsonPath('data.0.type_label', 'Absence annuelle')
             ->assertJsonPath('data.0.end_date', '2026-11-04')->assertJsonPath('data.0.days', 3);
     }

@@ -30,7 +30,7 @@ class User extends Authenticatable
         'password',
         'phone',
 
-        'manager_id',
+        'manager_id', 'manager_fonctionnel_id',
         'country_id', 'field_post_id',
         'status',
         'fcm_token',
