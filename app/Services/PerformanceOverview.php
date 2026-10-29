@@ -2,9 +2,15 @@
 
 namespace App\Services;
 
-use App\Models\{Activity, Objectif, User};
+use App\Models\Activity;
+use App\Models\Country;
+use App\Models\FieldPost;
+use App\Models\Objectif;
 use App\Models\Scopes\DynamicPerimeterScope;
+use App\Models\User;
+use App\Support\CountryFilter;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 
 class PerformanceOverview
 {
@@ -16,6 +22,8 @@ class PerformanceOverview
             'end_date' => 'required_with:start_date|nullable|date_format:Y-m-d|after_or_equal:start_date',
             'role_id' => 'nullable|string|max:100',
             'user_id' => 'nullable|string|max:100',
+            'manager_id' => 'nullable|string|max:100', 'director_id' => 'nullable|string|max:100',
+            'target_type' => 'nullable|in:practitioner,establishment', 'field_post_id' => 'nullable|uuid',
         ]);
         $period = $filters['period'] ?? 'monthly';
         [$start, $end] = match ($period) {
@@ -24,22 +32,33 @@ class PerformanceOverview
             'yearly' => [now()->startOfYear(), now()->endOfYear()],
             default => [now()->startOfMonth(), now()->endOfMonth()],
         };
-        if (!empty($filters['start_date'])) {
-            $start = \Illuminate\Support\Carbon::parse($filters['start_date'])->startOfDay();
-            $end = \Illuminate\Support\Carbon::parse($filters['end_date'])->endOfDay();
+        if (! empty($filters['start_date'])) {
+            $start = Carbon::parse($filters['start_date'])->startOfDay();
+            $end = Carbon::parse($filters['end_date'])->endOfDay();
         }
         $viewer = $request->user();
         $global = $viewer->can('scope:global') || $viewer->hasAnyRole(['superadmin', 'super-admin', 'admin']);
         // Keep selected-country isolation, replacing only the legacy perimeter with explicit ownership.
         $people = User::withoutGlobalScope(DynamicPerimeterScope::class)
-            ->when(!$global, fn ($q) => $q->whereIn('id', array_merge([$viewer->id], $viewer->teamMemberIds())))
+            ->when(! $global, fn ($q) => $q->whereIn('id', array_merge([$viewer->id], $viewer->teamMemberIds())))
             ->when($userIds !== null, fn ($q) => $q->whereIn('id', $userIds))
-            ->with(['roles', 'country'])->orderBy('name')->get();
+            ->with(['roles', 'country', 'fieldPost'])->orderBy('name')->get();
+        $managers = $people->filter(fn ($person) => $people->contains('manager_id', $person->id))
+            ->map(fn ($person) => ['id' => $person->id, 'name' => $person->name, 'role_ids' => $person->roles->pluck('id')->values()])->values();
+        foreach (['director_id', 'manager_id'] as $field) {
+            if (empty($filters[$field])) {
+                continue;
+            }
+            $manager = $people->firstWhere('id', $filters[$field]);
+            abort_unless($manager, 422, 'Responsable absent du périmètre sélectionné.');
+            $allowed = array_merge([$manager->id], $manager->teamMemberIds());
+            $people = $people->filter(fn ($person) => in_array($person->id, $allowed, true))->values();
+        }
         $roles = $people->flatMap(fn ($person) => $person->roles)->unique('id')->sortBy('name')->values()
             ->map(fn ($role) => ['id' => $role->id, 'name' => $role->name]);
         $options = $people->map(fn ($person) => ['id' => $person->id, 'name' => $person->name,
             'role_ids' => $person->roles->pluck('id')->values()]);
-        $people = $people->filter(fn ($person) =>
+        $people = $people->filter(fn ($person) => (empty($filters['field_post_id']) || $person->field_post_id === $filters['field_post_id']) &&
             (empty($filters['role_id']) || $person->roles->contains('id', $filters['role_id'])) &&
             (empty($filters['user_id']) || $person->id === $filters['user_id']));
         $ids = $people->modelKeys();
@@ -49,7 +68,10 @@ class PerformanceOverview
             ->get(['user_id', 'valeur_cible', 'valeur_realisee'])->groupBy('user_id');
         $peopleById = $people->keyBy('id');
         $planning = Activity::withoutGlobalScope(DynamicPerimeterScope::class)->visits()
-            ->whereIn('user_id', $ids)->whereBetween('date_activite', [$start->toDateString(), $end->toDateString()])
+            ->whereIn('user_id', $ids)
+            ->when(($filters['target_type'] ?? null) === 'practitioner', fn ($q) => $q->where(fn ($target) => $target->whereNotNull('contact_id')->orWhereHas('contacts')))
+            ->when(($filters['target_type'] ?? null) === 'establishment', fn ($q) => $q->whereNotNull('account_id')->whereNull('contact_id')->whereDoesntHave('contacts'))
+            ->whereDate('date_activite', '>=', $start->toDateString())->whereDate('date_activite', '<=', $end->toDateString())
             ->with(['contact:id,prenom,nom,account_id', 'contact.account:id,nom', 'contacts' => fn ($q) => $q->select('contacts.id', 'contacts.prenom', 'contacts.nom'), 'account:id,nom'])
             ->orderBy('date_activite')->orderBy('heure_debut')
             ->get(['id', 'user_id', 'contact_id', 'account_id', 'activity_type_id', 'activity_type', 'statut',
@@ -59,6 +81,7 @@ class PerformanceOverview
                 $execution = VisitExecution::describe($visit, now());
                 $duration = $visit->start_time && $visit->end_time && $visit->end_time->gte($visit->start_time)
                     ? round($visit->start_time->diffInMinutes($visit->end_time), 1) : null;
+
                 return array_merge($execution, [
                     'name' => $person->name, 'country_name' => $person->country?->name,
                     'practitioner' => collect([$visit->contact])->merge($visit->contacts)->filter()->map(fn ($contact) => trim($contact->prenom.' '.$contact->nom))->filter()->unique()->join(', ') ?: null,
@@ -79,9 +102,11 @@ class PerformanceOverview
             $durations = $completed->pluck('actual_duration_minutes')->filter(fn ($value) => $value !== null);
             $timed = $completed->filter(fn ($visit) => $visit['start_delay_minutes'] !== null);
             $submitted = $completed->where('report_submitted', true)->count();
+
             return array_merge($execution, [
                 'id' => $person->id, 'name' => $person->name,
                 'country_id' => $person->country_id, 'country_name' => $person->country?->name ?? 'Pays non renseigné',
+                'field_post_id' => $person->field_post_id, 'field_post_name' => $person->fieldPost?->name,
                 'roles' => $person->roles->map(fn ($role) => ['id' => $role->id, 'name' => $role->name])->values(),
                 'objective_count' => $assigned->count(), 'measured_objectives' => $rates->count(),
                 'achieved_objectives' => $rates->filter(fn ($rate) => $rate >= 100)->count(),
@@ -94,13 +119,14 @@ class PerformanceOverview
             ]);
         })->values();
         $countries = $people->filter(fn ($person) => $person->country)->map(fn ($person) => ['id' => $person->country_id, 'name' => $person->country->name])->unique('id')->values();
-        $selected = \App\Support\CountryFilter::resolveCountryId();
-        if ($global && !$selected && in_array(\App\Support\CountryFilter::selectedValue(), [null, '', 'group', 'default'], true)) {
-            $countries = \App\Models\Country::orderBy('name')->get(['id', 'name']);
+        $selected = CountryFilter::resolveCountryId();
+        if ($global && ! $selected && in_array(CountryFilter::selectedValue(), [null, '', 'group', 'default'], true)) {
+            $countries = Country::orderBy('name')->get(['id', 'name']);
         } elseif ($selected && $countries->isEmpty()) {
-            $countries = \App\Models\Country::whereKey($selected)->get(['id', 'name']);
+            $countries = Country::whereKey($selected)->get(['id', 'name']);
         }
+
         return ['data' => $data, 'planning' => $planning->values(), 'meta' => ['period' => $period, 'start_date' => $start->toDateString(),
-            'end_date' => $end->toDateString(), 'country_options' => $countries, 'roles' => $roles, 'users' => $options->values()]];
+            'end_date' => $end->toDateString(), 'country_options' => $countries, 'field_posts' => FieldPost::orderBy('name')->get(['id', 'name', 'country_id', 'is_active']), 'roles' => $roles, 'managers' => $managers, 'users' => $options->values()]];
     }
 }

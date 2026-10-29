@@ -20,7 +20,7 @@ class UserResource extends JsonResource
             }),
             'manager_id' => $this->manager_id,
             'manager' => new UserResource($this->whenLoaded('manager')),
-            'country_id' => $this->country_id,
+            'country_id' => $this->country_id, 'field_post_id' => $this->field_post_id, 'field_post' => $this->whenLoaded('fieldPost'),
             'country' => $this->whenLoaded('country'),
             'last_login_at' => $this->last_login_at,
             'otp_enabled' => (bool) $this->otp_enabled,

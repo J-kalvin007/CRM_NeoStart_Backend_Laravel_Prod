@@ -2,23 +2,21 @@
 
 namespace App\Models;
 
-use App\Models\Traits\HasActivityLogs;
-
+use App\Models\Scopes\DynamicPerimeterScope;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Models\Traits\HasActivityLogs;
+use App\Models\Traits\HasPerimeter;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-
-use Illuminate\Database\Eloquent\Concerns\HasUuids;
-use Spatie\Permission\Traits\HasRoles;
 use Laravel\Sanctum\HasApiTokens;
-use App\Models\Traits\HasPerimeter;
-
+use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
     use HasActivityLogs;
-    use HasApiTokens, HasFactory, Notifiable, HasUuids, HasRoles, HasPerimeter;
+    use HasApiTokens, HasFactory, HasPerimeter, HasRoles, HasUuids, Notifiable;
 
     /**
      * The attributes that are mass assignable.
@@ -33,7 +31,7 @@ class User extends Authenticatable
         'phone',
 
         'manager_id',
-        'country_id',
+        'country_id', 'field_post_id',
         'status',
         'fcm_token',
         'last_login_at',
@@ -56,6 +54,11 @@ class User extends Authenticatable
      *
      * @return array<string, string>
      */
+    public function fieldPost()
+    {
+        return $this->belongsTo(FieldPost::class);
+    }
+
     protected function casts(): array
     {
         return [
@@ -70,7 +73,6 @@ class User extends Authenticatable
             'otp_enabled' => 'boolean',
         ];
     }
-
 
     public function locations()
     {
@@ -90,13 +92,13 @@ class User extends Authenticatable
     public function manager()
     {
         return $this->belongsTo(User::class, 'manager_id')
-            ->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class);
+            ->withoutGlobalScope(DynamicPerimeterScope::class);
     }
 
     public function subordinates()
     {
         return $this->hasMany(User::class, 'manager_id')
-            ->withoutGlobalScope(\App\Models\Scopes\DynamicPerimeterScope::class);
+            ->withoutGlobalScope(DynamicPerimeterScope::class);
     }
 
     public function contacts()
@@ -133,7 +135,7 @@ class User extends Authenticatable
         $ids = [];
         $current = [$this->id];
 
-        while (!empty($current)) {
+        while (! empty($current)) {
             $children = static::withoutGlobalScopes()
                 ->whereIn('manager_id', $current)
                 ->whereNotIn('id', array_merge($ids, [$this->id]))
@@ -209,7 +211,7 @@ class User extends Authenticatable
             'directeur-marketing',
             'directeur_marketing',
             'sales_manager',
-            'superviseur'
+            'superviseur',
         ]);
     }
 }

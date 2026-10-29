@@ -3,18 +3,19 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
-use OpenApi\Attributes as OA;
+use App\Mail\LoginOtpMail;
+use App\Mail\PasswordChangedMail;
+use App\Mail\ResetPasswordMail;
+use App\Mail\UserInvitationMail;
+use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
-use App\Models\User;
-use App\Mail\UserInvitationMail;
-use App\Mail\LoginOtpMail;
-use App\Mail\ResetPasswordMail;
-use App\Mail\PasswordChangedMail;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use OpenApi\Attributes as OA;
 
 class AuthController extends Controller
 {
@@ -38,7 +39,7 @@ class AuthController extends Controller
         ),
         responses: [
             new OA\Response(response: 201, description: 'Utilisateur créé, email contenant les identifiants envoyé'),
-            new OA\Response(response: 422, description: 'Email déjà utilisé ou données invalides')
+            new OA\Response(response: 422, description: 'Email déjà utilisé ou données invalides'),
         ]
     )]
     public function invite(Request $request)
@@ -51,10 +52,10 @@ class AuthController extends Controller
         ]);
 
         $temporaryPassword = $validated['password'];
-        
+
         $validated['password'] = Hash::make($temporaryPassword);
         $validated['force_password_change'] = false;
-        
+
         $user = User::create($validated);
 
         // Envoi de l'email avec le mot de passe en clair (temporaire)
@@ -62,7 +63,7 @@ class AuthController extends Controller
 
         return response()->json([
             'message' => 'Compte créé avec succès, un email avec les identifiants a été envoyé.',
-            'user' => $user
+            'user' => $user,
         ], 201);
     }
 
@@ -87,7 +88,7 @@ class AuthController extends Controller
                 description: 'Connexion réussie (Token délivré directement si OTP désactivé)',
                 content: new OA\JsonContent(properties: [
                     new OA\Property(property: 'token', type: 'string'),
-                    new OA\Property(property: 'user', type: 'object')
+                    new OA\Property(property: 'user', type: 'object'),
                 ])
             ),
             new OA\Response(
@@ -95,7 +96,7 @@ class AuthController extends Controller
                 description: 'OTP requis et envoyé par email (si activé sur le profil utilisateur)',
                 content: new OA\JsonContent(properties: [
                     new OA\Property(property: 'status', type: 'string', example: 'requires_otp'),
-                    new OA\Property(property: 'user_id', type: 'string', format: 'uuid')
+                    new OA\Property(property: 'user_id', type: 'string', format: 'uuid'),
                 ])
             ),
             new OA\Response(
@@ -103,10 +104,10 @@ class AuthController extends Controller
                 description: 'Changement de mot de passe requis (première connexion)',
                 content: new OA\JsonContent(properties: [
                     new OA\Property(property: 'status', type: 'string', example: 'requires_password_change'),
-                    new OA\Property(property: 'user_id', type: 'string', format: 'uuid')
+                    new OA\Property(property: 'user_id', type: 'string', format: 'uuid'),
                 ])
             ),
-            new OA\Response(response: 401, description: 'Identifiants invalides')
+            new OA\Response(response: 401, description: 'Identifiants invalides'),
         ]
     )]
     public function login(Request $request)
@@ -118,7 +119,7 @@ class AuthController extends Controller
 
         $user = User::where('email', $request->email)->first();
 
-        if (!$user || !Hash::check($request->password, $user->password)) {
+        if (! $user || ! Hash::check($request->password, $user->password)) {
             throw ValidationException::withMessages([
                 'email' => ['Identifiants incorrects'],
             ]);
@@ -131,20 +132,20 @@ class AuthController extends Controller
             return response()->json([
                 'status' => 'requires_password_change',
                 'message' => 'Veuillez modifier votre mot de passe temporaire pour continuer.',
-                'user_id' => $user->id
+                'user_id' => $user->id,
             ], 403);
         }
 
         // Si l'utilisateur a activé l'authentification OTP sur son profil
         if ($user->otp_enabled) {
             $otpCode = (string) random_int(100000, 999999);
-            Cache::put('login_otp_' . $user->id, $otpCode, now()->addMinutes(10));
+            Cache::put('login_otp_'.$user->id, $otpCode, now()->addMinutes(10));
             Mail::to($user->email)->send(new LoginOtpMail($user, $otpCode));
 
             return response()->json([
                 'status' => 'requires_otp',
                 'message' => 'Un code de vérification a été envoyé à votre adresse email.',
-                'user_id' => $user->id
+                'user_id' => $user->id,
             ], 202);
         }
 
@@ -154,7 +155,7 @@ class AuthController extends Controller
 
         return response()->json([
             'token' => $token,
-            'user' => $user->load(['roles', 'permissions', 'country', 'manager'])
+            'user' => $user->load(['roles', 'permissions', 'country', 'manager', 'fieldPost']),
         ], 200);
     }
 
@@ -178,7 +179,7 @@ class AuthController extends Controller
         responses: [
             new OA\Response(response: 200, description: 'Mot de passe mis à jour avec succès, connexion directe'),
             new OA\Response(response: 202, description: 'Mot de passe mis à jour, OTP envoyé par email (si OTP activé)'),
-            new OA\Response(response: 422, description: 'Ancien mot de passe incorrect ou nouveau non conforme')
+            new OA\Response(response: 422, description: 'Ancien mot de passe incorrect ou nouveau non conforme'),
         ]
     )]
     public function forceChangePassword(Request $request)
@@ -193,7 +194,7 @@ class AuthController extends Controller
 
         abort_unless($user->status, 403, 'Votre compte est désactivé.');
 
-        if (!Hash::check($request->old_password, $user->password)) {
+        if (! Hash::check($request->old_password, $user->password)) {
             throw ValidationException::withMessages([
                 'old_password' => ['L\'ancien mot de passe est incorrect.'],
             ]);
@@ -212,13 +213,13 @@ class AuthController extends Controller
         // Si l'utilisateur a activé l'authentification OTP
         if ($user->otp_enabled) {
             $otpCode = (string) random_int(100000, 999999);
-            Cache::put('login_otp_' . $user->id, $otpCode, now()->addMinutes(10));
+            Cache::put('login_otp_'.$user->id, $otpCode, now()->addMinutes(10));
             Mail::to($user->email)->send(new LoginOtpMail($user, $otpCode));
 
             return response()->json([
                 'status' => 'requires_otp',
                 'message' => 'Mot de passe mis à jour avec succès. Un code OTP a été envoyé à votre email.',
-                'user_id' => $user->id
+                'user_id' => $user->id,
             ], 202);
         }
 
@@ -229,7 +230,7 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Mot de passe mis à jour avec succès.',
             'token' => $token,
-            'user' => $user->load(['roles', 'permissions'])
+            'user' => $user->load(['roles', 'permissions']),
         ], 200);
     }
 
@@ -259,7 +260,7 @@ class AuthController extends Controller
                     ]
                 )
             ),
-            new OA\Response(response: 401, description: 'Code OTP invalide ou expiré')
+            new OA\Response(response: 401, description: 'Code OTP invalide ou expiré'),
         ]
     )]
     public function verifyOtp(Request $request)
@@ -270,23 +271,22 @@ class AuthController extends Controller
         ]);
 
         $user = User::find($request->user_id);
-        
-        if (!$user) {
+
+        if (! $user) {
             return response()->json(['message' => 'Utilisateur introuvable.'], 404);
         }
 
-        abort_unless($user->status && !$user->force_password_change, 403, 'Connexion non autorisée pour ce compte.');
+        abort_unless($user->status && ! $user->force_password_change, 403, 'Connexion non autorisée pour ce compte.');
 
         // Récupération de l'OTP depuis le cache
-        $cachedOtp = Cache::get('login_otp_' . $user->id);
+        $cachedOtp = Cache::get('login_otp_'.$user->id);
 
-
-        if (!$cachedOtp || $cachedOtp !== $request->otp_code) {
+        if (! $cachedOtp || $cachedOtp !== $request->otp_code) {
             return response()->json(['message' => 'Code de vérification invalide ou expiré.'], 401);
         }
 
         // L'OTP est valide, on l'efface du cache
-        Cache::forget('login_otp_' . $user->id);
+        Cache::forget('login_otp_'.$user->id);
 
         // Mise à jour des informations de connexion et vérification email
         $updateData = ['last_login_at' => now()];
@@ -299,7 +299,7 @@ class AuthController extends Controller
 
         return response()->json([
             'token' => $token,
-            'user' => $user->load(['roles', 'permissions'])
+            'user' => $user->load(['roles', 'permissions']),
         ]);
     }
 
@@ -319,7 +319,7 @@ class AuthController extends Controller
         ),
         responses: [
             new OA\Response(response: 200, description: 'Nouveau code OTP envoyé'),
-            new OA\Response(response: 404, description: 'Utilisateur introuvable')
+            new OA\Response(response: 404, description: 'Utilisateur introuvable'),
         ]
     )]
     public function resendOtp(Request $request)
@@ -329,26 +329,27 @@ class AuthController extends Controller
         ]);
 
         $user = User::find($request->user_id);
-        if (!$user) {
+        if (! $user) {
             return response()->json(['message' => 'Utilisateur introuvable.'], 404);
         }
 
-        abort_unless($user->status && $user->otp_enabled && Cache::has('login_otp_' . $user->id), 422, 'Aucune connexion en attente de vérification.');
+        abort_unless($user->status && $user->otp_enabled && Cache::has('login_otp_'.$user->id), 422, 'Aucune connexion en attente de vérification.');
         $otpCode = (string) random_int(100000, 999999);
-        Cache::put('login_otp_' . $user->id, $otpCode, now()->addMinutes(10));
-        
+        Cache::put('login_otp_'.$user->id, $otpCode, now()->addMinutes(10));
+
         try {
             Mail::to($user->email)->send(new LoginOtpMail($user, $otpCode));
         } catch (\Exception $e) {
-            Cache::forget('login_otp_' . $user->id);
+            Cache::forget('login_otp_'.$user->id);
             report($e);
+
             return response()->json(['message' => 'L’envoi du code a échoué. Réessayez plus tard.'], 503);
         }
 
         return response()->json([
             'status' => 'success',
             'message' => 'Un nouveau code de vérification a été envoyé à votre adresse email.',
-            'user_id' => $user->id
+            'user_id' => $user->id,
         ], 200);
     }
 
@@ -359,12 +360,12 @@ class AuthController extends Controller
         tags: ['Authentication'],
         responses: [
             new OA\Response(response: 200, description: 'Succès'),
-            new OA\Response(response: 401, description: 'Non authentifié')
+            new OA\Response(response: 401, description: 'Non authentifié'),
         ]
     )]
     public function me(Request $request)
     {
-        return response()->json($request->user()->load(['roles', 'permissions', 'country', 'manager']));
+        return response()->json($request->user()->load(['roles', 'permissions', 'country', 'manager', 'fieldPost']));
     }
 
     /**
@@ -375,11 +376,12 @@ class AuthController extends Controller
         $user = $request->user();
         $data = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => ['required', 'email', 'max:255', \Illuminate\Validation\Rule::unique('users', 'email')->ignore($user->id)],
+            'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
             'phone' => 'nullable|string|max:50',
         ]);
         $user->update($data);
-        return response()->json($user->fresh()->load(['roles', 'permissions', 'country', 'manager']));
+
+        return response()->json($user->fresh()->load(['roles', 'permissions', 'country', 'manager', 'fieldPost']));
     }
 
     public function updateFcmToken(Request $request)
@@ -406,7 +408,7 @@ class AuthController extends Controller
             content: new OA\JsonContent(
                 required: ['otp_enabled'],
                 properties: [
-                    new OA\Property(property: 'otp_enabled', type: 'boolean', example: true, description: 'true pour activer, false pour désactiver')
+                    new OA\Property(property: 'otp_enabled', type: 'boolean', example: true, description: 'true pour activer, false pour désactiver'),
                 ]
             )
         ),
@@ -417,12 +419,12 @@ class AuthController extends Controller
                 content: new OA\JsonContent(
                     properties: [
                         new OA\Property(property: 'message', type: 'string'),
-                        new OA\Property(property: 'otp_enabled', type: 'boolean')
+                        new OA\Property(property: 'otp_enabled', type: 'boolean'),
                     ]
                 )
             ),
             new OA\Response(response: 401, description: 'Non authentifié'),
-            new OA\Response(response: 422, description: 'Données invalides')
+            new OA\Response(response: 422, description: 'Données invalides'),
         ]
     )]
     public function toggleOtp(Request $request)
@@ -450,13 +452,13 @@ class AuthController extends Controller
         tags: ['Authentication'],
         responses: [
             new OA\Response(response: 200, description: 'Déconnexion réussie'),
-            new OA\Response(response: 401, description: 'Non authentifié')
+            new OA\Response(response: 401, description: 'Non authentifié'),
         ]
     )]
     public function logout(Request $request)
     {
         $request->user()->currentAccessToken()->delete();
-        
+
         return response()->json(['message' => 'Déconnexion réussie']);
     }
 
@@ -470,34 +472,35 @@ class AuthController extends Controller
             content: new OA\JsonContent(
                 required: ['email'],
                 properties: [
-                    new OA\Property(property: 'email', type: 'string', format: 'email', example: 'user@example.com')
+                    new OA\Property(property: 'email', type: 'string', format: 'email', example: 'user@example.com'),
                 ]
             )
         ),
         responses: [
             new OA\Response(response: 200, description: 'Email de réinitialisation envoyé si le compte existe'),
-            new OA\Response(response: 422, description: 'Email valide requis')
+            new OA\Response(response: 422, description: 'Email valide requis'),
         ]
     )]
     public function sendResetLinkEmail(Request $request)
     {
         $request->validate(['email' => 'required|email']);
-        
+
         $user = User::where('email', $request->email)->first();
         if ($user && $user->status) {
             $resetToken = Str::random(60);
-            Cache::put('password_reset_' . $user->email, $resetToken, now()->addHours(1));
+            Cache::put('password_reset_'.$user->email, $resetToken, now()->addHours(1));
             try {
                 Mail::to($user->email)->send(new ResetPasswordMail($user, $resetToken));
             } catch (\Exception $e) {
-                Cache::forget('password_reset_' . $user->email);
+                Cache::forget('password_reset_'.$user->email);
                 report($e);
+
                 return response()->json(['message' => 'L’envoi du message a échoué. Réessayez plus tard.'], 503);
             }
         }
 
         return response()->json([
-            'message' => 'Un lien de réinitialisation a été envoyé à votre adresse email si elle correspond à un compte actif.'
+            'message' => 'Un lien de réinitialisation a été envoyé à votre adresse email si elle correspond à un compte actif.',
         ]);
     }
 
@@ -519,14 +522,15 @@ class AuthController extends Controller
         ),
         responses: [
             new OA\Response(response: 200, description: 'Mot de passe réinitialisé avec succès'),
-            new OA\Response(response: 422, description: 'Données invalides ou jeton expiré')
+            new OA\Response(response: 422, description: 'Données invalides ou jeton expiré'),
         ]
     )]
     public function verifyResetToken(Request $request)
     {
         $validated = $request->validate(['email' => 'required|email', 'token' => 'required|string']);
-        $token = Cache::get('password_reset_' . $validated['email']);
+        $token = Cache::get('password_reset_'.$validated['email']);
         abort_unless(is_string($token) && hash_equals($token, $validated['token']), 422, 'Jeton de réinitialisation invalide ou expiré.');
+
         return response()->json(['message' => 'Jeton valide.']);
     }
 
@@ -538,13 +542,13 @@ class AuthController extends Controller
             'password' => 'required|string|min:8|confirmed',
         ]);
 
-        $cachedToken = Cache::get('password_reset_' . $request->email);
-        if (!$cachedToken || $cachedToken !== $request->token) {
+        $cachedToken = Cache::get('password_reset_'.$request->email);
+        if (! $cachedToken || $cachedToken !== $request->token) {
             return response()->json(['message' => 'Jeton de réinitialisation invalide ou expiré.'], 422);
         }
 
         $user = User::where('email', $request->email)->first();
-        if (!$user) {
+        if (! $user) {
             return response()->json(['message' => 'Utilisateur introuvable.'], 404);
         }
 
@@ -554,16 +558,16 @@ class AuthController extends Controller
         ]);
 
         $user->tokens()->delete();
-        Cache::forget('password_reset_' . $request->email);
+        Cache::forget('password_reset_'.$request->email);
 
         try {
             Mail::to($user->email)->send(new PasswordChangedMail($user));
         } catch (\Exception $e) {
-            \Log::warning("Failed to send password changed email to {$user->email}: " . $e->getMessage());
+            \Log::warning("Failed to send password changed email to {$user->email}: ".$e->getMessage());
         }
 
         return response()->json([
-            'message' => 'Votre mot de passe a été réinitialisé avec succès. Vous pouvez maintenant vous connecter.'
+            'message' => 'Votre mot de passe a été réinitialisé avec succès. Vous pouvez maintenant vous connecter.',
         ]);
     }
 }

@@ -3,15 +3,18 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
-use App\Models\User;
-use Illuminate\Http\Request;
 use App\Http\Requests\StoreUserRequest;
 use App\Http\Requests\UpdateUserRequest;
 use App\Http\Resources\UserResource;
+use App\Mail\PasswordChangedMail;
+use App\Mail\UserInvitationMail;
+use App\Models\FieldPost;
+use App\Models\User;
+use App\Notifications\SystemNotification;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
-use App\Mail\UserInvitationMail;
 use OpenApi\Attributes as OA;
 
 #[OA\Tag(name: 'Users', description: 'Gestion des utilisateurs')]
@@ -30,9 +33,9 @@ class UserController extends Controller
     public function index(Request $request)
     {
         $actor = $request->user();
-        $query = User::with(['roles', 'country', 'manager']);
+        $query = User::with(['roles', 'country', 'manager', 'fieldPost']);
 
-        if (!$this->hasUserPermission($actor, 'users.view-all') && !$this->hasUserPermission($actor, 'users.view')) {
+        if (! $this->hasUserPermission($actor, 'users.view-all') && ! $this->hasUserPermission($actor, 'users.view')) {
             $query->whereIn('id', array_values(array_unique(array_merge([$actor->id], $actor->teamMemberIds()))));
         }
 
@@ -55,14 +58,14 @@ class UserController extends Controller
             content: new OA\JsonContent(
                 required: ['name', 'email', 'status'],
                 properties: [
-                    new OA\Property(property: 'name',          type: 'string',  example: 'Jean Dupont'),
-                    new OA\Property(property: 'email',         type: 'string',  format: 'email', example: 'jean.dupont@crm.local'),
-                    new OA\Property(property: 'phone',         type: 'string',  nullable: true, example: '+22890000000'),
-                    new OA\Property(property: 'status',        type: 'string',  enum: ['active', 'inactive'], example: 'active'),
-                    new OA\Property(property: 'manager_id',    type: 'string',  format: 'uuid', nullable: true),
+                    new OA\Property(property: 'name', type: 'string', example: 'Jean Dupont'),
+                    new OA\Property(property: 'email', type: 'string', format: 'email', example: 'jean.dupont@crm.local'),
+                    new OA\Property(property: 'phone', type: 'string', nullable: true, example: '+22890000000'),
+                    new OA\Property(property: 'status', type: 'string', enum: ['active', 'inactive'], example: 'active'),
+                    new OA\Property(property: 'manager_id', type: 'string', format: 'uuid', nullable: true),
 
-                    new OA\Property(property: 'roles',         type: 'array',   items: new OA\Items(type: 'string'), example: ['delegue']),
-                    new OA\Property(property: 'otp_enabled',   type: 'boolean', example: false, description: 'Activer la double authentification OTP pour cet utilisateur (défaut: false)'),
+                    new OA\Property(property: 'roles', type: 'array', items: new OA\Items(type: 'string'), example: ['delegue']),
+                    new OA\Property(property: 'otp_enabled', type: 'boolean', example: false, description: 'Activer la double authentification OTP pour cet utilisateur (défaut: false)'),
                 ]
             )
         ),
@@ -76,6 +79,7 @@ class UserController extends Controller
     {
         $this->authorizeUserPermission($request, 'users.create');
         $data = $request->validated();
+        $this->validateFieldPost($data);
 
         // Convertir 'active'/'inactive' → boolean pour la colonne DB
         if (isset($data['status'])) {
@@ -87,12 +91,12 @@ class UserController extends Controller
 
         // Si un mot de passe est fourni, l'utiliser directement
         // Sinon, générer un mot de passe temporaire lisible
-        if (!empty($data['password'])) {
+        if (! empty($data['password'])) {
             $temporaryPassword = $data['password'];
             $data['password'] = Hash::make($data['password']);
             $data['force_password_change'] = false; // Pas forcer le changement si admin a défini le mot de passe
         } else {
-            $temporaryPassword = Str::upper(Str::random(4)) . rand(10, 99) . '!' . Str::random(4);
+            $temporaryPassword = Str::upper(Str::random(4)).rand(10, 99).'!'.Str::random(4);
             $data['password'] = Hash::make($temporaryPassword);
             $data['force_password_change'] = false;
         }
@@ -106,20 +110,19 @@ class UserController extends Controller
         if (isset($data['permissions'])) {
             $user->syncPermissions($data['permissions']);
         }
-        
 
         // Envoyer l'email d'invitation avec le mot de passe en clair
         Mail::to($user->email)->send(new UserInvitationMail($user, $temporaryPassword));
 
         // Envoyer une notification in-app
-        $user->notify(new \App\Notifications\SystemNotification(
+        $user->notify(new SystemNotification(
             'Bienvenue sur le CRM',
             "Votre compte a été créé avec succès. Identifiants de connexion : Email: {$user->email} | Mot de passe: {$temporaryPassword}",
             'info',
             ['user_id' => $user->id]
         ));
 
-        return response()->json(new UserResource($user->load(['roles', 'permissions', 'country'])), 201);
+        return response()->json(new UserResource($user->load(['roles', 'permissions', 'country', 'fieldPost'])), 201);
     }
 
     #[OA\Get(
@@ -128,7 +131,7 @@ class UserController extends Controller
         security: [['bearerAuth' => []]],
         tags: ['Users'],
         parameters: [
-            new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))
+            new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid')),
         ],
         responses: [
             new OA\Response(response: 200, description: 'Détails de l\'utilisateur avec rôles, permissions et équipe'),
@@ -140,16 +143,16 @@ class UserController extends Controller
     {
         $actor = request()->user();
         $user = User::with([
-            'roles', 
-            'country', 
+            'roles',
+            'country',
             'permissions',
             'manager',
-            'contacts' => fn($q) => $q->with(['account', 'speciality'])->latest()->limit(50),
-            'accounts' => fn($q) => $q->latest()->limit(50),
-            'activities' => fn($q) => $q->with(['contact', 'account'])->latest()->limit(50)
+            'contacts' => fn ($q) => $q->with(['account', 'speciality'])->latest()->limit(50),
+            'accounts' => fn ($q) => $q->latest()->limit(50),
+            'activities' => fn ($q) => $q->with(['contact', 'account'])->latest()->limit(50),
         ])
-        ->withCount(['contacts', 'accounts', 'activities'])
-        ->findOrFail($id);
+            ->withCount(['contacts', 'accounts', 'activities'])
+            ->findOrFail($id);
 
         abort_unless(
             $this->hasUserPermission($actor, 'users.view-profile')
@@ -170,19 +173,19 @@ class UserController extends Controller
         security: [['bearerAuth' => []]],
         tags: ['Users'],
         parameters: [
-            new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))
+            new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid')),
         ],
         requestBody: new OA\RequestBody(
             required: true,
             content: new OA\JsonContent(
                 properties: [
-                    new OA\Property(property: 'name',          type: 'string'),
-                    new OA\Property(property: 'phone',         type: 'string', nullable: true),
-                    new OA\Property(property: 'status',        type: 'string', enum: ['active', 'inactive']),
-                    new OA\Property(property: 'manager_id',    type: 'string', format: 'uuid', nullable: true),
+                    new OA\Property(property: 'name', type: 'string'),
+                    new OA\Property(property: 'phone', type: 'string', nullable: true),
+                    new OA\Property(property: 'status', type: 'string', enum: ['active', 'inactive']),
+                    new OA\Property(property: 'manager_id', type: 'string', format: 'uuid', nullable: true),
 
-                    new OA\Property(property: 'roles',         type: 'array',  items: new OA\Items(type: 'string')),
-                    new OA\Property(property: 'otp_enabled',   type: 'boolean', description: 'Activer ou désactiver l\'OTP'),
+                    new OA\Property(property: 'roles', type: 'array', items: new OA\Items(type: 'string')),
+                    new OA\Property(property: 'otp_enabled', type: 'boolean', description: 'Activer ou désactiver l\'OTP'),
                 ]
             )
         ),
@@ -198,6 +201,10 @@ class UserController extends Controller
         $this->authorizeUserPermission($request, 'users.edit');
         $user = User::findOrFail($id);
         $data = $request->validated();
+        if (array_key_exists('country_id', $data) && $data['country_id'] !== $user->country_id && ! array_key_exists('field_post_id', $data)) {
+            $data['field_post_id'] = null;
+        }
+        $this->validateFieldPost($data, $user);
 
         if (array_key_exists('roles', $data) || array_key_exists('permissions', $data)) {
             $this->authorizeUserPermission($request, 'users.manage-roles');
@@ -209,14 +216,14 @@ class UserController extends Controller
         }
 
         // Extraire les champs relations avant l'update
-        $roles       = $data['roles']       ?? null;
+        $roles = $data['roles'] ?? null;
         $permissions = $data['permissions'] ?? null;
         unset($data['roles'], $data['permissions']);
 
         // Vérifier si le mot de passe est modifié
         $passwordChanged = false;
         $newPassword = '';
-        if (!empty($data['password'])) {
+        if (! empty($data['password'])) {
             $newPassword = $data['password'];
             $data['password'] = Hash::make($data['password']);
             $data['force_password_change'] = false;
@@ -235,13 +242,15 @@ class UserController extends Controller
         }
 
         // Si le mot de passe a été modifié, envoyer email et notification
-        if ($passwordChanged || $user->status === false) $user->tokens()->delete();
+        if ($passwordChanged || $user->status === false) {
+            $user->tokens()->delete();
+        }
         if ($passwordChanged) {
             // Confirmer le changement sans exposer le mot de passe.
-            Mail::to($user->email)->send(new \App\Mail\PasswordChangedMail($user));
+            Mail::to($user->email)->send(new PasswordChangedMail($user));
 
             // Envoyer une notification in-app
-            $user->notify(new \App\Notifications\SystemNotification(
+            $user->notify(new SystemNotification(
                 'Mot de passe modifié',
                 "Votre mot de passe a été modifié par l'administrateur. Veuillez utiliser votre nouveau mot de passe pour vous connecter.",
                 'warning',
@@ -249,7 +258,7 @@ class UserController extends Controller
             ));
         }
 
-        return new UserResource($user->load(['roles', 'permissions', 'country']));
+        return new UserResource($user->load(['roles', 'permissions', 'country', 'fieldPost']));
     }
 
     #[OA\Delete(
@@ -258,7 +267,7 @@ class UserController extends Controller
         security: [['bearerAuth' => []]],
         tags: ['Users'],
         parameters: [
-            new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid'))
+            new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'string', format: 'uuid')),
         ],
         responses: [
             new OA\Response(response: 204, description: 'Utilisateur supprimé'),
@@ -271,13 +280,15 @@ class UserController extends Controller
         $this->authorizeUserPermission(request(), 'users.delete');
         $user = User::findOrFail($id);
         $user->delete();
-        
+
         return response()->json(null, 204);
     }
 
     private function hasUserPermission(?User $user, string $permission): bool
     {
-        if (!$user) return false;
+        if (! $user) {
+            return false;
+        }
 
         return $user->can('scope:global')
             || $user->hasAnyRole(['superadmin', 'super-admin', 'admin'])
@@ -304,7 +315,7 @@ class UserController extends Controller
                 required: ['user_ids', 'country_id'],
                 properties: [
                     new OA\Property(property: 'user_ids', type: 'array', items: new OA\Items(type: 'string', format: 'uuid')),
-                    new OA\Property(property: 'country_id', type: 'string', format: 'uuid')
+                    new OA\Property(property: 'country_id', type: 'string', format: 'uuid'),
                 ]
             )
         ),
@@ -315,15 +326,25 @@ class UserController extends Controller
     public function bulkUpdateCountry(Request $request)
     {
         $this->authorizeUserPermission($request, 'users.edit');
-        
+
         $request->validate([
             'user_ids' => 'required|array',
             'user_ids.*' => 'uuid|exists:users,id',
             'country_id' => 'required|uuid|exists:countries,id',
         ]);
 
-        User::whereIn('id', $request->user_ids)->update(['country_id' => $request->country_id]);
+        User::whereIn('id', $request->user_ids)->update(['country_id' => $request->country_id, 'field_post_id' => null]);
 
         return response()->json(['message' => 'Utilisateurs mis à jour avec succès']);
+    }
+
+    private function validateFieldPost(array $data, ?User $user = null): void
+    {
+        if (empty($data['field_post_id'])) {
+            return;
+        }
+        $post = FieldPost::findOrFail($data['field_post_id']);
+        $country = array_key_exists('country_id', $data) ? $data['country_id'] : $user?->country_id;
+        abort_unless($post->country_id === $country && $post->is_active, 422, 'Choisissez un poste actif du pays du collaborateur.');
     }
 }

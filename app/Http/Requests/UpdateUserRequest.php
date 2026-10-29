@@ -24,18 +24,19 @@ class UpdateUserRequest extends FormRequest
         }
 
         return [
-            'name'        => ['sometimes', 'string', 'max:255'],
-            'email'       => ['sometimes', 'string', 'email', 'max:255', 'unique:users,email,' . $userId],
-            'phone'       => ['nullable', 'string', 'max:20'],
-            'status'      => ['sometimes', 'in:active,inactive,true,false,1,0'],
-            'roles'       => ['nullable', 'array'],
-            'roles.*'     => ['string', 'exists:roles,name'],
+            'name' => ['sometimes', 'string', 'max:255'],
+            'email' => ['sometimes', 'string', 'email', 'max:255', 'unique:users,email,'.$userId],
+            'phone' => ['nullable', 'string', 'max:20'],
+            'status' => ['sometimes', 'in:active,inactive,true,false,1,0'],
+            'roles' => ['nullable', 'array'],
+            'roles.*' => ['string', 'exists:roles,name'],
             'permissions' => ['nullable', 'array'],
             'permissions.*' => ['string', 'exists:permissions,name'],
-            'country_id'  => ['nullable', 'uuid', 'exists:countries,id'],
+            'field_post_id' => ['nullable', 'uuid', 'exists:field_posts,id'],
+            'country_id' => ['nullable', 'uuid', 'exists:countries,id'],
             'otp_enabled' => ['nullable', 'boolean'],
-            'manager_id'  => ['nullable', 'uuid', 'exists:users,id'],
-            'password'    => ['nullable', 'string', 'min:6'],
+            'manager_id' => ['nullable', 'uuid', 'exists:users,id'],
+            'password' => ['nullable', 'string', 'min:6'],
         ];
     }
 }

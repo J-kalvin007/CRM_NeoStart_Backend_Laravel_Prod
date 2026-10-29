@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Concerns\HasUuids;
 
 class Conversation extends Model
 {
@@ -12,7 +12,7 @@ class Conversation extends Model
 
     protected $fillable = [
         'title',
-        'type',
+        'type', 'created_by', 'country_id',
     ];
 
     public function users()
