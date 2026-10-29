@@ -137,10 +137,8 @@ Route::prefix('v1')->group(function () {
         Route::patch('campaigns/{campaign}/status', [CampaignController::class, 'updateStatus']);
         Route::post('campaigns/{campaign}/products', [CampaignController::class, 'attachProduct']);
         Route::delete('campaigns/{campaign}/products/{product}', [CampaignController::class, 'detachProduct']);
-        Route::post('campaigns/{campaign}/organizational-units', [CampaignController::class, 'attachOrganizationalUnit']);
-        Route::delete('campaigns/{campaign}/organizational-units/{unit}', [CampaignController::class, 'detachOrganizationalUnit']);
         Route::apiResource('campaigns', CampaignController::class);
-        Route::apiResource('kol-profiles', KolProfileController::class);
+        Route::apiResource('kol-profiles', KolProfileController::class)->only(['index']);
 
         // Utilisateurs, Rôles & Permissions
         Route::get('users/locations', [AnalyticsController::class, 'usersLocations']);

@@ -8,16 +8,21 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('field_posts', function (Blueprint $table) {
-            $table->uuid('id')->primary();
-            $table->foreignUuid('country_id')->constrained('countries');
-            $table->string('name');
-            $table->string('city')->nullable();
-            $table->boolean('is_active')->default(true);
-            $table->timestamps();
-            $table->unique(['country_id', 'name']);
-        });
-        Schema::table('users', fn (Blueprint $table) => $table->foreignUuid('field_post_id')->nullable()->constrained('field_posts')->nullOnDelete());
+        if (! Schema::hasTable('field_posts')) {
+            Schema::create('field_posts', function (Blueprint $table) {
+                $table->engine = 'InnoDB';
+                $table->uuid('id')->primary();
+                $table->foreignUuid('country_id')->constrained('countries');
+                $table->string('name');
+                $table->string('city')->nullable();
+                $table->boolean('is_active')->default(true);
+                $table->timestamps();
+                $table->unique(['country_id', 'name']);
+            });
+        }
+        if (! Schema::hasColumn('users', 'field_post_id')) {
+            Schema::table('users', fn (Blueprint $table) => $table->foreignUuid('field_post_id')->nullable()->constrained('field_posts')->nullOnDelete());
+        }
     }
 
     public function down(): void

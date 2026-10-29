@@ -41,7 +41,7 @@ class ConversationController extends Controller
             if (! $country) {
                 $query->whereRaw('1 = 0');
             } else {
-                $query->where(fn ($q) => $q->where('country_id', $country)->orWhere(fn ($legacy) => $legacy->whereNull('country_id')->whereHas('users', fn ($users) => $users->withoutGlobalScope(DynamicPerimeterScope::class)->where('users.country_id', $country))));
+                $query->where(fn ($q) => $q->where('conversations.country_id', $country)->orWhere(fn ($legacy) => $legacy->whereNull('conversations.country_id')->whereHas('users', fn ($users) => $users->withoutGlobalScope(DynamicPerimeterScope::class)->where('users.country_id', $country))));
             }
         }
 

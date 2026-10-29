@@ -2,17 +2,29 @@
 
 namespace App\Models;
 
+use App\Models\Traits\FiltersSelectedCountry;
+use App\Models\Traits\HasActivityLogs;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use App\Models\Traits\HasActivityLogs;
+use Illuminate\Support\Facades\Auth;
 
 class Campaign extends Model
 {
-    use \App\Models\Traits\FiltersSelectedCountry;
+    use FiltersSelectedCountry;
+    use HasActivityLogs, HasFactory, HasUuids, SoftDeletes;
 
-    use HasFactory, HasUuids, SoftDeletes, HasActivityLogs;
+    protected static function booted(): void
+    {
+        static::addGlobalScope('authorized_country', function (Builder $query) {
+            $viewer = Auth::user();
+            if ($viewer && ! $viewer->isAdminOrDirection()) {
+                $query->where('campaigns.country_id', $viewer->country_id ?? '__unassigned__');
+            }
+        });
+    }
 
     protected $fillable = [
         'country_id',
@@ -44,7 +56,6 @@ class Campaign extends Model
     {
         return $this->belongsToMany(Product::class, 'campaign_product');
     }
-
 
     public function activities()
     {
