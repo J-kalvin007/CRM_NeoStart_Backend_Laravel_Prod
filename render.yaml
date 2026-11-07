@@ -1,0 +1,168 @@
+# Blueprint Render. Il ne remplace pas docker-compose.yml.
+# MySQL est un service privé, jamais une base PostgreSQL Render.
+# Les secrets ne sont pas écrits ici : sync: false demande la valeur dans le tableau de bord.
+# Les migrations ne sont pas lancées automatiquement. Voir docs/deploiement-render.md.
+
+services:
+  - type: web
+    name: crm-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /up
+    disk:
+      name: crm-storage
+      mountPath: /var/www/html/storage
+      sizeGB: 10
+    envVars:
+      - key: APP_NAME
+        value: Laravel
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: APP_KEY
+        sync: false
+      - key: APP_URL
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: LOG_CHANNEL
+        value: stderr
+      - key: LOG_LEVEL
+        value: info
+      - key: DB_CONNECTION
+        value: mysql
+      - key: DB_HOST
+        fromService:
+          name: crm-mysql
+          type: pserv
+          property: host
+      - key: DB_PORT
+        value: "3306"
+      - key: DB_DATABASE
+        fromService:
+          name: crm-mysql
+          type: pserv
+          envVarKey: MYSQL_DATABASE
+      - key: DB_USERNAME
+        fromService:
+          name: crm-mysql
+          type: pserv
+          envVarKey: MYSQL_USER
+      - key: DB_PASSWORD
+        fromService:
+          name: crm-mysql
+          type: pserv
+          envVarKey: MYSQL_PASSWORD
+      - key: SESSION_DRIVER
+        value: database
+      - key: QUEUE_CONNECTION
+        value: database
+      - key: CACHE_STORE
+        value: database
+      - key: FILESYSTEM_DISK
+        value: local
+      - key: BROADCAST_CONNECTION
+        value: log
+      - key: MAIL_MAILER
+        value: log
+      - key: MAIL_FROM_ADDRESS
+        value: hello@example.com
+      - key: MAIL_FROM_NAME
+        value: Laravel
+      - key: FIREBASE_CREDENTIALS
+        sync: false
+      - key: PV_ALERT_EMAIL
+        sync: false
+      - key: WAIT_FOR_DB
+        value: "true"
+      - key: RUN_MIGRATIONS
+        value: "false"
+
+  - type: worker
+    name: crm-queue
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: php artisan queue:work --sleep=3 --tries=3 --max-time=3600
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: APP_KEY
+        fromService:
+          name: crm-backend
+          type: web
+          envVarKey: APP_KEY
+      - key: APP_URL
+        fromService:
+          name: crm-backend
+          type: web
+          envVarKey: APP_URL
+      - key: LOG_CHANNEL
+        value: stderr
+      - key: LOG_LEVEL
+        value: info
+      - key: DB_CONNECTION
+        value: mysql
+      - key: DB_HOST
+        fromService:
+          name: crm-mysql
+          type: pserv
+          property: host
+      - key: DB_PORT
+        value: "3306"
+      - key: DB_DATABASE
+        fromService:
+          name: crm-mysql
+          type: pserv
+          envVarKey: MYSQL_DATABASE
+      - key: DB_USERNAME
+        fromService:
+          name: crm-mysql
+          type: pserv
+          envVarKey: MYSQL_USER
+      - key: DB_PASSWORD
+        fromService:
+          name: crm-mysql
+          type: pserv
+          envVarKey: MYSQL_PASSWORD
+      - key: QUEUE_CONNECTION
+        value: database
+      - key: CACHE_STORE
+        value: database
+      - key: MAIL_MAILER
+        fromService:
+          name: crm-backend
+          type: web
+          envVarKey: MAIL_MAILER
+      - key: FIREBASE_CREDENTIALS
+        fromService:
+          name: crm-backend
+          type: web
+          envVarKey: FIREBASE_CREDENTIALS
+      - key: WAIT_FOR_DB
+        value: "true"
+      - key: RUN_MIGRATIONS
+        value: "false"
+
+  - type: pserv
+    name: crm-mysql
+    runtime: image
+    image:
+      url: docker.io/library/mysql:8.4
+    disk:
+      name: crm-mysql-data
+      mountPath: /var/lib/mysql
+      sizeGB: 10
+    envVars:
+      - key: MYSQL_DATABASE
+        value: crm_db
+      - key: MYSQL_USER
+        sync: false
+      - key: MYSQL_PASSWORD
+        sync: false
+      - key: MYSQL_ROOT_PASSWORD
+        sync: false
