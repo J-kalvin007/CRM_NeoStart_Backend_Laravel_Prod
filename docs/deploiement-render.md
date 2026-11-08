@@ -33,9 +33,9 @@ Le script `docker/entrypoint.sh` :
 2. prépare les répertoires de `storage` ;
 3. refuse de démarrer en production si `APP_KEY` est vide ;
 4. attend MySQL si `WAIT_FOR_DB=true` ;
-5. n'exécute les migrations que si `RUN_MIGRATIONS=true`.
+5. exécute `php artisan migrate --force` si `RUN_MIGRATIONS=true`.
 
-Dans `render.yaml`, `RUN_MIGRATIONS` vaut `false`. Un redémarrage ne rejoue donc pas les migrations. `php artisan key:generate` n'est jamais appelé au démarrage.
+Dans `render.yaml` et dans le stage `production` du Dockerfile, `RUN_MIGRATIONS` vaut `true` pour le service web. Chaque démarrage du conteneur web attend MySQL, puis applique les migrations en attente. Laravel n'applique que celles qui ne sont pas encore enregistrées : un redémarrage sans nouvelle migration ne change rien. Le worker garde `RUN_MIGRATIONS=false` pour éviter deux migrations en parallèle. `php artisan key:generate` n'est jamais appelé au démarrage.
 
 La sonde HTTP Render est `GET /up`, déjà déclarée par Laravel dans `bootstrap/app.php`. Render attend un code 2xx ou 3xx en moins de cinq secondes. Cette sonde confirme que le processus HTTP répond. Elle ne vérifie pas une requête métier MySQL.
 
@@ -102,14 +102,11 @@ Le plan gratuit ne convient pas à un disque persistant. Le service MySQL et le 
 
 Les fichiers de `database/migrations` créent et font évoluer tout le schéma : utilisateurs, jetons, cache, files, sessions, puis le métier CRM. Certaines étapes tardives modifient des colonnes avec du SQL MySQL et transforment des données déjà présentes. Les appliquer sur une base qui contient déjà des données peut donc changer ces données. Sur une base vide, elles construisent le schéma attendu par cette version du code.
 
-Ne les lancez pas automatiquement à chaque démarrage. Quand vous décidez de les appliquer, faites-le une fois, après une sauvegarde :
+Au démarrage du service web, `docker/entrypoint.sh` exécute `php artisan migrate --force` après l'attente MySQL. Ce n'est pas fait pendant le `docker build` : la base n'existe pas encore à ce moment. Vérifiez dans les journaux Render la ligne « Exécution des migrations… » après chaque déploiement.
 
-1. Ouvrez le shell du service web dans Render, ou un one-off job.
-2. Exécutez `php artisan migrate:status` et lisez les migrations en attente.
-3. Sauvegardez MySQL avec `mysqldump` depuis le shell du service MySQL.
-4. Exécutez `php artisan migrate --force` dans le service web.
+Si le service a été créé à la main sans blueprint, définissez aussi `RUN_MIGRATIONS=true` et `WAIT_FOR_DB=true` dans le tableau de bord du service web. Sur le worker, laissez `RUN_MIGRATIONS=false`.
 
-Render propose aussi une pre-deploy command. Vous pouvez y mettre `php artisan migrate --force` le jour où vous choisissez que chaque déploiement applique les migrations en attente. Ce dépôt ne l'active pas, parce qu'une migration ne doit pas partir seulement parce qu'un conteneur redémarre. La pre-deploy command voit le réseau privé, donc MySQL, mais elle ne voit pas le disque du service web. Cela n'empêche pas les migrations : elles écrivent dans MySQL, pas sur ce disque.
+Avant un déploiement qui contient une migration sensible sur une base déjà remplie, faites une sauvegarde `mysqldump` depuis le shell du service MySQL. En cas d'échec de migration, le conteneur web s'arrête et la sonde `/up` échoue.
 
 N'exécutez pas `migrate:fresh` ni `db:wipe` en production.
 
