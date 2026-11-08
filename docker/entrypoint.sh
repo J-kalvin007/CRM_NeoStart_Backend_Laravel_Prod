@@ -28,6 +28,9 @@ if [ "${APP_ENV:-local}" = "production" ] && [ -z "${APP_KEY:-}" ]; then
     exit 1
 fi
 
+# Attente active de MySQL avant migrations / démarrage applicatif.
+# Obligatoire en production Docker (Render) : le web peut démarrer avant
+# que le service privé MySQL soit prêt. Sans cette boucle, migrate échoue.
 if [ "${WAIT_FOR_DB:-false}" = "true" ]; then
     echo "Attente de MySQL (${DB_HOST:-inconnu}:${DB_PORT:-3306}, base ${DB_DATABASE:-inconnue})..."
     attempt=0
@@ -62,6 +65,11 @@ if [ "${WAIT_FOR_DB:-false}" = "true" ]; then
     echo "MySQL répond."
 fi
 
+# Application du schéma Laravel sur la base pointée par DB_*.
+# --force : autorise migrate hors mode interactif (requis en production).
+# Idempotent : seules les migrations absentes de la table `migrations`
+# sont exécutées. Un redémarrage sans nouvelle migration ne change rien.
+# Activer uniquement sur le service web (pas sur le worker queue).
 if [ "${RUN_MIGRATIONS:-false}" = "true" ]; then
     echo "Exécution des migrations sur la base désignée par les variables DB_*."
     setpriv --reuid=www-data --regid=www-data --init-groups \

@@ -1,8 +1,14 @@
 # Blueprint Render. Il ne remplace pas docker-compose.yml.
 # MySQL est un service privé, jamais une base PostgreSQL Render.
 # Les secrets ne sont pas écrits ici : sync: false demande la valeur dans le tableau de bord.
-# Les migrations partent au démarrage du service web (RUN_MIGRATIONS=true).
-# Le worker les laisse à false. Voir docs/deploiement-render.md.
+#
+# Migrations automatiques :
+# - Service web (crm-backend) : WAIT_FOR_DB=true + RUN_MIGRATIONS=true.
+#   Au démarrage, entrypoint.sh attend MySQL puis exécute
+#   `php artisan migrate --force` avant Nginx/PHP-FPM.
+# - Worker (crm-queue) : RUN_MIGRATIONS=false pour éviter deux migrate
+#   concurrents sur la même base au même déploiement.
+# Voir docs/deploiement-render.md.
 
 services:
   - type: web

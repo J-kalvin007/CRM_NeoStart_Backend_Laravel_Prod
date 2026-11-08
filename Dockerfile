@@ -81,9 +81,19 @@ RUN mkdir -p \
 
 FROM php-base AS production
 
-# Migrations au démarrage du conteneur (pas pendant le build d'image :
-# MySQL n'est pas joignable à ce moment). Le worker Render surcharge
-# RUN_MIGRATIONS=false pour éviter une course entre web et queue.
+# --- Migrations automatiques (runtime uniquement) ---
+# Sur Render (runtime Docker), Build/Start du tableau de bord sont ignorés :
+# tout passe par ce Dockerfile et par docker/entrypoint.sh.
+#
+# Ces variables NE s'exécutent PAS pendant `docker build` : à ce stade
+# MySQL (service privé) n'est pas joignable. Elles sont lues au démarrage
+# du conteneur par entrypoint.sh, qui :
+#   1) attend MySQL si WAIT_FOR_DB=true ;
+#   2) lance `php artisan migrate --force` si RUN_MIGRATIONS=true ;
+#   3) démarre ensuite Nginx + PHP-FPM (supervisord).
+#
+# Le worker Render (crm-queue) doit garder RUN_MIGRATIONS=false pour
+# qu'un seul processus (le service web) applique le schéma.
 ENV WAIT_FOR_DB=true \
     RUN_MIGRATIONS=true
 
