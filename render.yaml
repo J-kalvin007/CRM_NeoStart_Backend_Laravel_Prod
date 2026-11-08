@@ -86,6 +86,12 @@ services:
         value: "true"
       - key: RUN_MIGRATIONS
         value: "true"
+      # Chemins relatifs : évite le mixed content HTTPS si APP_URL est incomplet.
+      - key: L5_SWAGGER_USE_ABSOLUTE_PATH
+        value: "false"
+      # Régénère api-docs.json sur le disque monté (storage) à chaque démarrage web.
+      - key: RUN_SWAGGER_GENERATE
+        value: "true"
 
   - type: worker
     name: crm-queue

@@ -30,12 +30,15 @@ Le worker n'a pas de disque. Les fichiers uploadés sont écrits par le service 
 Le script `docker/entrypoint.sh` :
 
 1. fait écouter Nginx sur `$PORT` ;
-2. prépare les répertoires de `storage` ;
+2. prépare les répertoires de `storage` (y compris `storage/api-docs`) ;
 3. refuse de démarrer en production si `APP_KEY` est vide ;
 4. attend MySQL si `WAIT_FOR_DB=true` ;
-5. exécute `php artisan migrate --force` si `RUN_MIGRATIONS=true`.
+5. exécute `php artisan migrate --force` si `RUN_MIGRATIONS=true` ;
+6. régénère la documentation OpenAPI (`php artisan l5-swagger:generate`) si `RUN_SWAGGER_GENERATE=true` et que le processus lancé est supervisord.
 
 Dans `render.yaml` et dans le stage `production` du Dockerfile, `RUN_MIGRATIONS` vaut `true` pour le service web. Chaque démarrage du conteneur web attend MySQL, puis applique les migrations en attente. Laravel n'applique que celles qui ne sont pas encore enregistrées : un redémarrage sans nouvelle migration ne change rien. Le worker garde `RUN_MIGRATIONS=false` pour éviter deux migrations en parallèle. `php artisan key:generate` n'est jamais appelé au démarrage.
+
+Le disque persistant Render est monté sur `/var/www/html/storage`. Il masque donc tout `api-docs.json` éventuellement présent dans l'image. La génération au démarrage recrée ce fichier sur le disque. Vérifiez aussi que `APP_URL` vaut l'URL HTTPS Render (`https://….onrender.com`) : l'entrypoint en déduit `L5_SWAGGER_CONST_HOST` si cette variable n'est pas définie. `L5_SWAGGER_USE_ABSOLUTE_PATH=false` évite une page blanche liée au mixed content.
 
 La sonde HTTP Render est `GET /up`, déjà déclarée par Laravel dans `bootstrap/app.php`. Render attend un code 2xx ou 3xx en moins de cinq secondes. Cette sonde confirme que le processus HTTP répond. Elle ne vérifie pas une requête métier MySQL.
 

@@ -27,6 +27,8 @@ services:
       DB_PORT: "3306"
       WAIT_FOR_DB: "true"
       RUN_MIGRATIONS: "true"
+      RUN_SWAGGER_GENERATE: "true"
+      L5_SWAGGER_USE_ABSOLUTE_PATH: "false"
     volumes:
       - app_storage:/var/www/html/storage
     depends_on:

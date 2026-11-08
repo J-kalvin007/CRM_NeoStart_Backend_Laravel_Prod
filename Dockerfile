@@ -95,7 +95,9 @@ FROM php-base AS production
 # Le worker Render (crm-queue) doit garder RUN_MIGRATIONS=false pour
 # qu'un seul processus (le service web) applique le schéma.
 ENV WAIT_FOR_DB=true \
-    RUN_MIGRATIONS=true
+    RUN_MIGRATIONS=true \
+    RUN_SWAGGER_GENERATE=true \
+    L5_SWAGGER_USE_ABSOLUTE_PATH=false
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
